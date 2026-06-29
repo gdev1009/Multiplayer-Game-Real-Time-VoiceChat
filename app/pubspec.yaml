@@ -1,0 +1,42 @@
+name: match_word
+description: Match Word — a real-time multiplayer word game for seniors (Grandma Mac).
+publish_to: "none"
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+  flutter: ">=3.19.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Backend / realtime / auth
+  supabase_flutter: ^2.5.6
+
+  # Local secure storage for session + device fingerprint
+  flutter_secure_storage: ^9.2.2
+
+  # Stable device fingerprint for trial-abuse prevention
+  device_info_plus: ^10.1.0
+  uuid: ^4.4.0
+
+  # PIN hashing
+  crypto: ^3.0.3
+
+  # Lightweight state management
+  provider: ^6.1.2
+
+  # Environment configuration
+  flutter_dotenv: ^5.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - .env
+    - assets/images/
