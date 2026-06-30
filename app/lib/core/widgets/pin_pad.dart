@@ -126,7 +126,7 @@ class _PadKey extends StatelessWidget {
             child: Center(
               child: isBackspace
                   ? const Icon(Icons.backspace_outlined,
-                      size: 30, color: AppColors.deepPurple)
+                    size: 30, color: AppColors.deepPurple,)
                   : Text(label, style: AppText.title),
             ),
           ),

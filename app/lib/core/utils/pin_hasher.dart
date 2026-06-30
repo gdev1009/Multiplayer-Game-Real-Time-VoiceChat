@@ -23,7 +23,7 @@ class PinHasher {
 
   /// Derives a hash for [pin] using [salt] with stretched SHA-256.
   static String hash(String pin, String salt) {
-    var bytes = utf8.encode('$salt:$pin');
+    List<int> bytes = utf8.encode('$salt:$pin');
     for (var i = 0; i < _rounds; i++) {
       bytes = sha256.convert(bytes).bytes;
     }

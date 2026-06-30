@@ -186,16 +186,29 @@ class AuthService {
   }
 
   /// Sets a brand-new PIN after recovery and remembers this account locally.
+  ///
+  /// Recovery (email OTP) only grants a temporary session. To let the player
+  /// sign in silently with name + PIN later (after a sign-out), we also set a
+  /// fresh random Supabase password here and store it securely on the device.
   Future<void> setNewPin({required String pin}) async {
     final salt = PinHasher.generateSalt();
     final hash = PinHasher.hash(pin, salt);
     await _profiles.updatePin(pinHash: hash, pinSalt: salt);
 
-    final profile = await _profiles.currentProfile();
     final email = _client.auth.currentUser?.email;
-    if (profile != null && email != null) {
-      await _storage.write(key: _kName, value: profile.firstName);
-      await _storage.write(key: _kEmail, value: email);
+    final profile = await _profiles.currentProfile();
+    final name = profile?.firstName ?? await rememberedName() ?? '';
+    if (email == null) return;
+
+    final password = _generatePassword();
+    try {
+      await _client.auth.updateUser(UserAttributes(password: password));
+      await _remember(name: name, email: email, password: password);
+    } on AuthException {
+      // Even if the password update fails, keep name/email so the greeting and
+      // recovery still work.
+      await _storage.write(key: _kName, value: name.trim());
+      await _storage.write(key: _kEmail, value: email.trim());
     }
   }
 
@@ -219,13 +232,19 @@ class AuthService {
     final email = await _storage.read(key: _kEmail);
     final password = await _storage.read(key: _kPassword);
     if (email == null || password == null) {
-      throw const AuthFailure('We could not find your account on this device.');
+      throw const AuthFailure(
+        'We could not sign you in on this device. Please use '
+        '"Forgot My PIN" to restore your account.',
+      );
     }
     try {
       await _client.auth
           .signInWithPassword(email: email, password: password);
     } on AuthException {
-      throw const AuthFailure('We could not sign you in. Please try again.');
+      throw const AuthFailure(
+        'We could not sign you in. Please use "Forgot My PIN" to '
+        'restore your account.',
+      );
     }
   }
 

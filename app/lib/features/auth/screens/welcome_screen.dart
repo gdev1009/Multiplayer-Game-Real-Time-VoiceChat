@@ -22,11 +22,18 @@ class WelcomeScreen extends StatelessWidget {
           const SizedBox(height: AppSpacing.xl),
           const Icon(Icons.spa_rounded, size: 96, color: AppColors.deepPurple),
           const SizedBox(height: AppSpacing.lg),
-          Text('Welcome to', style: AppText.title, textAlign: TextAlign.center),
-          Text('Match Word',
-              style: AppText.display, textAlign: TextAlign.center),
+          const Text(
+            'Welcome to',
+            style: AppText.title,
+            textAlign: TextAlign.center,
+          ),
+          const Text(
+            'Match Word',
+            style: AppText.display,
+            textAlign: TextAlign.center,
+          ),
           const SizedBox(height: AppSpacing.md),
-          Text(
+          const Text(
             'A fun word game where you play with friends, '
             'laugh, and connect.',
             style: AppText.bodyMuted,
