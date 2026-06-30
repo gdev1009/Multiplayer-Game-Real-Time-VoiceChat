@@ -3,6 +3,10 @@
 **/.env
 *.keystore
 *.jks
+# Local scratchpad containing live credentials — never commit
+docs/Project.md
+**/google-services.json
+**/GoogleService-Info.plist
 
 # Flutter / Dart build artifacts
 app/.dart_tool/

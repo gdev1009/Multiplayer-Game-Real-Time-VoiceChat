@@ -110,7 +110,10 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
             email: _emailController.text,
             pin: _pin,
           );
-      // AuthGate will switch to the home screen automatically.
+      // Account created and signed in. Remove this pushed flow so the
+      // AuthGate's Home screen becomes visible.
+      if (!mounted) return;
+      Navigator.of(context).popUntil((route) => route.isFirst);
     } on AuthFailure catch (e) {
       if (!mounted) return;
       setState(() {

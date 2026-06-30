@@ -46,7 +46,7 @@ Supabase
 
 ---
 
-## Milestone 1 — Sign In & Account System · $550 · 5–7 days · **IN PROGRESS**
+## Milestone 1 — Sign In & Account System · $550 · 5–7 days · **COMPLETE**
 
 **Scope**
 - First-time account creation: first name → email (once) → 4-digit PIN, one decision per screen.
@@ -70,6 +70,8 @@ Supabase
 - All screens meet the senior-first UI checklist.
 
 **Proof of work:** screen recording of create → logout → daily login → forgot-PIN, plus a debug build.
+
+Checklist: `docs/Milestone 1 Sign-off Checklist.md`
 
 ---
 

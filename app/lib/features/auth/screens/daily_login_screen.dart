@@ -34,7 +34,10 @@ class _DailyLoginScreenState extends State<DailyLoginScreen> {
       await context
           .read<AuthController>()
           .dailyLogin(firstName: name, pin: _pin);
-      // AuthGate switches to home on success.
+      // Signed in. If this screen was pushed (e.g. from Welcome), remove it so
+      // the AuthGate's Home screen becomes visible. Safe no-op at root.
+      if (!mounted) return;
+      Navigator.of(context).popUntil((route) => route.isFirst);
     } on AuthFailure catch (e) {
       if (!mounted) return;
       setState(() {
@@ -61,15 +64,24 @@ class _DailyLoginScreenState extends State<DailyLoginScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const SizedBox(height: AppSpacing.xl),
-          const Icon(Icons.waving_hand_rounded,
-              size: 72, color: AppColors.gold),
+          const Icon(
+            Icons.waving_hand_rounded,
+            size: 72,
+            color: AppColors.gold,
+          ),
           const SizedBox(height: AppSpacing.md),
-          Text('Welcome back,',
-              style: AppText.title, textAlign: TextAlign.center),
+          const Text(
+            'Welcome back,',
+            style: AppText.title,
+            textAlign: TextAlign.center,
+          ),
           Text(name, style: AppText.display, textAlign: TextAlign.center),
           const SizedBox(height: AppSpacing.lg),
-          Text('Enter your 4-number PIN',
-              style: AppText.body, textAlign: TextAlign.center),
+          const Text(
+            'Enter your 4-number PIN',
+            style: AppText.body,
+            textAlign: TextAlign.center,
+          ),
           const SizedBox(height: AppSpacing.lg),
           if (_busy)
             const Padding(

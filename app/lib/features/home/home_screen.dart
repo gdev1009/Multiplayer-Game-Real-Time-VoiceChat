@@ -25,23 +25,29 @@ class HomeScreen extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const SizedBox(height: AppSpacing.xl),
-          const Icon(Icons.celebration_rounded,
-              size: 88, color: AppColors.gold),
+          const Icon(
+            Icons.celebration_rounded,
+            size: 88,
+            color: AppColors.gold,
+          ),
           const SizedBox(height: AppSpacing.lg),
-          Text('You are signed in,',
-              style: AppText.title, textAlign: TextAlign.center),
+          const Text(
+            'You are signed in,',
+            style: AppText.title,
+            textAlign: TextAlign.center,
+          ),
           Text(name, style: AppText.display, textAlign: TextAlign.center),
           const SizedBox(height: AppSpacing.lg),
           if (trialDays > 0)
             _TrialBanner(daysLeft: trialDays)
           else
-            Text(
+            const Text(
               'Your account is ready.',
               style: AppText.bodyMuted,
               textAlign: TextAlign.center,
             ),
           const Spacer(),
-          Text(
+          const Text(
             'The studio doors open next — coming in Milestone 2.',
             style: AppText.bodyMuted,
             textAlign: TextAlign.center,

@@ -73,11 +73,22 @@ flutter doctor
 4. **Enable the email one-time code (for Forgot PIN)**
 
    - Dashboard → **Authentication → Providers → Email**: enable Email.
+   - Dashboard → **Authentication → Sign In / Providers**: set **Confirm email** to OFF for this Milestone 1 flow.
    - Dashboard → **Authentication → Email Templates → Magic Link**: make sure the template
      includes the token, e.g. `Your code is: {{ .Token }}`. The app verifies this 6-digit
      code in the Forgot-PIN flow.
 
-5. **Run**
+5. **(Recommended for production) Use custom SMTP with Mailgun**
+
+   - Dashboard → **Authentication → Providers → Email**: enable Custom SMTP.
+   - Use Mailgun SMTP credentials:
+     - Host: `smtp.mailgun.org`
+     - Port: `587`
+     - Username: Mailgun SMTP login (typically `postmaster@<your-domain>`)
+     - Password: Mailgun SMTP password
+   - Use a verified sender email/domain in Mailgun.
+
+6. **Run**
 
    ```bash
    flutter run
