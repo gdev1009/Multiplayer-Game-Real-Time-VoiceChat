@@ -11,11 +11,16 @@ import '../../../core/widgets/big_text_field.dart';
 import '../../../core/widgets/pin_pad.dart';
 import '../../../services/auth_failure.dart';
 import '../auth_controller.dart';
+import 'forgot_pin_screen.dart';
 
 /// Step-by-step account creation: name → email → choose PIN → confirm PIN.
 /// One decision per screen, large controls, friendly errors.
 class CreateAccountScreen extends StatefulWidget {
-  const CreateAccountScreen({super.key});
+  const CreateAccountScreen({super.key, this.initialEmail});
+
+  /// Pre-fills the email field (e.g. when arriving from the "please create one"
+  /// sign-in prompt), so the player doesn't retype it.
+  final String? initialEmail;
 
   @override
   State<CreateAccountScreen> createState() => _CreateAccountScreenState();
@@ -34,6 +39,19 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
   String? _error;
   bool _busy = false;
 
+  /// True when the chosen email already has an account, so we can offer the
+  /// "Forgot my PIN" recovery flow right from the error.
+  bool _offerForgotPin = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final email = widget.initialEmail?.trim();
+    if (email != null && email.isNotEmpty) {
+      _emailController.text = email;
+    }
+  }
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -43,6 +61,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
 
   void _goTo(_Step step) => setState(() {
         _error = null;
+        _offerForgotPin = false;
         _step = step;
       });
 
@@ -102,6 +121,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     setState(() {
       _busy = true;
       _error = null;
+      _offerForgotPin = false;
     });
 
     try {
@@ -116,10 +136,14 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
       Navigator.of(context).popUntil((route) => route.isFirst);
     } on AuthFailure catch (e) {
       if (!mounted) return;
+      // If the email is already taken, the answer is to recover the PIN, not
+      // to create a second account — so surface the "Forgot my PIN" action.
+      final emailTaken = e.message.toLowerCase().contains('already');
       setState(() {
         _busy = false;
         _error = e.message;
-        _step = _Step.pin;
+        _offerForgotPin = emailTaken;
+        _step = emailTaken ? _Step.email : _Step.pin;
         _pin = '';
         _confirmPin = '';
       });
@@ -130,6 +154,15 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
         _error = 'Something went wrong. Please try again.';
       });
     }
+  }
+
+  void _openForgotPin() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            ForgotPinScreen(initialEmail: _emailController.text.trim()),
+      ),
+    );
   }
 
   @override
@@ -162,6 +195,15 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
         if (_error != null) ...[
           const SizedBox(height: AppSpacing.md),
           Text(_error!, style: AppText.error, textAlign: TextAlign.center),
+        ],
+        if (_offerForgotPin) ...[
+          const SizedBox(height: AppSpacing.md),
+          BigButton(
+            label: 'Forgot my PIN',
+            icon: Icons.lock_reset,
+            variant: BigButtonVariant.secondary,
+            onPressed: _openForgotPin,
+          ),
         ],
       ],
     );

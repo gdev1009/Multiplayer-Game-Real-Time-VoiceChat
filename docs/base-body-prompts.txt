@@ -1,0 +1,68 @@
+MATCH WORD — BASE BODY PROMPTS (ready to paste)
+================================================
+Target: 2 matched clay-style bodies, front-facing, BIG ROUND head, bald + plain
+basewear (hair/glasses/outfits are separate layers). Final files must be
+1254 x 1254 transparent PNG. Full guide: docs/Base Body AI Generation Guide.md
+
+
+----------------------------------------------------------------------
+PROMPT A — FEMALE (paste first)
+----------------------------------------------------------------------
+A full-body 3D clay-render character of a friendly woman, front view, standing
+straight and symmetrical, arms relaxed but slightly away from the body, feet
+together and fully visible. Cute stylized proportions with a BIG ROUND HEAD
+(head about one third of total height), soft rounded body, warm friendly face,
+gentle smile, small nose. Soft matte CLAY / PLASTICINE material with subtle
+sheen, smooth surfaces, soft studio top light, soft contact shadow. Bald / no
+hair, wearing only plain simple fitted neutral basewear (like a plain leotard),
+neutral warm skin tone. Style of a warm, cheerful game-show mascot (Pixar / The
+Sims / Toca Boca clay look). PLAIN FLAT LIGHT-GREY BACKGROUND, no floor lines,
+no props, no text. Centered, whole body inside frame with headroom and footroom.
+Square image.
+
+
+----------------------------------------------------------------------
+PROMPT B — MALE (paste AFTER the female is good, in the SAME chat)
+----------------------------------------------------------------------
+Now the MALE version — EXACTLY the same clay-render style, same camera angle,
+same lighting, same scale and framing, same plain flat light-grey background.
+A friendly man with the same BIG ROUND HEAD cartoon proportions, soft rounded
+body, warm friendly face, gentle smile. Bald / no hair, wearing only plain
+simple fitted neutral basewear (plain shorts), neutral warm skin tone. Front
+view, standing straight and symmetrical, arms slightly away from the body, feet
+fully visible. Match the woman so they look like a matched pair. Square image.
+
+
+----------------------------------------------------------------------
+STYLE BOOSTER (append if it looks too realistic)
+----------------------------------------------------------------------
+More stylized and cartoony, softer and rounder, more clay/putty material, less
+realistic, bigger head, cuter, warm and playful.
+
+
+----------------------------------------------------------------------
+AVOID / NEGATIVE
+----------------------------------------------------------------------
+avoid: realistic human proportions, small head, hair, hairstyle, hat, detailed
+clothing, logos, text, watermark, busy background, floor, shadows on wall,
+multiple characters, side view, cropped feet, harsh lighting.
+
+
+----------------------------------------------------------------------
+MIDJOURNEY — one-line versions (paste after /imagine)
+----------------------------------------------------------------------
+FEMALE:
+full body 3D clay render of a friendly woman, front view, big round head cartoon
+proportions, soft rounded body, gentle smile, matte plasticine clay material,
+soft studio top light, bald no hair, plain fitted neutral basewear, warm skin,
+Pixar / Sims / Toca Boca clay mascot, plain flat light-grey background, centered,
+full body with headroom and footroom --ar 1:1 --style raw --v 6.1 --no hair, hat,
+text, logo, props, floor, realistic proportions, small head, side view
+
+MALE (reuse the female's seed + cref):
+full body 3D clay render of a friendly man, same clay style camera and lighting,
+big round head cartoon proportions, soft rounded body, gentle smile, bald no
+hair, plain fitted basewear shorts, warm skin, plain flat light-grey background,
+centered, full body --ar 1:1 --style raw --v 6.1 --seed <FEMALE_SEED>
+--cref <FEMALE_IMAGE_URL> --cw 60 --no hair, hat, text, logo, props, floor,
+realistic proportions, small head, side view

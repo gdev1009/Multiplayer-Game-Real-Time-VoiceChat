@@ -47,6 +47,12 @@ class AuthController extends ChangeNotifier {
     _set(AuthStatus.signedIn);
   }
 
+  Future<void> quickTestSignIn() async {
+    _profile = await _auth.quickTestSignIn();
+    _rememberedName = _profile?.firstName;
+    _set(AuthStatus.signedIn);
+  }
+
   Future<void> dailyLogin({
     required String firstName,
     required String pin,
@@ -55,10 +61,55 @@ class AuthController extends ChangeNotifier {
     _set(AuthStatus.signedIn);
   }
 
+  /// Step 1 of "I already have an account": decides whether to sign in silently
+  /// and ask for the PIN (account already on this device) or to verify the PIN
+  /// on the server first (fresh device).
+  Future<EmailSignInResult> beginEmailSignIn({required String email}) =>
+      _auth.beginEmailSignIn(email: email);
+
+  /// Fresh-device step: verify the PIN on the server and, if correct, email a
+  /// one-time code to confirm the device. Returns the greeting name.
+  Future<String> verifyPinRemoteAndSendCode({
+    required String email,
+    required String pin,
+  }) =>
+      _auth.verifyPinRemoteAndSendCode(email: email, pin: pin);
+
+  /// Fresh-device final step: verify the emailed [code] (establishes the
+  /// session), then confirm the [pin] and sign in. This also restores silent
+  /// sign-in on this device for next time.
+  Future<void> completeRemoteSignIn({
+    required String email,
+    required String code,
+    required String pin,
+  }) async {
+    await _auth.verifyEmailCodeSignIn(email: email, code: code);
+    _profile = await _auth.verifyPinSignIn(pin: pin);
+    _rememberedName = await _auth.rememberedName();
+    _set(AuthStatus.signedIn);
+  }
+
+  /// Step 2 of "I already have an account" (same-device fast path): verify the
+  /// PIN and sign in.
+  Future<void> verifyPinSignIn({required String pin}) async {
+    _profile = await _auth.verifyPinSignIn(pin: pin);
+    _rememberedName = await _auth.rememberedName();
+    _set(AuthStatus.signedIn);
+  }
+
   Future<void> lock() async {
     await _auth.lock();
     _profile = null;
     _set(AuthStatus.locked);
+  }
+
+  /// Full sign-out from the Opening screen: ends the session and returns the
+  /// player to the Welcome screen (where they can sign in by email or create a
+  /// new account). The device still remembers the account for a quick sign-in.
+  Future<void> signOut() async {
+    await _auth.lock();
+    _profile = null;
+    _set(AuthStatus.needsAccount);
   }
 
   // Recovery passthroughs.

@@ -11,6 +11,31 @@ import 'device_service.dart';
 import 'profile_service.dart';
 import 'trial_service.dart';
 
+/// What the sign-in UI should do next after the player enters their email.
+enum EmailSignInStep {
+  /// The account is already on this device — ask for the PIN and sign in
+  /// silently (no email code needed).
+  enterPin,
+
+  /// The account exists elsewhere (fresh device). Ask for the PIN; it is
+  /// checked on the server, then a one-time code confirms the device.
+  enterPinRemote,
+}
+
+/// Outcome of [AuthService.beginEmailSignIn].
+class EmailSignInResult {
+  const EmailSignInResult.pin(String this.name)
+      : step = EmailSignInStep.enterPin;
+  const EmailSignInResult.pinRemote()
+      : step = EmailSignInStep.enterPinRemote,
+        name = null;
+
+  final EmailSignInStep step;
+
+  /// The account's first name, when known (fast local path only).
+  final String? name;
+}
+
 /// Coordinates the whole Sign In & Account System (Milestone 1).
 ///
 /// Login model (per spec):
@@ -37,6 +62,9 @@ class AuthService {
   static const _kName = 'mw_remembered_name';
   static const _kEmail = 'mw_account_email';
   static const _kPassword = 'mw_account_password';
+  static const _kQuickTestName = 'Tester';
+  static const _kQuickTestPin = '1234';
+  static const _kQuickTestPassword = 'MatchWord-Test-Only-2026!';
 
   final SupabaseClient _client;
   final DeviceService _device;
@@ -149,10 +177,241 @@ class AuthService {
     return profile;
   }
 
+  /// One-tap testing path for Milestones 2/3/4.
+  ///
+  /// Creates or signs in a deterministic per-device test account and returns a
+  /// valid signed-in [Profile] without asking the tester to go through the
+  /// full production auth flow. This is intended for APK testing only.
+  Future<Profile> quickTestSignIn() async {
+    final deviceId = await _device.deviceId();
+    final email = _quickTestEmail(deviceId);
+
+    try {
+      await _client.auth.signInWithPassword(
+        email: email,
+        password: _kQuickTestPassword,
+      );
+    } on AuthException {
+      final AuthResponse res;
+      try {
+        res = await _client.auth.signUp(
+          email: email,
+          password: _kQuickTestPassword,
+        );
+      } on AuthException {
+        throw const AuthFailure(
+          'We could not start the test account. Please try again.',
+        );
+      }
+
+      if (_client.auth.currentUser == null && res.user != null) {
+        try {
+          await _client.auth.signInWithPassword(
+            email: email,
+            password: _kQuickTestPassword,
+          );
+        } on AuthException {
+          throw const AuthFailure(
+            'We could not sign in the test account. Please try again.',
+          );
+        }
+      }
+    }
+
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      throw const AuthFailure(
+        'We could not sign in the test account. Please try again.',
+      );
+    }
+
+    var profile = await _profiles.currentProfile();
+    if (profile == null) {
+      final trialUsedBefore = await _trials.hasUsedTrial(deviceId);
+      final grantTrial = !trialUsedBefore;
+      final salt = PinHasher.generateSalt();
+      final hash = PinHasher.hash(_kQuickTestPin, salt);
+
+      await _profiles.createProfile(
+        userId: user.id,
+        firstName: _kQuickTestName,
+        deviceId: deviceId,
+        pinHash: hash,
+        pinSalt: salt,
+        grantTrial: grantTrial,
+      );
+
+      if (grantTrial) {
+        await _trials.recordTrialStart(deviceId);
+      }
+
+      profile = await _profiles.currentProfile();
+    }
+
+    if (profile == null) {
+      throw const AuthFailure(
+        'The test account was created but could not load. Please try again.',
+      );
+    }
+
+    await _remember(
+      name: profile.firstName,
+      email: email,
+      password: _kQuickTestPassword,
+    );
+    return profile;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Sign in with email + PIN ("I already have an account")
+  // ---------------------------------------------------------------------------
+
+  /// Step 1 of email sign-in. Decides how the player proves who they are:
+  ///
+  ///  - If this account is already on the device, we bring up its session with
+  ///    the saved password and go straight to the PIN (returning
+  ///    [EmailSignInStep.enterPin] with the greeting name). No code needed.
+  ///  - Otherwise this is a fresh device. We ask for the PIN next; it is
+  ///    verified on the server and, if correct, a one-time code confirms the
+  ///    device (returning [EmailSignInStep.enterPinRemote]).
+  ///
+  /// This never blocks a registered email and never sends a code until the PIN
+  /// checks out.
+  Future<EmailSignInResult> beginEmailSignIn({required String email}) async {
+    final lower = email.trim().toLowerCase();
+    final storedEmail =
+        (await _storage.read(key: _kEmail))?.trim().toLowerCase();
+
+    // Fast path: this account was set up on (or already restored to) this
+    // device, so we can sign in silently and just ask for the PIN.
+    if (storedEmail != null && storedEmail == lower) {
+      await _ensureSession();
+      final profile = await _profiles.currentProfile();
+      final name = profile?.firstName ?? await rememberedName();
+      if (name == null || name.trim().isEmpty) {
+        throw const AuthFailure('We could not load your account. Please retry.');
+      }
+      return EmailSignInResult.pin(name.trim());
+    }
+
+    // Fresh device: don't send anything yet. Collect the PIN next and verify it
+    // on the server (email -> PIN -> code order).
+    return const EmailSignInResult.pinRemote();
+  }
+
+  /// Fresh-device step: verifies [pin] for [email] on the server (no session
+  /// required) and, when correct, emails a one-time code to confirm the device.
+  /// Returns the account's first name for the greeting.
+  ///
+  /// Throws [AuthFailure] with:
+  ///  - code 'no_account' when the email has no account (UI offers Create),
+  ///  - a "PIN is not correct" message when the PIN is wrong,
+  ///  - a "too many tries" message while the account is temporarily locked.
+  Future<String> verifyPinRemoteAndSendCode({
+    required String email,
+    required String pin,
+  }) async {
+    final trimmedEmail = email.trim();
+    final Map<String, dynamic> res;
+    try {
+      res = (await _client.rpc(
+        'mw_verify_pin',
+        params: {'p_email': trimmedEmail, 'p_pin': pin},
+      ) as Map)
+          .cast<String, dynamic>();
+    } catch (_) {
+      throw const AuthFailure(
+        'We could not sign you in. Please check your connection and try again.',
+      );
+    }
+
+    final ok = res['ok'] == true;
+    if (!ok) {
+      final reason = res['reason'] as String?;
+      switch (reason) {
+        case 'no_account':
+          throw const AuthFailure(
+            'We could not find an account for that email. '
+            'Please check it, or create a new account.',
+            code: 'no_account',
+          );
+        case 'locked':
+          final secs = (res['retry_seconds'] as num?)?.round() ?? 900;
+          final mins = (secs / 60).ceil();
+          throw AuthFailure(
+            'Too many tries. Please wait about $mins '
+            '${mins == 1 ? 'minute' : 'minutes'} and try again.',
+          );
+        default:
+          throw const AuthFailure('That PIN is not correct.');
+      }
+    }
+
+    // PIN is correct — send the one-time code to confirm this device.
+    try {
+      await _client.auth
+          .signInWithOtp(email: trimmedEmail, shouldCreateUser: false);
+    } on AuthException {
+      throw const AuthFailure(
+        'We could not send the code. Please try again in a moment.',
+      );
+    }
+
+    final name = (res['name'] as String?)?.trim();
+    if (name == null || name.isEmpty) {
+      return 'there'; // greeting fallback; real name loads after the code
+    }
+    return name;
+  }
+
+  /// Fresh-device final step: verifies the one-time [code] emailed to [email],
+  /// establishes the account's session, and returns its first name.
+  Future<String> verifyEmailCodeSignIn({
+    required String email,
+    required String code,
+  }) async {
+    try {
+      await _client.auth.verifyOTP(
+        email: email.trim(),
+        token: code.trim(),
+        type: OtpType.email,
+      );
+    } on AuthException {
+      throw const AuthFailure('That code is not correct or has expired.');
+    }
+
+    final profile = await _profiles.currentProfile();
+    final name = profile?.firstName ?? await rememberedName();
+    if (name == null || name.trim().isEmpty) {
+      throw const AuthFailure('We could not load your account. Please retry.');
+    }
+    return name.trim();
+  }
+
+  /// Step 2 of email sign-in: verifies [pin] against the account whose session
+  /// was established by [beginEmailSignIn] or [verifyEmailCodeSignIn]. Returns
+  /// the signed-in [Profile].
+  Future<Profile> verifyPinSignIn({required String pin}) async {
+    final creds = await _profiles.pinCredentials();
+    if (creds == null) {
+      throw const AuthFailure('We could not find your account on this device.');
+    }
+    if (!PinHasher.verify(pin, creds.salt, creds.hash)) {
+      throw const AuthFailure('That PIN is not correct.');
+    }
+    // Make sure this device can sign in silently next time. On a fresh device
+    // (code path) there is no saved password yet, so mint one now.
+    await _ensureLocalCredentials();
+    final profile = await _profiles.currentProfile();
+    if (profile == null) {
+      throw const AuthFailure('We could not load your account. Please retry.');
+    }
+    return profile;
+  }
+
   // ---------------------------------------------------------------------------
   // Forgot PIN — email one-time code, then set a new PIN
   // ---------------------------------------------------------------------------
-
   /// Sends a one-time code to [email] (defaults to the remembered email).
   Future<void> sendRecoveryCode({String? email}) async {
     final target = (email ?? await _storage.read(key: _kEmail))?.trim();
@@ -258,10 +517,46 @@ class AuthService {
     await _storage.write(key: _kPassword, value: password);
   }
 
+  /// Ensures the device holds a working email + password so it can silently
+  /// re-authenticate later (daily login by name + PIN).
+  ///
+  /// Used after a fresh-device code sign-in, where the account's session came
+  /// from a one-time code and no reusable password is stored yet. We mint a new
+  /// random Supabase password and remember it. If one is already stored (the
+  /// normal returning-device case), this does nothing.
+  Future<void> _ensureLocalCredentials() async {
+    final storedPassword = await _storage.read(key: _kPassword);
+    if (storedPassword != null && storedPassword.isNotEmpty) return;
+
+    final email = _client.auth.currentUser?.email;
+    if (email == null) return;
+    final profile = await _profiles.currentProfile();
+    final name = profile?.firstName ?? await rememberedName() ?? '';
+
+    final password = _generatePassword();
+    try {
+      await _client.auth.updateUser(UserAttributes(password: password));
+      await _remember(name: name, email: email, password: password);
+    } on AuthException {
+      // Even if we could not rotate the password, remember name + email so the
+      // greeting works and recovery stays available.
+      await _storage.write(key: _kName, value: name.trim());
+      await _storage.write(key: _kEmail, value: email.trim());
+    }
+  }
+
   String _generatePassword() {
     final random = Random.secure();
     final bytes = List<int>.generate(24, (_) => random.nextInt(256));
     return 'Mw!${base64Url.encode(bytes)}';
+  }
+
+  String _quickTestEmail(String deviceId) {
+    final slug = deviceId.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').toLowerCase();
+    final short = slug.isEmpty
+        ? 'device'
+        : slug.substring(0, slug.length > 20 ? 20 : slug.length);
+    return 'tester+$short@matchword.local';
   }
 
   String _friendlySignUpError(AuthException e) {

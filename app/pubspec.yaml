@@ -27,6 +27,9 @@ dependencies:
   # Lightweight state management
   provider: ^6.1.2
 
+  # Native share sheet — share a game code outside the app (M4)
+  share_plus: ^10.0.0
+
   # Environment configuration
   flutter_dotenv: ^5.1.0
 
@@ -34,9 +37,35 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
+  flutter_launcher_icons: ^0.14.1
+
+# App launcher icons (Android + web). Regenerate with:
+#   dart run flutter_launcher_icons
+flutter_launcher_icons:
+  image_path: "assets/images/matchword-app-icon.png"
+  android: "ic_launcher"
+  min_sdk_android: 21
+  adaptive_icon_background: "#3B1A63"
+  adaptive_icon_foreground: "assets/images/matchword-app-icon.png"
+  ios: true
+  remove_alpha_ios: true
+  background_color_ios: "#3B1A63"
+  web:
+    generate: true
+    image_path: "assets/images/matchword-app-icon.png"
+    background_color: "#3B1A63"
+    theme_color: "#5B2D8E"
+  flutter_launcher_icons: ^0.14.4
 
 flutter:
   uses-material-design: true
   assets:
     - .env
     - assets/images/
+    - assets/images/host/
+    - assets/images/character/
+    - assets/images/character/base/
+    - assets/images/character/hair/
+    - assets/images/character/eyes/
+    - assets/images/character/glasses/
+    - assets/images/character/outfit/

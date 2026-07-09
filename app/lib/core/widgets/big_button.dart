@@ -24,11 +24,35 @@ class BigButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool isPrimary = variant == BigButtonVariant.primary;
-    final Color background =
-        isPrimary ? AppColors.deepPurple : Colors.transparent;
     final Color foreground =
         isPrimary ? AppColors.onPrimary : AppColors.deepPurple;
     final bool enabled = onPressed != null && !isLoading;
+
+    final Widget content = isLoading
+        ? const SizedBox(
+            height: 28,
+            width: 28,
+            child: CircularProgressIndicator(
+              strokeWidth: 3,
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+            ),
+          )
+        : Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (icon != null) ...[
+                Icon(icon, size: 28, color: foreground),
+                const SizedBox(width: AppSpacing.sm),
+              ],
+              Flexible(
+                child: Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: AppText.action.copyWith(color: foreground),
+                ),
+              ),
+            ],
+          );
 
     return SizedBox(
       width: double.infinity,
@@ -36,46 +60,37 @@ class BigButton extends StatelessWidget {
       child: Semantics(
         button: true,
         label: label,
-        child: ElevatedButton(
-          onPressed: enabled ? onPressed : null,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: background,
-            foregroundColor: foreground,
-            disabledBackgroundColor:
-                isPrimary ? AppColors.divider : Colors.transparent,
-            elevation: isPrimary ? 2 : 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
-              side: isPrimary
-                  ? BorderSide.none
-                  : const BorderSide(color: AppColors.deepPurple, width: 3),
-            ),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: isPrimary && enabled ? AppColors.brandGradient : null,
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: isPrimary && enabled ? AppColors.softShadow : null,
           ),
-          child: isLoading
-              ? const SizedBox(
-                  height: 28,
-                  width: 28,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 3,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                  ),
-                )
-              : Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    if (icon != null) ...[
-                      Icon(icon, size: 28, color: foreground),
-                      const SizedBox(width: AppSpacing.sm),
-                    ],
-                    Flexible(
-                      child: Text(
-                        label,
-                        textAlign: TextAlign.center,
-                        style: AppText.action.copyWith(color: foreground),
-                      ),
-                    ),
-                  ],
-                ),
+          child: ElevatedButton(
+            onPressed: enabled ? onPressed : null,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.transparent,
+              foregroundColor: foreground,
+              shadowColor: Colors.transparent,
+              disabledBackgroundColor:
+                  isPrimary ? AppColors.divider : Colors.transparent,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+                side: isPrimary
+                    ? BorderSide.none
+                    : const BorderSide(color: AppColors.deepPurple, width: 3),
+              ),
+            ).copyWith(
+              backgroundColor: WidgetStateProperty.resolveWith((states) {
+                if (states.contains(WidgetState.disabled)) {
+                  return isPrimary ? AppColors.divider : Colors.transparent;
+                }
+                return Colors.transparent;
+              }),
+            ),
+            child: content,
+          ),
         ),
       ),
     );

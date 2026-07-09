@@ -75,7 +75,7 @@ Checklist: `docs/Milestone 1 Sign-off Checklist.md`
 
 ---
 
-## Milestone 2 — Opening Screen & Navigation · $400 · 4–5 days
+## Milestone 2 — Opening Screen & Navigation · $400 · 4–5 days · **COMPLETE**
 
 **Scope**
 - App navigation shell and routing.
@@ -87,19 +87,71 @@ Checklist: `docs/Milestone 1 Sign-off Checklist.md`
 **Definition of done:** navigable shell; opening screen matches brand colours (#5B2D8E etc.); design
 system documented and reused; passes UI checklist on iPhone SE.
 
+Design system: `docs/Design System.md`
+
 ---
 
-## Milestone 3 — Character Creation System · $650 · 6–7 days
+## Milestone 3 — Character Creation System · $650 · 6–7 days · **90% (final art pending)**
+
+**Milestone 3+ add-on (approved 2026-07-03): official base body renders · +$120 CAD, rolled into M3.**
+- Deliver 2 master base bodies (female + male), 1254×1254 transparent PNG, front-facing, warm
+  Guy Smiley clay style with bigger/rounder heads — to serve as the artist's north-star reference.
+- Includes a "safe zone" registration guide (head centre, eye line, shoulder line, hem line) so the
+  Fiverr artist paints hair/eyes/glasses/outfits in perfect alignment.
+- One revision round with the client before the bodies are finalized and sent to the artist.
+
+**Update — base bodies DELIVERED (2026-07-06):** both master base bodies generated and installed as
+spec-perfect 1254×1254 transparent PNGs (`assets/images/character/base/body-female.png`,
+`body-male.png`), auto-registered to the safe-zone landmarks (head-top y90, feet y1200, centre x627).
+Repeatable pipeline lives in `app/tools/generate_base_bodies.py` (`--dry-run` previews prompt + cost).
+The safe-zone guide + references ship in `app/dist/MatchWord-Character-Artist-Pack.zip`.
 
 **Scope**
 - Step-by-step wizard (one choice per screen): base figure → hair → eyes → glasses → outfit →
   display name → preview/confirm.
 - Paper-doll assembly engine that layers client-provided PNG assets.
 - Save character to profile; allow later editing from settings.
+- Neutral-PNG colour tinting for hair and eyes: one colourless PNG per style, coloured in-app
+  (hair: black/brown/auburn/blonde/grey/white; eyes: brown/hazel/green/blue/grey).
 
 **Dependency:** client-provided layered PNG character assets.
 **Definition of done:** a character can be built, previewed, saved, reloaded, and edited; renders
 crisply on small screens; assembly engine handles missing/None layers gracefully.
+
+**Proof of work:** `app/screenshots/` — face selection, hair-colour tint (auburn), eye-colour tint
+(blue), and the review/save screen, captured from the running builder.
+
+**Update — premium "Character Studio" + body types (new art):**
+- Rebuilt around Ronna's real clay art: a spotlit **Character Studio** stage (backdrop, floor
+  shadow, progress bar, animated glossy tiles).
+- **Two body types** — Woman and Man — each a real full-body clay render, selectable in step 1.
+- **Skin-tone tinting** on the body (Light / Medium / Tan / Deep) via in-app colour modulation.
+- **Real drop-in hair**: the client's spiky hair PNG loads and tints across all six hair colours
+  (black/brown/auburn/blonde/grey/white), aligned to the head on both bodies.
+- Every other layer (eyes, glasses, outfit) still drops in by filename with a graceful vector
+  fallback until final art arrives.
+- Validated: `flutter analyze` clean, all tests pass. Release APKs built for phone (arm64/arm32)
+  and LDPlayer (x86_64) in `app/dist/`.
+- Proof screenshots: `app/screenshots/new_08_female_spiky.png`, `new_10_blonde.png`,
+  `new_11_male_spiky.png`.
+
+**Update — name-on-shirt + edit-later (spec parity):**
+- **Name-on-shirt** implemented: the player's name now prints across the front of the shirt in the
+  live preview (uppercase jersey style, auto-scales to fit long names, dark outline so it reads on
+  any outfit colour). Shows whenever an outfit is worn.
+- **Edit later** verified working: the home screen's **Edit** button re-opens the wizard with every
+  saved choice (body, colours, hair, eyes, glasses, outfit, name) pre-filled, and re-saves in place.
+- **Per-body art support** added to the engine: each accessory can load a body-specific render
+  (`<id>__body-female.png` / `<id>__body-male.png`) so parts fit each figure precisely, falling back
+  to the shared file, then the vector placeholder. Artist brief updated in
+  `app/assets/images/character/README.md`.
+- Validated: `flutter analyze` clean, 16/16 tests pass, APKs rebuilt in `app/dist/`.
+
+**Remaining 10% (final art):** the flow, save/edit, name-on-shirt and assembly are all done and
+shipping. The last 10% is swapping the placeholder hair/eyes/glasses/outfit vectors for the
+premium rendered art pack — a pure drop-in by filename, **no code changes**. Marked COMPLETE once
+the art pack lands.
+
 
 ---
 
@@ -113,6 +165,47 @@ crisply on small screens; assembly engine handles missing/None layers gracefully
 
 **Definition of done:** four devices (or device + AI fill) can land in one lobby with correct roles
 and teams; Realtime lobby state stays in sync; codes are unique and expire sensibly.
+
+**Update — build in progress (2026-07-06):** the lobby vertical slice is implemented and passing all
+quality gates (analyze clean, 25/25 tests).
+- **Server-authoritative schema** (`supabase/migrations/0004_lobby.sql`, applied to live DB): `games`
+  + `game_players` tables, RLS with SELECT-only client access, and `SECURITY DEFINER` functions as the
+  only write path — `mw_create_game`, `mw_join_game`, `mw_quick_match`, `mw_fill_seats`,
+  `mw_start_game`, `mw_leave_game`, plus seat/role helpers.
+- **4-digit codes**: unique among active lobbies (partial unique index), auto-expire after 24h.
+- **Teams & roles**: seats map 0→A1, 1→B1, 2→A2, 3→B2 (Team A / Team B); SQL and Dart
+  (`LobbyRoles`) mapping verified identical.
+- **Matchmaking**: "Find a Game" quick-matches into the oldest open public lobby or opens a new one;
+  join-by-code; host "Add Players" fills empty seats with studio players (the word "AI" never appears
+  in the UI, per the guiding principles).
+- **Realtime**: `games` + `game_players` on the `supabase_realtime` publication; the client subscribes
+  via `.stream()` so seats update live as players join/leave and when the host starts.
+- **UI** (senior-first, reuses the design system): lobby hub (`upcoming_games_screen.dart`),
+  4-digit code entry (`join_by_code_screen.dart`), and the live room with shareable code, team seats,
+  and host controls (`lobby_room_screen.dart`).
+
+**Update — premium completion (2026-07-08):** closed the remaining spec gaps so both lobby entry
+points are fully live and the "definition of done" is met end to end.
+- **Player counts in "Check Upcoming Games"** — the open-games list now shows live occupancy
+  ("2 / 4 players") for each joinable lobby, and full games drop off the list automatically. Backed
+  by a single `SECURITY DEFINER` function (`supabase/migrations/0005_lobby_counts.sql` →
+  `mw_list_open_games`) that returns each open public game with its live `player_count`, avoiding
+  per-row count queries.
+- **"Enter the Studio" now hosts/joins** — the Studio screen (previously a Milestone-2 placeholder)
+  is wired to the lobby: **Start a New Game** opens a private room to share by code, and **Join with
+  a Code** enters a friend's game. Public matchmaking stays on the "Check Upcoming Games" hub.
+- **Share the code outside the app** — the game room's code card now opens the **native share sheet**
+  (`share_plus`) so a host can send the code by text, email, or any messaging app, in addition to
+  copy-to-clipboard. Fulfils "generates a 4-digit code; share outside the app."
+- Validated: `flutter analyze` clean, **28/28 tests** pass (added occupancy/`player_count` coverage),
+  and the arm64 release APK builds cleanly with the new plugin.
+
+**Update — sign-off build (2026-07-08):** `0005_lobby_counts.sql` applied to the live Supabase
+project. Full `--split-per-abi` release APK set rebuilt and refreshed in `app/dist/`
+(`MatchWord-phone-arm64.apk`, `MatchWord-phone-arm32.apk`, `MatchWord-LDPlayer-x86_64.apk`).
+
+**Remaining before sign-off:** multi-device manual test pass on the live backend.
+
 
 ---
 

@@ -6,8 +6,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'app.dart';
 import 'core/config/app_config.dart';
 import 'features/auth/auth_controller.dart';
+import 'features/character/character_controller.dart';
+import 'features/lobby/lobby_controller.dart';
 import 'services/auth_service.dart';
+import 'services/character_service.dart';
 import 'services/device_service.dart';
+import 'services/lobby_service.dart';
 import 'services/profile_service.dart';
 import 'services/trial_service.dart';
 
@@ -33,10 +37,18 @@ Future<void> main() async {
     profileService: profileService,
     trialService: trialService,
   );
+  final characterService = CharacterService(client);
+  final lobbyService = LobbyService(client);
 
   runApp(
-    ChangeNotifierProvider(
-      create: (_) => AuthController(authService),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthController(authService)),
+        ChangeNotifierProvider(
+          create: (_) => CharacterController(characterService),
+        ),
+        ChangeNotifierProvider(create: (_) => LobbyController(lobbyService)),
+      ],
       child: const MatchWordApp(),
     ),
   );

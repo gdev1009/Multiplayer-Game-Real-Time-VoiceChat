@@ -14,7 +14,11 @@ import '../auth_controller.dart';
 
 /// PIN recovery: enter email → receive a one-time code → set a new PIN.
 class ForgotPinScreen extends StatefulWidget {
-  const ForgotPinScreen({super.key});
+  const ForgotPinScreen({super.key, this.initialEmail});
+
+  /// Pre-fills the email field (e.g. when arriving from a "that email already
+  /// has an account" prompt), so the player doesn't retype it.
+  final String? initialEmail;
 
   @override
   State<ForgotPinScreen> createState() => _ForgotPinScreenState();
@@ -31,6 +35,15 @@ class _ForgotPinScreenState extends State<ForgotPinScreen> {
 
   String? _error;
   bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final email = widget.initialEmail?.trim();
+    if (email != null && email.isNotEmpty) {
+      _emailController.text = email;
+    }
+  }
 
   @override
   void dispose() {

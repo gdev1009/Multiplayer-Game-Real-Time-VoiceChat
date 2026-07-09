@@ -7,6 +7,11 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 class AppConfig {
   AppConfig._();
 
+  static bool get easyTestAuth {
+    final value = dotenv.env['EASY_TEST_AUTH']?.trim().toLowerCase();
+    return value == '1' || value == 'true' || value == 'yes';
+  }
+
   static String get supabaseUrl {
     final value = dotenv.env['SUPABASE_URL'];
     if (value == null || value.isEmpty) {

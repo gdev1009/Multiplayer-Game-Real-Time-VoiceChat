@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 
 /// A consistent page wrapper: safe area, generous padding, optional title bar,
@@ -20,11 +21,15 @@ class AppPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: title == null
           ? null
           : AppBar(
               title: Text(title!),
               automaticallyImplyLeading: showBack,
+              flexibleSpace: const DecoratedBox(
+                decoration: BoxDecoration(gradient: AppColors.brandGradient),
+              ),
               leading: showBack
                   ? IconButton(
                       icon: const Icon(Icons.arrow_back, size: 30),
@@ -33,17 +38,20 @@ class AppPage extends StatelessWidget {
                     )
                   : null,
             ),
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            return SingleChildScrollView(
-              padding: const EdgeInsets.all(AppSpacing.pagePadding),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                child: IntrinsicHeight(child: child),
-              ),
-            );
-          },
+      body: Container(
+        decoration: const BoxDecoration(gradient: AppColors.pageGradient),
+        child: SafeArea(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return SingleChildScrollView(
+                padding: const EdgeInsets.all(AppSpacing.pagePadding),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: IntrinsicHeight(child: child),
+                ),
+              );
+            },
+          ),
         ),
       ),
     );

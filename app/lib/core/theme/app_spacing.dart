@@ -17,4 +17,10 @@ class AppSpacing {
 
   /// Page horizontal padding.
   static const double pagePadding = 24;
+
+  // Corner radii — generous, friendly rounding for a premium feel.
+  static const double radiusSm = 14;
+  static const double radiusMd = 20;
+  static const double radiusLg = 28;
+  static const double radiusXl = 36;
 }
