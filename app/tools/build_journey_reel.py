@@ -51,12 +51,16 @@ SCENES = {
     "04_char_outfit":     ("M3", "Dress your character", "Real artwork, layered to fit perfectly"),
     "05_char_accessories":("M3", "Add the finishing touches", "Hats, glasses, earrings and a cane"),
     "06_char_final":      ("M3", "Looking great, Rosie!", "Name your character and save"),
-    "07_upcoming":        ("M4", "Play a game", "Find a game, host, or join by code"),
-    "08_lobby_countdown": ("M4", "Game Room", "Studio players join in a few seconds"),
-    "09_lobby_filled":    ("M4", "Teams are set", "Four players across Team A and Team B"),
-    "10_play_turn":       ("M5", "Match Word begins", "Sunny gives a one-word clue"),
-    "11_play_clue":       ("M5", "The clue is in", "\u201cPetals\u201d \u2014 now teammates guess"),
-    "12_play_score":      ("M5", "Correct \u2014 +5 points!", "Team A guessed \u201cFlower\u201d"),
+    "07_home_saved":      ("M3", "Character saved", "Rosie is ready to head into the studio"),
+    "08_upcoming":        ("M4", "Play a game", "Find a game, host, or join by code"),
+    "09_lobby_countdown": ("M4", "Game Room", "Studio players join in a few seconds"),
+    "10_lobby_filled":    ("M4", "Teams are set", "Four players across Team A and Team B"),
+    "11_play_turn":       ("M5", "Match Word begins", "Sunny gives a one-word clue"),
+    "12_play_clue":       ("M5", "The clue is in", "\u201cPetals\u201d \u2014 now teammates guess"),
+    "13_play_score":      ("M5", "Correct \u2014 +5 points!", "Team A guessed \u201cFlower\u201d"),
+    "14_halftime":        ("M5", "Halftime!", "Teams switch roles for the second half"),
+    "15_second_half":     ("M5", "The game continues", "New words, new clues, climbing scores"),
+    "16_winner":          ("M5", "We have a winner!", "A full match, played start to finish"),
 }
 
 CHIP_COLORS = {"M3": (123, 79, 176), "M4": (212, 164, 49), "M5": (91, 45, 142)}
