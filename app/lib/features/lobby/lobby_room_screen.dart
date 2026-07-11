@@ -110,6 +110,10 @@ class _LobbyBody extends StatelessWidget {
         const SizedBox(height: AppSpacing.lg),
         _CodeCard(code: game.code),
         const SizedBox(height: AppSpacing.lg),
+        if (lobby.awaitingFill) ...[
+          _LookingForPlayers(secondsLeft: lobby.fillSecondsLeft),
+          const SizedBox(height: AppSpacing.lg),
+        ],
         Expanded(
           child: SingleChildScrollView(
             child: Column(
@@ -166,6 +170,45 @@ class _LobbyBody extends StatelessWidget {
           ),
         const SizedBox(height: AppSpacing.md),
       ],
+    );
+  }
+}
+
+/// A friendly "looking for players" banner shown while a quick-matched room
+/// holds its seats open for real people, before the studio players fill in.
+class _LookingForPlayers extends StatelessWidget {
+  const _LookingForPlayers({required this.secondsLeft});
+
+  final int secondsLeft;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.lavenderSoft,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        border: Border.all(color: AppColors.deepPurpleLight, width: 2),
+      ),
+      child: Row(
+        children: [
+          const SizedBox(
+            width: 28,
+            height: 28,
+            child: CircularProgressIndicator(strokeWidth: 3),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Text(
+              secondsLeft > 0
+                  ? 'Looking for players… studio players join in '
+                      '$secondsLeft second${secondsLeft == 1 ? '' : 's'}.'
+                  : 'Bringing in studio players…',
+              style: AppText.body,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

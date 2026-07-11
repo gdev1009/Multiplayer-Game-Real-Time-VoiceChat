@@ -146,7 +146,7 @@ begin
   from public.game_players
   where game_id = p_game and role = v_role;
   v_name := coalesce(v_name, 'Player ' || v_role);
-  return v_name || ' (Player ' || v_role || '), give a one-word clue.';
+  return v_name || ', give a one-word clue.';
 end;
 $$;
 

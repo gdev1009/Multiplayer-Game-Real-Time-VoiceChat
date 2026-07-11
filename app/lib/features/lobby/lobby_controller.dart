@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../models/game.dart';
 import '../../models/game_player.dart';
+import '../../models/game_preview.dart';
 import '../../services/lobby_failure.dart';
 import '../../services/lobby_service.dart';
 
@@ -13,6 +14,12 @@ class LobbyController extends ChangeNotifier {
   LobbyController(this._service);
 
   final LobbyService _service;
+
+  /// How long a quick-matched game waits for real players to join before the
+  /// studio (AI) players fill the empty seats. This is the adjustable "dial" —
+  /// raise it to give real matches more of a chance, lower it to start sooner.
+  /// Set to [Duration.zero] to fill immediately (no wait).
+  static Duration quickMatchFillDelay = const Duration(seconds: 8);
 
   // ---- Current room ---------------------------------------------------------
   Game? _game;
@@ -34,6 +41,18 @@ class LobbyController extends ChangeNotifier {
 
   String? _error;
   String? get error => _error;
+
+  // ---- Quick-match "looking for players" wait -------------------------------
+  Timer? _fillTimer;
+  bool _awaitingFill = false;
+  int _fillSecondsLeft = 0;
+
+  /// Whether a quick-matched room is currently holding a seat open for real
+  /// players before the studio players fill in.
+  bool get awaitingFill => _awaitingFill;
+
+  /// Seconds remaining before the studio players fill the empty seats.
+  int get fillSecondsLeft => _fillSecondsLeft;
 
   void _setBusy(bool value) {
     _busy = value;
@@ -89,15 +108,74 @@ class LobbyController extends ChangeNotifier {
   Future<bool> joinByCode(String code) =>
       _enter(() => _service.joinByCode(code));
 
-  Future<bool> quickMatch() => _enter(() => _service.quickMatch());
+  /// Joins [code] into a specific [seat] the player picked in the preview, so
+  /// they can choose their own team.
+  Future<bool> joinSeat(String code, int seat) =>
+      _enter(() => _service.joinSeat(code, seat));
+
+  /// Fetches the roster for a code without joining, so the UI can show a
+  /// preview + confirm step. Returns null (and sets [error]) on failure.
+  Future<GamePreview?> peekByCode(String code) async {
+    GamePreview? preview;
+    final ok = await _run(() async {
+      preview = await _service.peekByCode(code);
+    });
+    return ok ? preview : null;
+  }
+
+  /// Quick-matches into a game, then holds the empty seats open for
+  /// [quickMatchFillDelay] so real players can join before the studio players
+  /// fill in. If the room is already full (e.g. matched a busy lobby), no wait.
+  Future<bool> quickMatch() async {
+    final ok = await _enter(() => _service.quickMatch());
+    if (ok && !isFull) _startFillCountdown();
+    return ok;
+  }
 
   Future<bool> _enter(Future<Game> Function() action) {
+    _cancelFillCountdown();
     return _run(() async {
       final game = await action();
       _game = game;
       _players = await _service.loadPlayers(game.id);
       _subscribe(game.id);
     });
+  }
+
+  // ---- Quick-match auto-fill countdown --------------------------------------
+  /// Starts the "looking for players" countdown. When it elapses, the studio
+  /// players fill any seats still empty. Cancelled early if real players fill
+  /// the room first, or the player leaves.
+  void _startFillCountdown() {
+    _cancelFillCountdown();
+    final seconds = quickMatchFillDelay.inSeconds;
+    if (seconds <= 0) {
+      // No wait configured: fill right away.
+      unawaited(fillSeats());
+      return;
+    }
+    _awaitingFill = true;
+    _fillSecondsLeft = seconds;
+    notifyListeners();
+    _fillTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      _fillSecondsLeft -= 1;
+      if (_fillSecondsLeft <= 0 || isFull) {
+        _cancelFillCountdown();
+        if (!isFull) unawaited(fillSeats());
+      } else {
+        notifyListeners();
+      }
+    });
+  }
+
+  void _cancelFillCountdown() {
+    _fillTimer?.cancel();
+    _fillTimer = null;
+    if (_awaitingFill) {
+      _awaitingFill = false;
+      _fillSecondsLeft = 0;
+      notifyListeners();
+    }
   }
 
   void _subscribe(String gameId) {
@@ -109,6 +187,9 @@ class LobbyController extends ChangeNotifier {
     _playersSub = _service.watchPlayers(gameId).listen(
       (rows) {
         _players = rows;
+        // If real players filled the room during the wait, stop the countdown
+        // so the studio players don't bump anyone.
+        if (_awaitingFill && isFull) _cancelFillCountdown();
         notifyListeners();
       },
       onError: (Object _) {},
@@ -152,6 +233,7 @@ class LobbyController extends ChangeNotifier {
   }
 
   Future<void> _teardown() async {
+    _cancelFillCountdown();
     await _playersSub?.cancel();
     await _gameSub?.cancel();
     _playersSub = null;
@@ -160,6 +242,7 @@ class LobbyController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _fillTimer?.cancel();
     _playersSub?.cancel();
     _gameSub?.cancel();
     super.dispose();

@@ -209,14 +209,12 @@ class _DeskColumn extends StatelessWidget {
       children: [
         _SeatChip(
           name: state.names[clueRole] ?? 'Player $clueRole',
-          role: clueRole,
           job: 'Clue-giver',
           highlight: onClock && state.step == TurnStep.awaitingClue,
         ),
         const SizedBox(height: AppSpacing.xs),
         _SeatChip(
           name: state.names[guessRole] ?? 'Player $guessRole',
-          role: guessRole,
           job: 'Guesser',
           highlight: onClock && state.step == TurnStep.awaitingGuess,
         ),
@@ -228,13 +226,11 @@ class _DeskColumn extends StatelessWidget {
 class _SeatChip extends StatelessWidget {
   const _SeatChip({
     required this.name,
-    required this.role,
     required this.job,
     required this.highlight,
   });
 
   final String name;
-  final String role;
   final String job;
   final bool highlight;
 
@@ -260,7 +256,7 @@ class _SeatChip extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
           ),
           Text(
-            '$job · Player $role',
+            job,
             style: AppText.bodyMuted.copyWith(fontSize: 15),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -308,7 +304,6 @@ class _TurnBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final giving = state.step == TurnStep.awaitingClue;
     final name = giving ? state.clueGiverName : state.guesserName;
-    final role = giving ? state.clueGiverRole : state.guesserRole;
     final action = giving ? 'give a one-word clue' : 'make your guess';
     return Container(
       width: double.infinity,
@@ -321,7 +316,7 @@ class _TurnBanner extends StatelessWidget {
       child: Column(
         children: [
           Text(
-            '$name, you\'re Player $role',
+            '$name, it\'s your turn!',
             style: AppText.title.copyWith(color: AppColors.deepPurple),
             textAlign: TextAlign.center,
           ),
@@ -395,7 +390,7 @@ class _FeedLine extends StatelessWidget {
                 style: AppText.body,
                 children: [
                   TextSpan(
-                    text: '${entry.playerName} (${entry.role}): ',
+                    text: '${entry.playerName}: ',
                     style: AppText.body.copyWith(
                       fontWeight: FontWeight.w700,
                       color: AppColors.textSecondary,
@@ -497,6 +492,10 @@ class _HalftimePanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final newClueA =
+        state.names[MatchEngine.clueGiverRole('A', GamePhase.secondHalf)];
+    final newClueB =
+        state.names[MatchEngine.clueGiverRole('B', GamePhase.secondHalf)];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -515,10 +514,26 @@ class _HalftimePanel extends StatelessWidget {
               const Text('Halftime!', style: AppText.display),
               const SizedBox(height: AppSpacing.xs),
               const Text(
-                'Each team swaps clue-giver and guesser for the second half.',
+                'Teams switch it up for the second half.',
                 style: AppText.body,
                 textAlign: TextAlign.center,
               ),
+              if (newClueA != null) ...[
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  '$newClueA, you\'re now the clue-giver for Team A.',
+                  style: AppText.body.copyWith(fontWeight: FontWeight.w700),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+              if (newClueB != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  '$newClueB, you\'re now the clue-giver for Team B.',
+                  style: AppText.body.copyWith(fontWeight: FontWeight.w700),
+                  textAlign: TextAlign.center,
+                ),
+              ],
               const SizedBox(height: AppSpacing.sm),
               Text('Score: ${state.scoreA} – ${state.scoreB}',
                   style: AppText.title,),

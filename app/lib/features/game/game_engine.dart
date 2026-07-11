@@ -436,6 +436,6 @@ class MatchEngine {
   static String _clueLine(String team, GamePhase phase, Map<String, String> names) {
     final role = clueGiverRole(team, phase);
     final name = names[role] ?? 'Player $role';
-    return '$name (Player $role), give a one-word clue.';
+    return '$name, give a one-word clue.';
   }
 }

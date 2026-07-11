@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/navigation/app_routes.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text.dart';
@@ -9,6 +8,7 @@ import '../../core/widgets/app_page.dart';
 import '../../core/widgets/big_button.dart';
 import '../../core/widgets/host_greeting.dart';
 import '../../core/widgets/pin_pad.dart';
+import 'join_preview_screen.dart';
 import 'lobby_controller.dart';
 
 /// Enter a friend's 4-digit game code to join their room.
@@ -24,11 +24,16 @@ class _JoinByCodeScreenState extends State<JoinByCodeScreen> {
 
   Future<void> _submit() async {
     final lobby = context.read<LobbyController>();
-    final ok = await lobby.joinByCode(_code);
+    // Peek first so the player can see who's already in the game (and which
+    // team they'll land on) before committing to join.
+    final preview = await lobby.peekByCode(_code);
     if (!mounted) return;
-    if (ok) {
-      // Replace this screen with the room so Back returns to the hub.
-      Navigator.of(context).pushReplacementNamed(AppRoutes.lobbyRoom);
+    if (preview != null) {
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => JoinPreviewScreen(preview: preview),
+        ),
+      );
     } else if (lobby.error != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -66,8 +71,8 @@ class _JoinByCodeScreenState extends State<JoinByCodeScreen> {
           ),
           const SizedBox(height: AppSpacing.lg),
           BigButton(
-            label: 'Join Game',
-            icon: Icons.login_rounded,
+            label: 'See the Game',
+            icon: Icons.arrow_forward_rounded,
             isLoading: lobby.busy,
             onPressed:
                 (!complete || lobby.busy) ? null : _submit,

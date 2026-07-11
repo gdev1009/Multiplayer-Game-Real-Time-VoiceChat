@@ -2,6 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/game.dart';
 import '../models/game_player.dart';
+import '../models/game_preview.dart';
 import 'lobby_failure.dart';
 
 /// Server-authoritative lobby operations for Milestone 4.
@@ -48,6 +49,24 @@ class LobbyService {
   Future<Game> joinByCode(String code) async {
     final res = await _callOk('mw_join_game', {'p_code': code.trim()});
     return loadGame(res['game_id'] as String);
+  }
+
+  /// Joins a game by [code] into a specific [seat] the player picked in the
+  /// preview (taking over a studio player if that seat holds one), so friends
+  /// can choose the same team. Returns the joined game.
+  Future<Game> joinSeat(String code, int seat) async {
+    final res = await _callOk(
+      'mw_join_seat',
+      {'p_code': code.trim(), 'p_seat': seat},
+    );
+    return loadGame(res['game_id'] as String);
+  }
+
+  /// Reads the roster for a 4-digit [code] *without* seating the caller, so the
+  /// UI can show a "who's already here" confirm step before joining.
+  Future<GamePreview> peekByCode(String code) async {
+    final res = await _callOk('mw_peek_game', {'p_code': code.trim()});
+    return GamePreview.fromMap(res);
   }
 
   /// Finds an open public game with a free seat, or creates one. Returns the

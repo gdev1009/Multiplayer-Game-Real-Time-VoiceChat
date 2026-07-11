@@ -24,6 +24,7 @@ import 'features/lobby/upcoming_games_screen.dart';
 import 'features/studio/studio_screen.dart';
 import 'models/game.dart';
 import 'models/game_player.dart';
+import 'models/game_preview.dart';
 import 'services/auth_service.dart';
 import 'services/device_service.dart';
 import 'services/lobby_service.dart';
@@ -150,7 +151,42 @@ class _InMemoryLobbyService extends LobbyService {
   }
 
   @override
+  Future<Game> joinSeat(String code, int seat) async {
+    // Pick-your-seat: the host holds seat 0; you land in the seat you tapped,
+    // taking over the AI there if needed.
+    _game = _newGame(isPublic: false, code: code.isEmpty ? '4827' : code);
+    _players = [
+      _seat(seat: 0, name: 'Grace', isAi: false),
+      _seat(seat: seat, name: 'Sunny', isAi: false),
+    ];
+    _players.sort((a, b) => a.seat.compareTo(b.seat));
+    return _game!;
+  }
+
+  @override
+  Future<GamePreview> peekByCode(String code) async {
+    // Show a friend's game with the host + one AI already seated, so the
+    // preview's "you'll join Team B" highlight has something to point at.
+    final seats = [
+      _seat(seat: 0, name: 'Grace', isAi: false),
+      _seat(seat: 2, name: 'Walter', isAi: true),
+    ];
+    return GamePreview(
+      gameId: 'demo-game',
+      code: code.isEmpty ? '4827' : code,
+      maxPlayers: 4,
+      seatsTaken: seats.length,
+      alreadyMember: false,
+      players: seats,
+    );
+  }
+
+  @override
   Future<Game> quickMatch() async {
+    // Mirrors migration 0011: land the solo player in a fresh public game with
+    // the seats left OPEN. The LobbyController's "looking for players" countdown
+    // then calls fillSeats() when it elapses — so the demo exercises the real
+    // pre-AI wait path instead of faking its own fill here.
     _startWith(isPublic: true, code: '3591');
     return _game!;
   }
