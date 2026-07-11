@@ -3,59 +3,64 @@ import 'package:flutter/material.dart';
 /// The character layers, in back-to-front stacking order.
 ///
 /// The assembly engine paints them in this order, so later entries appear on
-/// top (e.g. [glasses] over [eyes], [outfit] over [base]).
-enum CharacterLayer { base, hair, eyes, glasses, outfit }
+/// top (e.g. [glasses] over the face, [hat] over the [hair]).
+///
+/// Milestone 3 uses the artist's real, full-colour PNG art. Every option is a
+/// pre-registered 1254×1254 overlay that lines up exactly on the chosen body,
+/// so the engine simply stacks the chosen layers — no tinting, no per-part
+/// positioning.
+enum CharacterLayer { base, hair, outfit, glasses, hat, earrings, accessory }
 
 extension CharacterLayerInfo on CharacterLayer {
   /// Friendly, senior-first heading shown in the wizard.
   String get title => switch (this) {
         CharacterLayer.base => 'Choose a body',
         CharacterLayer.hair => 'Choose hair',
-        CharacterLayer.eyes => 'Choose eyes',
-        CharacterLayer.glasses => 'Choose glasses',
         CharacterLayer.outfit => 'Choose an outfit',
+        CharacterLayer.glasses => 'Choose glasses',
+        CharacterLayer.hat => 'Choose a hat',
+        CharacterLayer.earrings => 'Choose earrings',
+        CharacterLayer.accessory => 'Add something to hold',
       };
 
   /// Whether the player may pick "None" for this layer.
   ///
-  /// A face is always required; everything else is optional so the engine must
-  /// handle missing layers gracefully.
-  bool get optional => this != CharacterLayer.base;
-
-  /// Whether this layer's art is a neutral PNG that the app tints with a
-  /// player-chosen colour (skin tone for the body, colour for hair and eyes).
-  /// The client supplies one colourless/neutral PNG per style and the engine
-  /// applies the colour.
-  bool get tintable =>
-      this == CharacterLayer.base ||
-      this == CharacterLayer.hair ||
-      this == CharacterLayer.eyes;
+  /// A body is always required, and everyone should be dressed, so the outfit
+  /// is required too. Everything else is optional.
+  bool get optional =>
+      this != CharacterLayer.base && this != CharacterLayer.outfit;
 
   /// The asset sub-folder for this layer's PNGs.
   String get folder => switch (this) {
         CharacterLayer.base => 'base',
         CharacterLayer.hair => 'hair',
-        CharacterLayer.eyes => 'eyes',
-        CharacterLayer.glasses => 'glasses',
         CharacterLayer.outfit => 'outfit',
+        CharacterLayer.glasses => 'glasses',
+        CharacterLayer.hat => 'hat',
+        CharacterLayer.earrings => 'earrings',
+        CharacterLayer.accessory => 'accessory',
       };
 
   /// A friendly icon used on section headers and the "None" tile.
   IconData get icon => switch (this) {
         CharacterLayer.base => Icons.face_2_rounded,
         CharacterLayer.hair => Icons.content_cut_rounded,
-        CharacterLayer.eyes => Icons.remove_red_eye_rounded,
-        CharacterLayer.glasses => Icons.visibility_rounded,
         CharacterLayer.outfit => Icons.checkroom_rounded,
+        CharacterLayer.glasses => Icons.visibility_rounded,
+        CharacterLayer.hat => Icons.emoji_nature_rounded,
+        CharacterLayer.earrings => Icons.brightness_high_rounded,
+        CharacterLayer.accessory => Icons.shopping_bag_rounded,
       };
 
   /// One-line, senior-friendly helper text shown under the heading.
   String get hint => switch (this) {
-        CharacterLayer.base => 'Pick a body, then a skin tone.',
-        CharacterLayer.hair => 'Choose a style, then a colour.',
-        CharacterLayer.eyes => 'Choose a shape, then a colour.',
+        CharacterLayer.base => 'Pick the body that feels like you.',
+        CharacterLayer.hair => 'Choose a hairstyle, or skip it.',
+        CharacterLayer.outfit => 'Pick something nice to wear.',
         CharacterLayer.glasses => 'Add glasses, or skip this step.',
-        CharacterLayer.outfit => 'Pick an outfit colour, or skip.',
+        CharacterLayer.hat => 'Pop on a hat, or skip it.',
+        CharacterLayer.earrings => 'Add earrings, or skip them.',
+        CharacterLayer.accessory => 'A bag or a walking aid, or skip it.',
       };
 }
 
@@ -64,8 +69,7 @@ class LayerOption {
   const LayerOption({
     required this.id,
     required this.label,
-    this.swatch,
-    this.asset,
+    required this.folder,
   });
 
   /// Stable id stored on the character (also the PNG file name, sans folder).
@@ -74,188 +78,152 @@ class LayerOption {
   /// Friendly label shown under the option.
   final String label;
 
-  /// Optional colour used by the fallback renderer when the PNG is absent,
-  /// so the builder is fully usable before final art arrives. For the base
-  /// layer this doubles as the skin tone applied to the shared clay body.
-  final Color? swatch;
+  /// The asset sub-folder the PNG lives in.
+  final String folder;
 
-  /// Optional explicit asset path. When null the engine uses the convention
-  /// `assets/images/character/<folder>/<id>.png`. Used so every skin tone can
-  /// share the one real clay body render.
-  final String? asset;
-
-  /// Full asset path the assembly engine tries to load.
+  /// Full asset path the assembly engine loads.
   ///
-  /// Convention: `assets/images/character/<folder>/<id>.png`. Drop the
-  /// client's PNGs in with these names and they appear automatically.
-  String assetPath(CharacterLayer layer) =>
-      asset ?? 'assets/images/character/${layer.folder}/$id.png';
-
-  /// Optional body-specific render tried *before* [assetPath], so an accessory
-  /// can be positioned precisely for each body shape.
-  ///
-  /// Convention: `assets/images/character/<folder>/<id>__<baseId>.png`
-  /// (e.g. `hair-short__body-female.png`). Returns null for layers that use an
-  /// explicit [asset] (the base body itself).
-  String? assetPathForBody(CharacterLayer layer, String baseId) =>
-      asset != null
-          ? null
-          : 'assets/images/character/${layer.folder}/${id}__$baseId.png';
+  /// Convention: `assets/images/character/<folder>/<id>.png`.
+  String get assetPath => 'assets/images/character/$folder/$id.png';
 }
 
 /// The catalog of options for every layer.
 ///
-/// This is the single place to register character parts. When Ronna sends the
-/// layered PNGs, add an entry here (or reuse these ids as file names) and the
-/// wizard + assembly engine pick them up with no other code changes.
+/// Options are **body-aware**: the woman and man have their own hairstyles,
+/// outfits, glasses, hats and held items (the earrings are shared). Pass the
+/// chosen body id to [forLayer] to get the right set.
 class CharacterCatalog {
   CharacterCatalog._();
 
-  static const Map<CharacterLayer, List<LayerOption>> options = {
-    CharacterLayer.base: [
-      LayerOption(
-        id: 'body-female',
-        label: 'Woman',
-        swatch: Color(0xFFE7BE9A),
-        asset: 'assets/images/character/base/body-female.png',
-      ),
-      LayerOption(
-        id: 'body-male',
-        label: 'Man',
-        swatch: Color(0xFFE7BE9A),
-        asset: 'assets/images/character/base/body-male.png',
-      ),
-    ],
-    CharacterLayer.hair: [
-      LayerOption(id: 'hair-spiky', label: 'Spiky', swatch: Color(0xFF8A6A4A)),
-      LayerOption(id: 'hair-short', label: 'Short', swatch: Color(0xFF8A6A4A)),
-      LayerOption(id: 'hair-curly', label: 'Curly', swatch: Color(0xFF8A6A4A)),
-      LayerOption(id: 'hair-bun', label: 'Bun', swatch: Color(0xFF8A6A4A)),
-      LayerOption(id: 'hair-long', label: 'Long', swatch: Color(0xFF8A6A4A)),
-    ],
-    CharacterLayer.eyes: [
-      LayerOption(id: 'eyes-round', label: 'Round', swatch: Color(0xFF6B4226)),
-      LayerOption(id: 'eyes-almond', label: 'Almond', swatch: Color(0xFF6B4226)),
-      LayerOption(id: 'eyes-wide', label: 'Wide', swatch: Color(0xFF6B4226)),
-    ],
-    CharacterLayer.glasses: [
-      LayerOption(id: 'glasses-round', label: 'Round', swatch: Color(0xFF333333)),
-      LayerOption(id: 'glasses-square', label: 'Square', swatch: Color(0xFF5B2D8E)),
-      LayerOption(id: 'glasses-gold', label: 'Gold', swatch: Color(0xFFD4A431)),
-    ],
-    CharacterLayer.outfit: [
-      LayerOption(
-        id: 'outfit-blue',
-        label: 'Blue suit',
-        swatch: Color(0xFF3F51B5),
-      ),
-      LayerOption(
-        id: 'outfit-rose',
-        label: 'Rose dress',
-        swatch: Color(0xFFC2185B),
-      ),
-      LayerOption(
-        id: 'outfit-green',
-        label: 'Green set',
-        swatch: Color(0xFF2E7D32),
-      ),
-      LayerOption(
-        id: 'outfit-purple',
-        label: 'Purple set',
-        swatch: Color(0xFF5B2D8E),
-      ),
-      LayerOption(
-        id: 'outfit-sunny',
-        label: 'Sunny shorts',
-        swatch: Color(0xFFF39C12),
-      ),
-      LayerOption(
-        id: 'outfit-teal',
-        label: 'Teal hoodie',
-        swatch: Color(0xFF00897B),
-      ),
-    ],
-  };
+  /// The two body choices (this layer is not body-dependent).
+  static const List<LayerOption> _bodies = [
+    LayerOption(id: 'body-female', label: 'Woman', folder: 'base'),
+    LayerOption(id: 'body-male', label: 'Man', folder: 'base'),
+  ];
 
-  /// All options for a layer.
-  static List<LayerOption> forLayer(CharacterLayer layer) =>
-      options[layer] ?? const [];
+  // ----- Female sets -------------------------------------------------------
+  static const List<LayerOption> _hairFemale = [
+    LayerOption(id: 'hair-f1', label: 'Style 1', folder: 'hair'),
+    LayerOption(id: 'hair-f2', label: 'Style 2', folder: 'hair'),
+    LayerOption(id: 'hair-f3', label: 'Style 3', folder: 'hair'),
+    LayerOption(id: 'hair-f4', label: 'Style 4', folder: 'hair'),
+    LayerOption(id: 'hair-f5', label: 'Style 5', folder: 'hair'),
+    LayerOption(id: 'hair-f6', label: 'Style 6', folder: 'hair'),
+    LayerOption(id: 'hair-f7', label: 'Style 7', folder: 'hair'),
+    LayerOption(id: 'hair-f8', label: 'Style 8', folder: 'hair'),
+  ];
+  static const List<LayerOption> _outfitFemale = [
+    LayerOption(id: 'outfit-f1', label: 'Outfit 1', folder: 'outfit'),
+    LayerOption(id: 'outfit-f2', label: 'Outfit 2', folder: 'outfit'),
+    LayerOption(id: 'outfit-f3', label: 'Outfit 3', folder: 'outfit'),
+    LayerOption(id: 'outfit-f4', label: 'Outfit 4', folder: 'outfit'),
+    LayerOption(id: 'outfit-f5', label: 'Outfit 5', folder: 'outfit'),
+    LayerOption(id: 'outfit-f6', label: 'Outfit 6', folder: 'outfit'),
+    LayerOption(id: 'outfit-f7', label: 'Outfit 7', folder: 'outfit'),
+  ];
+  static const List<LayerOption> _glassesFemale = [
+    LayerOption(id: 'glasses-f-round', label: 'Round', folder: 'glasses'),
+    LayerOption(id: 'glasses-f-rect', label: 'Rectangle', folder: 'glasses'),
+    LayerOption(id: 'glasses-f-square', label: 'Square', folder: 'glasses'),
+    LayerOption(id: 'glasses-f-cateye', label: 'Cat-eye', folder: 'glasses'),
+  ];
+  static const List<LayerOption> _hatFemale = [
+    LayerOption(id: 'hat-f-cap', label: 'Cap', folder: 'hat'),
+    LayerOption(id: 'hat-f-knit', label: 'Knit hat', folder: 'hat'),
+    LayerOption(id: 'hat-f-brim', label: 'Brim hat', folder: 'hat'),
+    LayerOption(id: 'hat-f-sun', label: 'Sun hat', folder: 'hat'),
+  ];
+  static const List<LayerOption> _accessoryFemale = [
+    LayerOption(id: 'acc-f-purse', label: 'Purse', folder: 'accessory'),
+    LayerOption(id: 'acc-f-tote', label: 'Tote bag', folder: 'accessory'),
+    LayerOption(
+      id: 'acc-f-crossbody',
+      label: 'Shoulder bag',
+      folder: 'accessory',
+    ),
+    LayerOption(id: 'acc-f-cane', label: 'Walking cane', folder: 'accessory'),
+    LayerOption(id: 'acc-f-walker', label: 'Walker', folder: 'accessory'),
+  ];
 
-  /// Finds an option by id within a layer, or null.
+  // ----- Male sets ---------------------------------------------------------
+  static const List<LayerOption> _hairMale = [
+    LayerOption(id: 'hair-m1', label: 'Style 1', folder: 'hair'),
+    LayerOption(id: 'hair-m2', label: 'Style 2', folder: 'hair'),
+    LayerOption(id: 'hair-m3', label: 'Style 3', folder: 'hair'),
+    LayerOption(id: 'hair-m4', label: 'Style 4', folder: 'hair'),
+  ];
+  static const List<LayerOption> _outfitMale = [
+    LayerOption(id: 'outfit-m1', label: 'Outfit 1', folder: 'outfit'),
+    LayerOption(id: 'outfit-m2', label: 'Outfit 2', folder: 'outfit'),
+    LayerOption(id: 'outfit-m3', label: 'Outfit 3', folder: 'outfit'),
+    LayerOption(id: 'outfit-m4', label: 'Outfit 4', folder: 'outfit'),
+    LayerOption(id: 'outfit-m5', label: 'Outfit 5', folder: 'outfit'),
+    LayerOption(id: 'outfit-m6', label: 'Outfit 6', folder: 'outfit'),
+  ];
+  static const List<LayerOption> _glassesMale = [
+    LayerOption(id: 'glasses-m-round', label: 'Round', folder: 'glasses'),
+    LayerOption(id: 'glasses-m-rect', label: 'Rectangle', folder: 'glasses'),
+    LayerOption(id: 'glasses-m-square', label: 'Square', folder: 'glasses'),
+    LayerOption(id: 'glasses-m-cateye', label: 'Cat-eye', folder: 'glasses'),
+  ];
+  static const List<LayerOption> _hatMale = [
+    LayerOption(id: 'hat-m-cap', label: 'Cap', folder: 'hat'),
+    LayerOption(id: 'hat-m-knit', label: 'Knit hat', folder: 'hat'),
+    LayerOption(id: 'hat-m-brim', label: 'Brim hat', folder: 'hat'),
+  ];
+  static const List<LayerOption> _accessoryMale = [
+    LayerOption(id: 'acc-m-tote', label: 'Tote bag', folder: 'accessory'),
+    LayerOption(
+      id: 'acc-m-crossbody',
+      label: 'Shoulder bag',
+      folder: 'accessory',
+    ),
+    LayerOption(id: 'acc-m-cane', label: 'Walking cane', folder: 'accessory'),
+    LayerOption(id: 'acc-m-walker', label: 'Walker', folder: 'accessory'),
+  ];
+
+  // ----- Shared ------------------------------------------------------------
+  static const List<LayerOption> _earrings = [
+    LayerOption(id: 'earring-1', label: 'Studs', folder: 'earrings'),
+    LayerOption(id: 'earring-2', label: 'Drops', folder: 'earrings'),
+    LayerOption(id: 'earring-3', label: 'Teardrops', folder: 'earrings'),
+    LayerOption(id: 'earring-4', label: 'Diamonds', folder: 'earrings'),
+  ];
+
+  /// The default body used when none has been chosen yet.
+  static String get defaultBodyId => _bodies.first.id;
+
+  /// Whether [baseId] is the male body (drives which option set to show).
+  static bool _isMale(String? baseId) => baseId == 'body-male';
+
+  /// All options for a layer, for the given body.
+  static List<LayerOption> forLayer(CharacterLayer layer, {String? baseId}) {
+    final male = _isMale(baseId);
+    return switch (layer) {
+      CharacterLayer.base => _bodies,
+      CharacterLayer.hair => male ? _hairMale : _hairFemale,
+      CharacterLayer.outfit => male ? _outfitMale : _outfitFemale,
+      CharacterLayer.glasses => male ? _glassesMale : _glassesFemale,
+      CharacterLayer.hat => male ? _hatMale : _hatFemale,
+      CharacterLayer.earrings => _earrings,
+      CharacterLayer.accessory => male ? _accessoryMale : _accessoryFemale,
+    };
+  }
+
+  /// Finds an option by id within a layer (across both bodies), or null.
   static LayerOption? find(CharacterLayer layer, String? id) {
     if (id == null) return null;
-    for (final option in forLayer(layer)) {
+    for (final option in [
+      ...forLayer(layer, baseId: 'body-female'),
+      ...forLayer(layer, baseId: 'body-male'),
+    ]) {
       if (option.id == id) return option;
     }
     return null;
   }
 
-  // ---------------------------------------------------------------------------
-  // Colour tints for the neutral hair and eyes PNGs.
-  //
-  // Ronna supplies one colourless PNG per style; the player then picks a colour
-  // here and the assembly engine tints the art. Add or reorder entries freely.
-  // ---------------------------------------------------------------------------
-
-  static const List<TintOption> hairColors = [
-    TintOption(id: 'black', label: 'Black', color: Color(0xFF2E2A26)),
-    TintOption(id: 'brown', label: 'Brown', color: Color(0xFF6B4226)),
-    TintOption(id: 'auburn', label: 'Auburn', color: Color(0xFF8A3324)),
-    TintOption(id: 'blonde', label: 'Blonde', color: Color(0xFFD9B370)),
-    TintOption(id: 'grey', label: 'Grey', color: Color(0xFFBFBFBF)),
-    TintOption(id: 'white', label: 'White', color: Color(0xFFEDE8E0)),
-  ];
-
-  static const List<TintOption> eyeColors = [
-    TintOption(id: 'brown', label: 'Brown', color: Color(0xFF6B4226)),
-    TintOption(id: 'hazel', label: 'Hazel', color: Color(0xFF8E6B3A)),
-    TintOption(id: 'green', label: 'Green', color: Color(0xFF4E8A5B)),
-    TintOption(id: 'blue', label: 'Blue', color: Color(0xFF3F6FB0)),
-    TintOption(id: 'grey', label: 'Grey', color: Color(0xFF7E8791)),
-  ];
-
-  /// Skin tones for the body. These multiply onto the clay render, so the
-  /// first (lightest) keeps the art bright and later ones deepen it.
-  static const List<TintOption> skinColors = [
-    TintOption(id: 'light', label: 'Light', color: Color(0xFFFFF4EA)),
-    TintOption(id: 'medium', label: 'Medium', color: Color(0xFFF0D2B4)),
-    TintOption(id: 'tan', label: 'Tan', color: Color(0xFFD9AC86)),
-    TintOption(id: 'deep', label: 'Deep', color: Color(0xFFB07E58)),
-  ];
-
-  /// The colour palette for a tintable layer (empty for non-tintable layers).
-  static List<TintOption> tintsFor(CharacterLayer layer) => switch (layer) {
-        CharacterLayer.base => skinColors,
-        CharacterLayer.hair => hairColors,
-        CharacterLayer.eyes => eyeColors,
-        _ => const [],
-      };
-
-  /// Finds a tint option by id within a layer's palette, or null.
-  static TintOption? findTint(CharacterLayer layer, String? id) {
-    if (id == null) return null;
-    for (final tint in tintsFor(layer)) {
-      if (tint.id == id) return tint;
-    }
-    return null;
-  }
-}
-
-/// A selectable colour applied to a tintable layer's neutral PNG.
-class TintOption {
-  const TintOption({
-    required this.id,
-    required this.label,
-    required this.color,
-  });
-
-  /// Stable id stored on the character (e.g. `brown`).
-  final String id;
-
-  /// Friendly label shown under the colour swatch.
-  final String label;
-
-  /// The colour multiplied onto the neutral PNG by the assembly engine.
-  final Color color;
+  /// The first outfit for a body — used to dress a new character immediately.
+  static String defaultOutfitFor(String? baseId) =>
+      forLayer(CharacterLayer.outfit, baseId: baseId).first.id;
 }
 

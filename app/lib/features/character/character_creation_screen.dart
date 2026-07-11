@@ -14,6 +14,10 @@ import 'character_preview.dart';
 
 /// Step-by-step character builder. One clear choice per screen, with a live
 /// preview at the top so the player always sees what they are making.
+///
+/// Steps: Body → Hair → Outfit → Glasses → Accessories → Name → Review.
+/// The Accessories step groups a hat, earrings and a held item (bag / cane /
+/// walker) together so the whole look is finished in one friendly screen.
 class CharacterCreationScreen extends StatefulWidget {
   const CharacterCreationScreen({super.key});
 
@@ -23,11 +27,15 @@ class CharacterCreationScreen extends StatefulWidget {
 }
 
 class _CharacterCreationScreenState extends State<CharacterCreationScreen> {
-  /// The ordered steps: one per layer, then name, then review.
-  static final List<_Step> _steps = [
-    ...CharacterLayer.values.map(_Step.layer),
-    const _Step.name(),
-    const _Step.review(),
+  /// The ordered steps of the builder.
+  static const List<_Step> _steps = [
+    _Step.layer(CharacterLayer.base),
+    _Step.layer(CharacterLayer.hair),
+    _Step.layer(CharacterLayer.outfit),
+    _Step.layer(CharacterLayer.glasses),
+    _Step.accessories(),
+    _Step.name(),
+    _Step.review(),
   ];
 
   int _index = 0;
@@ -129,14 +137,15 @@ class _CharacterCreationScreenState extends State<CharacterCreationScreen> {
 
   Widget _buildStepBody(CharacterController controller) {
     return switch (_step.kind) {
-      _StepKind.layer => _LayerChooser(
-          layer: _step.layer!,
-          reference: controller.draft,
-          selectedId: controller.selected(_step.layer!),
-          onChoose: (id) => controller.chooseOption(_step.layer!, id),
-          selectedColorId: controller.selectedColor(_step.layer!),
-          onChooseColor: (id) => controller.chooseColor(_step.layer!, id),
+      _StepKind.layer => SingleChildScrollView(
+          child: _OptionWrap(
+            layer: _step.layer!,
+            reference: controller.draft,
+            selectedId: controller.selected(_step.layer!),
+            onChoose: (id) => controller.chooseOption(_step.layer!, id),
+          ),
         ),
+      _StepKind.accessories => _AccessoriesStep(controller: controller),
       _StepKind.name => _NameStep(
           controller: _nameController,
           errorText: _nameTouched && _nameController.text.trim().isEmpty
@@ -163,8 +172,10 @@ class _CharacterCreationScreenState extends State<CharacterCreationScreen> {
     }
 
     final bool canAdvance = switch (_step.kind) {
-      _StepKind.layer =>
-        !_step.layer!.optional ? controller.selected(_step.layer!) != null : true,
+      _StepKind.layer => !_step.layer!.optional
+          ? controller.selected(_step.layer!) != null
+          : true,
+      _StepKind.accessories => true,
       _StepKind.name => _nameController.text.trim().isNotEmpty,
       _StepKind.review => true,
     };
@@ -188,10 +199,13 @@ class _CharacterCreationScreenState extends State<CharacterCreationScreen> {
 // Step model
 // ---------------------------------------------------------------------------
 
-enum _StepKind { layer, name, review }
+enum _StepKind { layer, accessories, name, review }
 
 class _Step {
   const _Step.layer(this.layer) : kind = _StepKind.layer;
+  const _Step.accessories()
+      : kind = _StepKind.accessories,
+        layer = null;
   const _Step.name()
       : kind = _StepKind.name,
         layer = null;
@@ -242,88 +256,90 @@ class _StepProgress extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Layer chooser
+// Option chooser (one layer)
 // ---------------------------------------------------------------------------
 
-class _LayerChooser extends StatelessWidget {
-  const _LayerChooser({
+/// A section header plus a wrap of selectable tiles for a single [layer],
+/// showing the real art on the player's own body. Used by the plain layer
+/// steps and, three at a time, by the Accessories step.
+class _OptionWrap extends StatelessWidget {
+  const _OptionWrap({
     required this.layer,
     required this.reference,
     required this.selectedId,
     required this.onChoose,
-    required this.selectedColorId,
-    required this.onChooseColor,
   });
 
   final CharacterLayer layer;
 
-  /// The current draft, so each style tile can preview on the player's body.
+  /// The current draft, so each tile previews on the player's chosen body.
   final Character reference;
   final String? selectedId;
   final ValueChanged<String?> onChoose;
-  final String? selectedColorId;
-  final ValueChanged<String?> onChooseColor;
 
   @override
   Widget build(BuildContext context) {
-    final options = CharacterCatalog.forLayer(layer);
-    final showColors = layer.tintable && selectedId != null;
+    final options =
+        CharacterCatalog.forLayer(layer, baseId: reference.base);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SectionHeader(icon: layer.icon, title: layer.title, hint: layer.hint),
+        const SizedBox(height: AppSpacing.md),
+        Wrap(
+          spacing: AppSpacing.md,
+          runSpacing: AppSpacing.md,
+          children: [
+            if (layer.optional)
+              _OptionTile(
+                label: 'None',
+                icon: Icons.block_rounded,
+                selected: selectedId == null,
+                onTap: () => onChoose(null),
+              ),
+            for (final option in options)
+              _OptionTile(
+                label: option.label,
+                preview: CharacterPartThumb(
+                  layer: layer,
+                  optionId: option.id,
+                  reference: reference,
+                ),
+                selected: selectedId == option.id,
+                onTap: () => onChoose(option.id),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// The Accessories step: a hat, earrings and a held item, grouped on one
+/// friendly screen. Everything here is optional.
+class _AccessoriesStep extends StatelessWidget {
+  const _AccessoriesStep({required this.controller});
+
+  final CharacterController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget group(CharacterLayer layer) => _OptionWrap(
+          layer: layer,
+          reference: controller.draft,
+          selectedId: controller.selected(layer),
+          onChoose: (id) => controller.chooseOption(layer, id),
+        );
+
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _SectionHeader(icon: layer.icon, title: layer.title, hint: layer.hint),
-          const SizedBox(height: AppSpacing.md),
-          Wrap(
-            spacing: AppSpacing.md,
-            runSpacing: AppSpacing.md,
-            children: [
-              if (layer.optional)
-                _OptionTile(
-                  label: 'None',
-                  color: AppColors.surface,
-                  icon: Icons.block_rounded,
-                  selected: selectedId == null,
-                  onTap: () => onChoose(null),
-                ),
-              for (final option in options)
-                _OptionTile(
-                  label: option.label,
-                  preview: CharacterPartThumb(
-                    layer: layer,
-                    optionId: option.id,
-                    reference: reference,
-                  ),
-                  selected: selectedId == option.id,
-                  onTap: () => onChoose(option.id),
-                ),
-            ],
-          ),
-          if (showColors) ...[
-            const SizedBox(height: AppSpacing.lg),
-            _SectionHeader(
-              icon: Icons.palette_rounded,
-              title: switch (layer) {
-                CharacterLayer.base => 'Skin tone',
-                CharacterLayer.hair => 'Hair colour',
-                _ => 'Eye colour',
-              },
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Wrap(
-              spacing: AppSpacing.md,
-              runSpacing: AppSpacing.md,
-              children: [
-                for (final tint in CharacterCatalog.tintsFor(layer))
-                  _OptionTile(
-                    label: tint.label,
-                    color: tint.color,
-                    selected: selectedColorId == tint.id,
-                    onTap: () => onChooseColor(tint.id),
-                  ),
-              ],
-            ),
-          ],
+          group(CharacterLayer.hat),
+          const SizedBox(height: AppSpacing.lg),
+          group(CharacterLayer.earrings),
+          const SizedBox(height: AppSpacing.lg),
+          group(CharacterLayer.accessory),
         ],
       ),
     );
@@ -373,21 +389,19 @@ class _OptionTile extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.onTap,
-    this.color,
     this.preview,
     this.icon,
   });
 
   final String label;
 
-  /// The swatch colour, used for colour/tint tiles and the "None" tile.
-  final Color? color;
-
-  /// A live style thumbnail, used for hair/eyes/glasses/outfit/body tiles so
-  /// each option previews its real look instead of an identical dot.
+  /// A live style thumbnail, used for every real option so each tile previews
+  /// its actual look on the player's body.
   final Widget? preview;
   final bool selected;
   final VoidCallback onTap;
+
+  /// Icon shown on the "None" tile.
   final IconData? icon;
 
   @override
@@ -415,7 +429,7 @@ class _OptionTile extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              preview != null ? _thumbSwatch() : _colorSwatch(),
+              preview != null ? _thumbSwatch() : _noneSwatch(),
               const SizedBox(height: AppSpacing.xs),
               Text(
                 label,
@@ -468,8 +482,11 @@ class _OptionTile extends StatelessWidget {
                   shape: BoxShape.circle,
                   border: Border.all(color: Colors.white, width: 1.5),
                 ),
-                child: const Icon(Icons.check_rounded,
-                    color: Colors.white, size: 15,),
+                child: const Icon(
+                  Icons.check_rounded,
+                  color: Colors.white,
+                  size: 15,
+                ),
               ),
             ),
         ],
@@ -477,37 +494,30 @@ class _OptionTile extends StatelessWidget {
     );
   }
 
-  /// A rounded colour dot for tint palettes and the "None" tile.
-  Widget _colorSwatch() {
-    final swatch = color ?? AppColors.lavender;
-    final bool isLight = swatch.computeLuminance() > 0.6;
-    final Color checkColor = isLight ? AppColors.deepPurple : Colors.white;
+  /// A rounded "None" tile with a friendly icon (or a tick when selected).
+  Widget _noneSwatch() {
     return Container(
       width: 64,
       height: 64,
       decoration: BoxDecoration(
-        gradient: RadialGradient(
-          center: const Alignment(-0.3, -0.4),
+        gradient: const RadialGradient(
+          center: Alignment(-0.3, -0.4),
           radius: 1.0,
-          colors: [
-            Color.lerp(swatch, Colors.white, 0.35)!,
-            swatch,
-            Color.lerp(swatch, Colors.black, 0.12)!,
-          ],
-          stops: const [0.0, 0.6, 1.0],
+          colors: [AppColors.surface, AppColors.lavenderSoft],
+          stops: [0.0, 1.0],
         ),
         shape: BoxShape.circle,
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.8),
-          width: 2,
+          color: selected ? AppColors.deepPurple : Colors.white,
+          width: selected ? 2.5 : 2,
         ),
         boxShadow: AppColors.tileShadow,
       ),
-      child: icon != null && !selected
-          ? Icon(icon, color: checkColor, size: 28)
-          : selected
-              ? Icon(Icons.check_rounded, color: checkColor, size: 32)
-              : null,
+      child: Icon(
+        selected ? Icons.check_rounded : (icon ?? Icons.block_rounded),
+        color: AppColors.deepPurple,
+        size: selected ? 32 : 26,
+      ),
     );
   }
 }

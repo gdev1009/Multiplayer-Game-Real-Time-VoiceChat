@@ -27,3 +27,6 @@ Thumbs.db
 # Generated
 *.g.dart
 coverage/
+
+# Raw artist art drops (import source only; the app uses assets/images/character/)
+assets/images/All*/

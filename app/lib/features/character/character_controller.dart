@@ -49,32 +49,33 @@ class CharacterController extends ChangeNotifier {
 
   /// Sets (or clears, when [id] is null) the chosen option for a layer.
   void chooseOption(CharacterLayer layer, String? id) {
-    _draft = switch (layer) {
-      CharacterLayer.base => _draft.copyWith(base: id),
-      CharacterLayer.hair => _draft.copyWith(hair: id),
-      CharacterLayer.eyes => _draft.copyWith(eyes: id),
-      CharacterLayer.glasses => _draft.copyWith(glasses: id),
-      CharacterLayer.outfit => _draft.copyWith(outfit: id),
-    };
-    // Give tintable layers a sensible default colour the moment a style is
-    // picked, and clear the colour when the player chooses "None".
-    if (layer.tintable) {
-      if (id == null) {
-        _draft = switch (layer) {
-          CharacterLayer.base => _draft.copyWith(baseColor: null),
-          CharacterLayer.hair => _draft.copyWith(hairColor: null),
-          CharacterLayer.eyes => _draft.copyWith(eyeColor: null),
-          _ => _draft,
-        };
-      } else if (selectedColor(layer) == null) {
-        final defaultTint = CharacterCatalog.tintsFor(layer).first.id;
-        _draft = switch (layer) {
-          CharacterLayer.base => _draft.copyWith(baseColor: defaultTint),
-          CharacterLayer.hair => _draft.copyWith(hairColor: defaultTint),
-          CharacterLayer.eyes => _draft.copyWith(eyeColor: defaultTint),
-          _ => _draft,
-        };
-      }
+    switch (layer) {
+      case CharacterLayer.base:
+        // Changing body swaps every option set, so reset the body-specific
+        // choices and dress the new body in its first outfit right away.
+        if (id != null && id != _draft.base) {
+          _draft = _draft.copyWith(
+            base: id,
+            hair: null,
+            outfit: CharacterCatalog.defaultOutfitFor(id),
+            glasses: null,
+            hat: null,
+            // earrings are shared across bodies, so they can stay.
+            accessory: null,
+          );
+        }
+      case CharacterLayer.hair:
+        _draft = _draft.copyWith(hair: id);
+      case CharacterLayer.outfit:
+        _draft = _draft.copyWith(outfit: id);
+      case CharacterLayer.glasses:
+        _draft = _draft.copyWith(glasses: id);
+      case CharacterLayer.hat:
+        _draft = _draft.copyWith(hat: id);
+      case CharacterLayer.earrings:
+        _draft = _draft.copyWith(earrings: id);
+      case CharacterLayer.accessory:
+        _draft = _draft.copyWith(accessory: id);
     }
     notifyListeners();
   }
@@ -83,28 +84,11 @@ class CharacterController extends ChangeNotifier {
   String? selected(CharacterLayer layer) => switch (layer) {
         CharacterLayer.base => _draft.base,
         CharacterLayer.hair => _draft.hair,
-        CharacterLayer.eyes => _draft.eyes,
-        CharacterLayer.glasses => _draft.glasses,
         CharacterLayer.outfit => _draft.outfit,
-      };
-
-  /// Sets (or clears, when [id] is null) the tint colour for a tintable layer.
-  void chooseColor(CharacterLayer layer, String? id) {
-    _draft = switch (layer) {
-      CharacterLayer.base => _draft.copyWith(baseColor: id),
-      CharacterLayer.hair => _draft.copyWith(hairColor: id),
-      CharacterLayer.eyes => _draft.copyWith(eyeColor: id),
-      _ => _draft,
-    };
-    notifyListeners();
-  }
-
-  /// The currently chosen tint id for a tintable layer, or null.
-  String? selectedColor(CharacterLayer layer) => switch (layer) {
-        CharacterLayer.base => _draft.baseColor,
-        CharacterLayer.hair => _draft.hairColor,
-        CharacterLayer.eyes => _draft.eyeColor,
-        _ => null,
+        CharacterLayer.glasses => _draft.glasses,
+        CharacterLayer.hat => _draft.hat,
+        CharacterLayer.earrings => _draft.earrings,
+        CharacterLayer.accessory => _draft.accessory,
       };
 
   void setDisplayName(String name) {
@@ -114,7 +98,9 @@ class CharacterController extends ChangeNotifier {
 
   /// Whether the draft is complete enough to save.
   bool get isComplete =>
-      _draft.displayName.trim().isNotEmpty && _draft.base != null;
+      _draft.displayName.trim().isNotEmpty &&
+      _draft.base != null &&
+      _draft.outfit != null;
 
   /// Persists the draft and updates the saved character.
   Future<void> save() async {

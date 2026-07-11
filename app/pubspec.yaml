@@ -66,6 +66,8 @@ flutter:
     - assets/images/character/
     - assets/images/character/base/
     - assets/images/character/hair/
-    - assets/images/character/eyes/
-    - assets/images/character/glasses/
     - assets/images/character/outfit/
+    - assets/images/character/glasses/
+    - assets/images/character/hat/
+    - assets/images/character/earrings/
+    - assets/images/character/accessory/
