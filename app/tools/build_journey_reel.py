@@ -5,7 +5,7 @@ import os
 from PIL import Image, ImageDraw, ImageFont
 import imageio.v2 as imageio
 
-SRC = "/tmp/journey_frames"
+SRC = os.environ.get("JOURNEY_FRAMES", "/tmp/journey_frames")
 OUT_DIR = "/home/dev/Downloads/Multiplayer-Game-Real-Time-VoiceChat/docs/screenshots/journey"
 os.makedirs(OUT_DIR, exist_ok=True)
 
@@ -46,11 +46,11 @@ F_SUB = font(18)
 # frame -> (milestone, caption, subtitle)
 SCENES = {
     "01_home":            ("M3", "Meet Grandma Mac", "Sunny's warm, friendly home screen"),
-    "02_char_body":       ("M3", "Character Studio", "Choose a body and skin tone"),
-    "03_char_hair":       ("M3", "Style your look", "Pick hair, eyes and colours"),
-    "04_char_outfit":     ("M3", "Dress your character", "A cheerful clay figure comes to life"),
-    "05_char_final":      ("M3", "Looking great, Rosie!", "Name your character and save"),
-    "06_home_saved":      ("M3", "Character saved", "Ready to head into the studio"),
+    "02_char_body":       ("M3", "Character Studio", "Pick a body \u2014 auto-dressed, ready to go"),
+    "03_char_hair":       ("M3", "Style the hair", "Hand-painted styles in soft silver"),
+    "04_char_outfit":     ("M3", "Dress your character", "Real artwork, layered to fit perfectly"),
+    "05_char_accessories":("M3", "Add the finishing touches", "Hats, glasses, earrings and a cane"),
+    "06_char_final":      ("M3", "Looking great, Rosie!", "Name your character and save"),
     "07_upcoming":        ("M4", "Play a game", "Find a game, host, or join by code"),
     "08_lobby_countdown": ("M4", "Game Room", "Studio players join in a few seconds"),
     "09_lobby_filled":    ("M4", "Teams are set", "Four players across Team A and Team B"),
