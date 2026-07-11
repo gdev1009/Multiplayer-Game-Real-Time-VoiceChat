@@ -1,0 +1,50 @@
+// Standalone demo entry for the Milestone 5 live gameplay screen.
+//
+// This mounts the real M5 PlayScreen driven by a purely *local* Gameplay
+// controller (the pure MatchEngine, no Supabase), so a full game — turns,
+// clues, guesses, steals, halftime role-switch, reveals and scoring — can be
+// run and screenshotted WITHOUT a live backend or sign-in. It is a
+// developer/demo tool only and is never bundled into the shipping app (the
+// real entry point remains lib/main.dart).
+//
+// Run for the web with:
+//   flutter run -d web-server -t lib/demo_game.dart
+import 'dart:math';
+
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import 'core/theme/app_theme.dart';
+import 'features/game/game_engine.dart';
+import 'features/game/gameplay_controller.dart';
+import 'features/game/play_screen.dart';
+import 'features/game/word_bank.dart';
+
+void main() {
+  final controller = GameplayController()
+    ..startLocal(
+      // A fixed, senior-friendly roster so screenshots read clearly.
+      names: const {
+        'A1': 'Sunny',
+        'A2': 'Walter',
+        'B1': 'Rosa',
+        'B2': 'Mabel',
+      },
+      // A seeded RNG so the demo always deals the same words — screenshots stay
+      // reproducible across runs.
+      words: WordBank.deal(8, random: Random(20260629)),
+      config: const MatchConfig(),
+    );
+
+  runApp(
+    ChangeNotifierProvider<GameplayController>.value(
+      value: controller,
+      child: MaterialApp(
+        title: 'Match Word — Play',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.light(),
+        home: const PlayScreen(),
+      ),
+    ),
+  );
+}

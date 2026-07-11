@@ -204,6 +204,16 @@ points are fully live and the "definition of done" is met end to end.
 project. Full `--split-per-abi` release APK set rebuilt and refreshed in `app/dist/`
 (`MatchWord-phone-arm64.apk`, `MatchWord-phone-arm32.apk`, `MatchWord-LDPlayer-x86_64.apk`).
 
+**Update — visual verification pass (2026-07-09):** M3 and M4 re-checked end to end and captured as
+proof in `docs/screenshots/milestone3-4/`. M3: character studio wizard (body → hair → eyes →
+glasses → outfit → name → review), with glasses/eyes/outfit now placed correctly on the clay body,
+name-on-shirt, save, and edit-later (all choices pre-filled) all confirmed. M4: Play-a-Game hub
+(Find a Game / Start a New Game / Join with a Code), the live Game Room with a shareable 4-digit
+code, Team A/B seats filling with players, and the "game is starting" hand-off, plus the
+Join-with-a-Code number pad. The M4 screens run against an in-memory lobby (`lib/demo_lobby.dart`,
+a dev-only entry mirroring `lib/demo_character.dart`) so the flow can be shown without a live
+backend. `flutter analyze` clean, 28/28 tests pass.
+
 **Remaining before sign-off:** multi-device manual test pass on the live backend.
 
 
@@ -220,7 +230,37 @@ project. Full `--split-per-abi` release APK set rebuilt and refreshed in `app/di
 **Definition of done:** a full game can be played end-to-end across devices; turns, steals, reveals,
 and scoring all enforced server-side; voice input degrades gracefully to text.
 
+**Update — engine + play screen built (2026-07-09):** the full gameplay vertical slice is implemented
+and passing all quality gates (`flutter analyze` clean, **45/45 tests** — 17 new engine tests).
+- **Authoritative rules engine** (`lib/features/game/game_engine.dart`): a pure-Dart reducer with an
+  explicit state machine — `firstHalf → halftime → secondHalf → gameOver`, and per-turn
+  `awaitingClue → awaitingGuess → resolved`. Handles clue/guess, the **steal** (a wrong guess drops
+  the word value by 1 and passes to the other team), **~5-exchange auto-reveal** for no points, and
+  the **halftime role switch** (each team swaps clue-giver ↔ guesser). Seat→role mapping (0→A1,
+  1→B1, 2→A2, 3→B2) matches the lobby exactly, so gameplay greets each player **by name *and* role**
+  ("Sunny, you're Player A1") — the behaviour Ronna asked about.
+- **Server-authoritative writes** (`supabase/migrations/0007_gameplay.sql`): `game_state`,
+  `game_words`, `game_plays` tables; the same rules mirrored in `SECURITY DEFINER` functions
+  (`mw_begin_play`, `mw_submit_clue`, `mw_submit_guess`, `mw_next_word`, `mw_begin_second_half`) as
+  the only write path, with turn validation (`mw_actor_ok`) and SELECT-only RLS for clients. Live
+  updates flow over the `supabase_realtime` publication.
+- **Voice-or-text input** (`lib/features/game/word_input.dart`): a big press-to-speak mic beside a
+  large text field with a Send button — the **text fallback is always available**, so the flow never
+  dead-ends before the speech engine (M6+) is wired.
+- **Play screen** (`lib/features/game/play_screen.dart`): scoreboard, both team desks with Guy Smiley
+  in the middle, the host turn banner, the shared real-time clue/guess feed, and calm halftime /
+  game-over panels. Wired into the lobby room so the host's **Start Game** hands every player off to
+  the live board (`gameplay_controller.dart` + `gameplay_service.dart`).
+- **Verified end to end** and captured in `docs/screenshots/milestone5/`: a complete 8-word game —
+  clue → guess, a steal (word value 5 → 4, turn passes teams), correct-guess scoring, the halftime
+  role switch (Walter/Mabel become clue-givers, Sunny/Rosa become guessers), and the winner
+  announcement (Team B 24 – 15). Runs offline via a dev-only entry (`lib/demo_game.dart`).
+
+**Remaining before sign-off:** apply `0007_gameplay.sql` to the live Supabase project and run a
+multi-device manual test pass; the speech-to-text provider is scoped with the M6 host/audio work.
+
 ---
+
 
 ## Milestone 6 — Guy Smiley Host + Audio System · $750 · 8–9 days
 

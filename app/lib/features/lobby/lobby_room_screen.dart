@@ -11,7 +11,10 @@ import '../../core/widgets/big_button.dart';
 import '../../core/widgets/host_greeting.dart';
 import '../../models/game.dart';
 import '../../models/game_player.dart';
+import '../../services/gameplay_service.dart';
 import '../auth/auth_controller.dart';
+import '../game/gameplay_controller.dart';
+import '../game/play_screen.dart';
 import 'lobby_controller.dart';
 
 /// The live game room (Milestone 4).
@@ -55,7 +58,7 @@ class LobbyRoomScreen extends StatelessWidget {
           if (context.mounted) Navigator.of(context).pop();
         },
         child: game.status == GameStatus.inProgress
-            ? const _StartingPanel()
+            ? _StartingPanel(game: game, players: lobby.players)
             : _LobbyBody(game: game, lobby: lobby),
       ),
     );
@@ -381,8 +384,51 @@ class _Tag extends StatelessWidget {
   }
 }
 
-class _StartingPanel extends StatelessWidget {
-  const _StartingPanel();
+class _StartingPanel extends StatefulWidget {
+  const _StartingPanel({required this.game, required this.players});
+
+  final Game game;
+  final List<GamePlayer> players;
+
+  @override
+  State<_StartingPanel> createState() => _StartingPanelState();
+}
+
+class _StartingPanelState extends State<_StartingPanel> {
+  bool _launched = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Once the host flips the game to in-progress, everyone in the room hands
+    // off to the live play screen. We scope a fresh GameplayController to that
+    // screen so its streams are torn down cleanly when the game ends.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _launch());
+  }
+
+  Future<void> _launch() async {
+    if (_launched || !mounted) return;
+    _launched = true;
+
+    final service = context.read<GameplayService>();
+    final controller = GameplayController(service: service, game: widget.game);
+    // Deal words (host) / subscribe (everyone) before showing the screen.
+    await controller.startOnline(players: widget.players);
+    if (!mounted) {
+      controller.dispose();
+      return;
+    }
+
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ChangeNotifierProvider<GameplayController>.value(
+          value: controller,
+          child: const PlayScreen(),
+        ),
+      ),
+    );
+    controller.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {

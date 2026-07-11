@@ -7,6 +7,7 @@ import '../../core/theme/app_text.dart';
 import '../../core/widgets/app_page.dart';
 import '../../core/widgets/big_button.dart';
 import '../../core/widgets/big_text_field.dart';
+import '../../models/character.dart';
 import 'character_catalog.dart';
 import 'character_controller.dart';
 import 'character_preview.dart';
@@ -130,6 +131,7 @@ class _CharacterCreationScreenState extends State<CharacterCreationScreen> {
     return switch (_step.kind) {
       _StepKind.layer => _LayerChooser(
           layer: _step.layer!,
+          reference: controller.draft,
           selectedId: controller.selected(_step.layer!),
           onChoose: (id) => controller.chooseOption(_step.layer!, id),
           selectedColorId: controller.selectedColor(_step.layer!),
@@ -246,6 +248,7 @@ class _StepProgress extends StatelessWidget {
 class _LayerChooser extends StatelessWidget {
   const _LayerChooser({
     required this.layer,
+    required this.reference,
     required this.selectedId,
     required this.onChoose,
     required this.selectedColorId,
@@ -253,6 +256,9 @@ class _LayerChooser extends StatelessWidget {
   });
 
   final CharacterLayer layer;
+
+  /// The current draft, so each style tile can preview on the player's body.
+  final Character reference;
   final String? selectedId;
   final ValueChanged<String?> onChoose;
   final String? selectedColorId;
@@ -283,7 +289,11 @@ class _LayerChooser extends StatelessWidget {
               for (final option in options)
                 _OptionTile(
                   label: option.label,
-                  color: option.swatch ?? AppColors.lavender,
+                  preview: CharacterPartThumb(
+                    layer: layer,
+                    optionId: option.id,
+                    reference: reference,
+                  ),
                   selected: selectedId == option.id,
                   onTap: () => onChoose(option.id),
                 ),
@@ -361,23 +371,27 @@ class _SectionHeader extends StatelessWidget {
 class _OptionTile extends StatelessWidget {
   const _OptionTile({
     required this.label,
-    required this.color,
     required this.selected,
     required this.onTap,
+    this.color,
+    this.preview,
     this.icon,
   });
 
   final String label;
-  final Color color;
+
+  /// The swatch colour, used for colour/tint tiles and the "None" tile.
+  final Color? color;
+
+  /// A live style thumbnail, used for hair/eyes/glasses/outfit/body tiles so
+  /// each option previews its real look instead of an identical dot.
+  final Widget? preview;
   final bool selected;
   final VoidCallback onTap;
   final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
-    final bool isLight = color.computeLuminance() > 0.6;
-    final Color checkColor = isLight ? AppColors.deepPurple : Colors.white;
-
     return Semantics(
       button: true,
       selected: selected,
@@ -401,33 +415,7 @@ class _OptionTile extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: 64,
-                height: 64,
-                decoration: BoxDecoration(
-                  gradient: RadialGradient(
-                    center: const Alignment(-0.3, -0.4),
-                    radius: 1.0,
-                    colors: [
-                      Color.lerp(color, Colors.white, 0.35)!,
-                      color,
-                      Color.lerp(color, Colors.black, 0.12)!,
-                    ],
-                    stops: const [0.0, 0.6, 1.0],
-                  ),
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.8),
-                    width: 2,
-                  ),
-                  boxShadow: AppColors.tileShadow,
-                ),
-                child: icon != null && !selected
-                    ? Icon(icon, color: checkColor, size: 28)
-                    : selected
-                        ? Icon(Icons.check_rounded, color: checkColor, size: 32)
-                        : null,
-              ),
+              preview != null ? _thumbSwatch() : _colorSwatch(),
               const SizedBox(height: AppSpacing.xs),
               Text(
                 label,
@@ -444,6 +432,82 @@ class _OptionTile extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  /// A live figure thumbnail with a selection tick in the corner.
+  Widget _thumbSwatch() {
+    return SizedBox(
+      width: 66,
+      height: 66,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(66 * 0.30),
+              border: Border.all(
+                color: selected
+                    ? AppColors.deepPurple
+                    : Colors.white.withValues(alpha: 0.9),
+                width: selected ? 2.5 : 2,
+              ),
+              boxShadow: AppColors.tileShadow,
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: preview,
+          ),
+          if (selected)
+            Positioned(
+              right: -2,
+              bottom: -2,
+              child: Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  color: AppColors.deepPurple,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 1.5),
+                ),
+                child: const Icon(Icons.check_rounded,
+                    color: Colors.white, size: 15,),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// A rounded colour dot for tint palettes and the "None" tile.
+  Widget _colorSwatch() {
+    final swatch = color ?? AppColors.lavender;
+    final bool isLight = swatch.computeLuminance() > 0.6;
+    final Color checkColor = isLight ? AppColors.deepPurple : Colors.white;
+    return Container(
+      width: 64,
+      height: 64,
+      decoration: BoxDecoration(
+        gradient: RadialGradient(
+          center: const Alignment(-0.3, -0.4),
+          radius: 1.0,
+          colors: [
+            Color.lerp(swatch, Colors.white, 0.35)!,
+            swatch,
+            Color.lerp(swatch, Colors.black, 0.12)!,
+          ],
+          stops: const [0.0, 0.6, 1.0],
+        ),
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.8),
+          width: 2,
+        ),
+        boxShadow: AppColors.tileShadow,
+      ),
+      child: icon != null && !selected
+          ? Icon(icon, color: checkColor, size: 28)
+          : selected
+              ? Icon(Icons.check_rounded, color: checkColor, size: 32)
+              : null,
     );
   }
 }

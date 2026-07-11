@@ -11,6 +11,7 @@ import 'features/lobby/lobby_controller.dart';
 import 'services/auth_service.dart';
 import 'services/character_service.dart';
 import 'services/device_service.dart';
+import 'services/gameplay_service.dart';
 import 'services/lobby_service.dart';
 import 'services/profile_service.dart';
 import 'services/trial_service.dart';
@@ -39,6 +40,7 @@ Future<void> main() async {
   );
   final characterService = CharacterService(client);
   final lobbyService = LobbyService(client);
+  final gameplayService = GameplayService(client);
 
   runApp(
     MultiProvider(
@@ -48,6 +50,7 @@ Future<void> main() async {
           create: (_) => CharacterController(characterService),
         ),
         ChangeNotifierProvider(create: (_) => LobbyController(lobbyService)),
+        Provider<GameplayService>.value(value: gameplayService),
       ],
       child: const MatchWordApp(),
     ),

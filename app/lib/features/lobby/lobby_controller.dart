@@ -103,14 +103,23 @@ class LobbyController extends ChangeNotifier {
   void _subscribe(String gameId) {
     _playersSub?.cancel();
     _gameSub?.cancel();
-    _playersSub = _service.watchPlayers(gameId).listen((rows) {
-      _players = rows;
-      notifyListeners();
-    });
-    _gameSub = _service.watchGame(gameId).listen((game) {
-      if (game != null) _game = game;
-      notifyListeners();
-    });
+    // Realtime is a live convenience, not a requirement: the room already has
+    // its seats from loadPlayers(). If a stream errors (e.g. a transient
+    // connection drop) we keep the last-known state instead of crashing.
+    _playersSub = _service.watchPlayers(gameId).listen(
+      (rows) {
+        _players = rows;
+        notifyListeners();
+      },
+      onError: (Object _) {},
+    );
+    _gameSub = _service.watchGame(gameId).listen(
+      (game) {
+        if (game != null) _game = game;
+        notifyListeners();
+      },
+      onError: (Object _) {},
+    );
   }
 
   // ---- Host / room actions --------------------------------------------------

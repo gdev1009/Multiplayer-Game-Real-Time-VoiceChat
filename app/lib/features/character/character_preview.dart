@@ -76,6 +76,102 @@ class CharacterPreview extends StatelessWidget {
   }
 }
 
+/// A small, premium thumbnail that previews a single [layer] option on the
+/// player's own figure — so the chooser shows the *actual* hairstyle, eye
+/// shape, glasses or outfit instead of identical colour dots.
+///
+/// It reuses the real [CharacterPreview] assembly (PNG art first, clay-styled
+/// vector fallback otherwise) on a minimal figure — the player's chosen body
+/// plus only this one option — then zooms to the relevant part of the body.
+class CharacterPartThumb extends StatelessWidget {
+  const CharacterPartThumb({
+    super.key,
+    required this.layer,
+    required this.optionId,
+    required this.reference,
+    this.size = 66,
+  });
+
+  /// The layer this thumbnail previews.
+  final CharacterLayer layer;
+
+  /// The option id to show (e.g. `hair-curly`).
+  final String optionId;
+
+  /// The current draft — used only to inherit the body and chosen colours so
+  /// the thumbnail matches what the player will actually see.
+  final Character reference;
+
+  /// The rendered square size in logical pixels.
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final baseId = reference.base ??
+        CharacterCatalog.options[CharacterLayer.base]!.first.id;
+    final skin = reference.baseColor ?? CharacterCatalog.skinColors.first.id;
+
+    // A minimal figure: the chosen body plus only this option, so the
+    // thumbnail unmistakably reads as this single choice.
+    var c = Character(displayName: '', base: baseId, baseColor: skin);
+    switch (layer) {
+      case CharacterLayer.base:
+        c = Character(displayName: '', base: optionId, baseColor: skin);
+      case CharacterLayer.hair:
+        c = c.copyWith(
+          hair: optionId,
+          hairColor: reference.hairColor ?? CharacterCatalog.hairColors[1].id,
+        );
+      case CharacterLayer.eyes:
+        c = c.copyWith(
+          eyes: optionId,
+          eyeColor: reference.eyeColor ?? CharacterCatalog.eyeColors.first.id,
+        );
+      case CharacterLayer.glasses:
+        c = c.copyWith(glasses: optionId);
+      case CharacterLayer.outfit:
+        c = c.copyWith(outfit: optionId);
+    }
+
+    // Where to centre the zoom (as a fraction of the stage height) and how
+    // tight, tuned per layer so the relevant part fills the tile.
+    final (double focusY, double zoom) = switch (layer) {
+      CharacterLayer.outfit => (0.42, 1.55),
+      CharacterLayer.base => (0.16, 2.30),
+      CharacterLayer.hair => (0.115, 2.55),
+      _ => (0.165, 2.75), // eyes / glasses — frame the face
+    };
+
+    final render = size * zoom;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(size * 0.30),
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: DecoratedBox(
+          decoration: const BoxDecoration(gradient: AppColors.stageGradient),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned(
+                width: render,
+                height: render,
+                left: (size - render) / 2,
+                top: size / 2 - focusY * render,
+                child: CharacterPreview(
+                  character: c,
+                  size: render,
+                  showBackdrop: false,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Backdrop + grounding
 // ---------------------------------------------------------------------------
@@ -431,68 +527,68 @@ class _BodyAnchors {
     switch (baseId) {
       case 'body-male':
         return const _BodyAnchors(
-          eyeY: 0.150,
-          eyeCX: 0.494,
-          eyeDX: 0.034,
+          eyeY: 0.235,
+          eyeCX: 0.488,
+          eyeDX: 0.060,
           irisR: 0.0105,
-          templeX: 0.445,
-          browY: 0.128,
+          templeX: 0.325,
+          browY: 0.195,
           crownY: 0.044,
           headCX: 0.494,
           headHalf: 0.094,
           hairlineY: 0.098,
-          collarY: 0.275,
-          neckHalf: 0.043,
-          shoulderY: 0.315,
-          shoulderHalf: 0.128,
-          sleeveY: 0.350,
-          sleeveHalf: 0.142,
-          waistY: 0.455,
-          waistHalf: 0.118,
-          hemY: 0.510,
-          hemHalf: 0.132,
-          hipY: 0.500,
-          crotchY: 0.635,
-          inseamHalf: 0.012,
-          thighOuterHalf: 0.112,
-          legCenter: 0.056,
-          kneeY: 0.720,
-          kneeHalf: 0.040,
-          ankleY: 0.895,
-          ankleHalf: 0.026,
+          collarY: 0.405,
+          neckHalf: 0.055,
+          shoulderY: 0.430,
+          shoulderHalf: 0.220,
+          sleeveY: 0.478,
+          sleeveHalf: 0.235,
+          waistY: 0.575,
+          waistHalf: 0.160,
+          hemY: 0.645,
+          hemHalf: 0.190,
+          hipY: 0.635,
+          crotchY: 0.740,
+          inseamHalf: 0.015,
+          thighOuterHalf: 0.175,
+          legCenter: 0.070,
+          kneeY: 0.835,
+          kneeHalf: 0.056,
+          ankleY: 0.930,
+          ankleHalf: 0.040,
         );
       case 'body-female':
       default:
         return const _BodyAnchors(
-          eyeY: 0.175,
-          eyeCX: 0.498,
-          eyeDX: 0.035,
+          eyeY: 0.220,
+          eyeCX: 0.492,
+          eyeDX: 0.060,
           irisR: 0.0100,
-          templeX: 0.448,
-          browY: 0.153,
+          templeX: 0.330,
+          browY: 0.178,
           crownY: 0.062,
           headCX: 0.498,
           headHalf: 0.092,
           hairlineY: 0.120,
-          collarY: 0.270,
-          neckHalf: 0.038,
-          shoulderY: 0.305,
-          shoulderHalf: 0.104,
-          sleeveY: 0.335,
-          sleeveHalf: 0.118,
-          waistY: 0.440,
-          waistHalf: 0.100,
-          hemY: 0.498,
-          hemHalf: 0.116,
-          hipY: 0.492,
-          crotchY: 0.605,
-          inseamHalf: 0.010,
-          thighOuterHalf: 0.097,
-          legCenter: 0.051,
-          kneeY: 0.720,
-          kneeHalf: 0.034,
-          ankleY: 0.895,
-          ankleHalf: 0.025,
+          collarY: 0.390,
+          neckHalf: 0.050,
+          shoulderY: 0.418,
+          shoulderHalf: 0.200,
+          sleeveY: 0.465,
+          sleeveHalf: 0.215,
+          waistY: 0.555,
+          waistHalf: 0.150,
+          hemY: 0.630,
+          hemHalf: 0.180,
+          hipY: 0.620,
+          crotchY: 0.720,
+          inseamHalf: 0.014,
+          thighOuterHalf: 0.165,
+          legCenter: 0.065,
+          kneeY: 0.820,
+          kneeHalf: 0.052,
+          ankleY: 0.925,
+          ankleHalf: 0.038,
         );
     }
   }
@@ -961,32 +1057,42 @@ class _HairPainter extends CustomPainter {
     final outerHalf = half + 0.010; // slight puff past the head silhouette
 
     // ---- Long trailing panels (drawn first, behind the head mass) ----
+    //
+    // The two locks hang *outside* the face silhouette — from the temples down
+    // past the shoulders — so long hair frames the face instead of covering it.
+    // The inner edge never crosses the head half-width (where the ears are), so
+    // the eyes and cheeks stay clear.
     if (style == 'hair-long') {
       final panel = Paint()
         ..shader = ui.Gradient.linear(
           Offset(w * cx, h * crown),
-          Offset(w * cx, h * (line + 0.230)),
+          Offset(w * cx, h * (line + 0.320)),
           [mid, color, dark],
           [0.0, 0.55, 1.0],
         );
+      final topY = crown + 0.050; // starts at the temple, just below the crown
+      final botY = line + 0.315; // falls to the upper chest
       for (final s in [-1.0, 1.0]) {
-        final x = cx + s * (outerHalf - 0.004);
+        final innerTop = cx + s * (half - 0.004); // hugs the head edge (sideburn)
+        final outer = cx + s * (half + 0.052); // bulges out beside the head
+        final botX = cx + s * (half + 0.016); // tapers back in at the tip
         final path = Path()
-          ..moveTo(w * (x - s * 0.030), h * (crown + 0.055))
+          ..moveTo(w * innerTop, h * topY)
+          // outer edge: bulge out past the ear, then sweep down to the tip
           ..cubicTo(
-            w * (x + s * 0.006), h * (line + 0.020),
-            w * (x + s * 0.014), h * (line + 0.120),
-            w * (x - s * 0.004), h * (line + 0.235),
+            w * outer, h * (crown + 0.130),
+            w * outer, h * (line + 0.170),
+            w * botX, h * botY,
+          )
+          // rounded tip, then back up the inner edge (kept at the head edge)
+          ..quadraticBezierTo(
+            w * (cx + s * (half + 0.004)), h * (botY + 0.006),
+            w * (cx + s * (half - 0.010)), h * (line + 0.190),
           )
           ..cubicTo(
-            w * (x - s * 0.030), h * (line + 0.238),
-            w * (x - s * 0.052), h * (line + 0.170),
-            w * (x - s * 0.050), h * (line + 0.080),
-          )
-          ..cubicTo(
-            w * (x - s * 0.052), h * (line + 0.020),
-            w * (x - s * 0.048), h * (crown + 0.090),
-            w * (x - s * 0.030), h * (crown + 0.055),
+            w * (cx + s * (half - 0.006)), h * (line + 0.090),
+            w * (cx + s * (half - 0.002)), h * (crown + 0.120),
+            w * innerTop, h * topY,
           )
           ..close();
         canvas.drawPath(path, panel);
@@ -1181,12 +1287,14 @@ class _EyesPainter extends CustomPainter {
 
     // A freshly drawn pair of eyes that covers the clay art, so the chosen
     // shape and colour are unmistakably the player's. Dimensions vary by style.
-    final (double eyeHalfW, double eyeHalfH, double spacing, double lidDrop) =
-        switch (shape) {
-      'eyes-almond' => (0.0220, 0.0118, 0.036, 0.30),
-      'eyes-wide' => (0.0215, 0.0140, 0.040, 0.16),
-      _ /* eyes-round */ => (0.0195, 0.0140, 0.034, 0.10),
+    final (double eyeHalfW, double eyeHalfH, double lidDrop) = switch (shape) {
+      'eyes-almond' => (0.0250, 0.0130, 0.30),
+      'eyes-wide' => (0.0245, 0.0160, 0.16),
+      _ /* eyes-round */ => (0.0230, 0.0160, 0.10),
     };
+    // Space the eyes on the body's real eye-line (measured into eyeDX), so they
+    // sit over the clay eyes instead of bunched up in the middle.
+    final spacing = a.eyeDX;
 
     // Iris height a little under the eye opening, so white shows around it and
     // the eye reads as an eye (not a dark disc / sunglasses).
@@ -1328,8 +1436,8 @@ class _GlassesPainter extends CustomPainter {
 
     final leftC = Offset(w * (a.eyeCX - a.eyeDX), h * a.eyeY);
     final rightC = Offset(w * (a.eyeCX + a.eyeDX), h * a.eyeY);
-    final rx = w * 0.020;
-    final ry = h * 0.017;
+    final rx = w * 0.026;
+    final ry = h * 0.021;
     final radius = Radius.circular(w * 0.008);
     final left = RRect.fromRectAndRadius(
       Rect.fromCenter(center: leftC, width: rx * 2, height: ry * 2),
