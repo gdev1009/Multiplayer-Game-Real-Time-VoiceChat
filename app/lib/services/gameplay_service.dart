@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../features/game/game_engine.dart';
+import '../models/character.dart';
 import 'lobby_failure.dart';
 
 /// A parsed `game_state` row — the server's authoritative match snapshot.
@@ -22,6 +24,7 @@ class GameStateRow {
     required this.wordsPerHalf,
     required this.maxExchanges,
     required this.wordValue,
+    required this.updatedAt,
   });
 
   final GamePhase phase;
@@ -37,6 +40,19 @@ class GameStateRow {
   final int wordsPerHalf;
   final int maxExchanges;
   final int wordValue;
+
+  /// When the server last wrote this row. Used to ignore stale realtime rows
+  /// that would otherwise clobber a fresher snapshot (fixes scores/turn info
+  /// flickering backwards when realtime delivers rows out of order).
+  final DateTime updatedAt;
+
+  static DateTime _time(dynamic v) {
+    if (v is String) {
+      return DateTime.tryParse(v)?.toUtc() ??
+          DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+    }
+    return DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+  }
 
   static GamePhase _phase(String? v) => switch (v) {
         'halftime' => GamePhase.halftime,
@@ -71,6 +87,7 @@ class GameStateRow {
         wordsPerHalf: (m['words_per_half'] as num?)?.toInt() ?? 4,
         maxExchanges: (m['max_exchanges'] as num?)?.toInt() ?? 5,
         wordValue: (m['word_value'] as num?)?.toInt() ?? 5,
+        updatedAt: _time(m['updated_at']),
       );
 }
 
@@ -96,6 +113,11 @@ class GameplayService {
 
   final SupabaseClient _client;
 
+  /// The signed-in player's id, or null when there is no session. Used by the
+  /// controller to tell the host device apart (only the host deals the words
+  /// and drives the computer-filled seats).
+  String? get currentUserId => _client.auth.currentUser?.id;
+
   Map<String, dynamic> _asMap(dynamic result) {
     if (result is Map<String, dynamic>) return result;
     if (result is Map) return Map<String, dynamic>.from(result);
@@ -111,7 +133,23 @@ class GameplayService {
       if (res['ok'] == true) return res;
       throw LobbyFailure.fromReason(res['reason'] as String?);
     } on PostgrestException catch (e) {
-      throw LobbyFailure('Something went wrong. Please try again.', code: e.code);
+      debugPrint(
+        '[GameplayService] $fn failed: ${e.code} ${e.message} '
+        '(details: ${e.details}, hint: ${e.hint})',
+      );
+      final msg = e.message.toLowerCase();
+      final missingSchema = e.code == '42883' ||
+          e.code == '42P01' ||
+          e.code == 'PGRST202' ||
+          msg.contains('does not exist') ||
+          msg.contains('could not find');
+      throw LobbyFailure(
+        missingSchema
+            ? 'This game needs a quick setup on the server before it can be '
+                'played. Please contact support.'
+            : 'Something went wrong. Please try again.',
+        code: e.code,
+      );
     }
   }
 
@@ -143,6 +181,66 @@ class GameplayService {
         .eq('game_id', gameId)
         .order('word_index');
     return rows.map<String>((r) => (r['word'] as String?) ?? '').toList();
+  }
+
+  /// Fetches the current authoritative match state once (not a stream), so an
+  /// action's result is applied even if a realtime UPDATE is delayed or the
+  /// project's realtime replication is not delivering row changes.
+  Future<GameStateRow?> loadState(String gameId) async {
+    final row = await _client
+        .from('game_state')
+        .select()
+        .eq('game_id', gameId)
+        .maybeSingle();
+    return row == null ? null : GameStateRow.fromMap(row);
+  }
+
+  /// Fetches the current shared clue/guess feed once (not a stream), oldest
+  /// first — a polling fallback for when realtime is delayed or off.
+  Future<List<PlayEntry>> loadPlays(String gameId) async {
+    final rows = await _client
+        .from('game_plays')
+        .select()
+        .eq('game_id', gameId)
+        .order('created_at');
+    return rows.map(playEntryFromMap).toList();
+  }
+
+  /// Loads every seated human's saved character, keyed by their seat role
+  /// (A1/A2/B1/B2), so the live stage can show each player's own character.
+  /// Reads through the members-only `mw_game_characters` function because the
+  /// `characters` table's RLS otherwise blocks reading other players' rows.
+  /// Computer seats are absent here (the client draws them locally).
+  Future<Map<String, Character>> loadCharacters(String gameId) async {
+    try {
+      final res = await _client.rpc(
+        'mw_game_characters',
+        params: {'p_game': gameId},
+      );
+      final rows = (res as List?) ?? const [];
+      final out = <String, Character>{};
+      for (final r in rows) {
+        final m = Map<String, dynamic>.from(r as Map);
+        final role = m['role'] as String?;
+        if (role == null) continue;
+        out[role] = Character(
+          displayName: (m['display_name'] as String?) ?? '',
+          base: m['base'] as String?,
+          hair: m['hair'] as String?,
+          outfit: m['outfit'] as String?,
+          glasses: m['glasses'] as String?,
+          hat: m['hat'] as String?,
+          earrings: m['earrings'] as String?,
+          accessory: m['accessory'] as String?,
+        );
+      }
+      return out;
+    } on PostgrestException catch (e) {
+      debugPrint(
+        '[GameplayService] mw_game_characters failed: ${e.code} ${e.message}',
+      );
+      return const {};
+    }
   }
 
   /// Realtime stream of the authoritative match state.

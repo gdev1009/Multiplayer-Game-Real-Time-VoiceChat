@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text.dart';
+import '../../models/character.dart';
+import '../character/character_preview.dart';
 import '../game/game_engine.dart';
 
 /// The Milestone 6 "game-show studio" stage.
@@ -17,14 +19,31 @@ import '../game/game_engine.dart';
 /// It is a pure presentation widget driven entirely by [state]; all inputs,
 /// buttons and audio live around it in `play_screen.dart`.
 class StudioStage extends StatelessWidget {
-  const StudioStage({super.key, required this.state});
+  const StudioStage({
+    super.key,
+    required this.state,
+    this.viewerRole,
+    this.charactersByRole = const {},
+  });
 
   final MatchState state;
+
+  /// The role (A1/A2/B1/B2) of the player looking at this device, or null for a
+  /// single-device / demo game. Used so the secret word is only ever revealed
+  /// on the clue-giver's own screen — never on the guesser's device.
+  final String? viewerRole;
+
+  /// Each seat role's character (the player's saved character, or a generated
+  /// look for a computer seat). Empty falls back to a generic clay bust.
+  final Map<String, Character> charactersByRole;
 
   @override
   Widget build(BuildContext context) {
     // The stage keeps a portrait TV-frame aspect so the composition matches the
-    // mockup on any width. Content scales inside via LayoutBuilder.
+    // mockup on any width. The whole composition is authored against a fixed
+    // 360×480 canvas and then uniformly scaled to fit the device via FittedBox,
+    // so the host, podiums and busts always keep the same relative positions
+    // and never overlap on narrower phones.
     return AspectRatio(
       aspectRatio: 3 / 4,
       child: ClipRRect(
@@ -41,48 +60,63 @@ class StudioStage extends StatelessWidget {
               ],
             ),
           ),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              // Spotlights + studio floor behind everything.
-              const Positioned.fill(child: _StudioBackdrop()),
+          child: FittedBox(
+            fit: BoxFit.fill,
+            child: SizedBox(
+              width: 360,
+              height: 480,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  // Spotlights + studio floor behind everything.
+                  const Positioned.fill(child: _StudioBackdrop()),
 
-              // Scoreboard + word tile pinned to the top.
-              Positioned(
-                top: 12,
-                left: 12,
-                right: 12,
-                child: Column(
-                  children: [
-                    _Scoreboard(state: state),
-                    const SizedBox(height: 10),
-                    _WordTile(state: state),
-                  ],
-                ),
-              ),
+                  // Scoreboard + word tile pinned to the top.
+                  Positioned(
+                    top: 12,
+                    left: 12,
+                    right: 12,
+                    child: Column(
+                      children: [
+                        _Scoreboard(state: state),
+                        const SizedBox(height: 10),
+                        _WordTile(state: state, viewerRole: viewerRole),
+                      ],
+                    ),
+                  ),
 
-              // Podiums flank the lower third; the host stands between them.
-              Positioned(
-                left: 8,
-                bottom: 96,
-                width: 132,
-                child: _TeamPodium(state: state, team: 'A'),
-              ),
-              Positioned(
-                right: 8,
-                bottom: 96,
-                width: 132,
-                child: _TeamPodium(state: state, team: 'B'),
-              ),
+                  // Podiums flank the lower third; the host stands between them.
+                  Positioned(
+                    left: 8,
+                    bottom: 96,
+                    width: 132,
+                    child: _TeamPodium(
+                      state: state,
+                      team: 'A',
+                      charactersByRole: charactersByRole,
+                    ),
+                  ),
+                  Positioned(
+                    right: 8,
+                    bottom: 96,
+                    width: 132,
+                    child: _TeamPodium(
+                      state: state,
+                      team: 'B',
+                      charactersByRole: charactersByRole,
+                    ),
+                  ),
 
-              // Guy Smiley, centre-stage, with his nameplate + speech bubble.
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 8,
-                child: _HostCentre(state: state),
+                  // Guy Smiley, centre-stage, with his nameplate + speech bubble.
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 8,
+                    child: _HostCentre(state: state),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -271,13 +305,19 @@ class _ScoreEnd extends StatelessWidget {
 /// the clue step); otherwise it shows the word counter so the guesser can never
 /// read the answer. The label pops when it changes.
 class _WordTile extends StatelessWidget {
-  const _WordTile({required this.state});
+  const _WordTile({required this.state, this.viewerRole});
   final MatchState state;
+  final String? viewerRole;
 
   @override
   Widget build(BuildContext context) {
+    // Reveal the word during the clue step, but only on the clue-giver's own
+    // device. In a single-device / demo game (viewerRole == null) the one
+    // screen is the clue-giver, so it shows as before.
+    final amClueGiver =
+        viewerRole == null || viewerRole == state.clueGiverRole;
     final revealSecret =
-        state.isTurnActive && state.step == TurnStep.awaitingClue;
+        state.isTurnActive && state.step == TurnStep.awaitingClue && amClueGiver;
     final label = revealSecret ? state.secretWord.toUpperCase() : state.wordLabel;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 10),
@@ -316,9 +356,14 @@ class _WordTile extends StatelessWidget {
 /// A team podium with two character busts above a gold-trimmed desk holding the
 /// team name and the two seat nameplates. The active seat glows gold.
 class _TeamPodium extends StatelessWidget {
-  const _TeamPodium({required this.state, required this.team});
+  const _TeamPodium({
+    required this.state,
+    required this.team,
+    this.charactersByRole = const {},
+  });
   final MatchState state;
   final String team;
+  final Map<String, Character> charactersByRole;
 
   @override
   Widget build(BuildContext context) {
@@ -337,9 +382,19 @@ class _TeamPodium extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            _Bust(name: clueName, seed: '$team$clueRole', active: clueActive),
+            _Bust(
+              name: clueName,
+              seed: '$team$clueRole',
+              active: clueActive,
+              character: charactersByRole[clueRole],
+            ),
             const SizedBox(width: 6),
-            _Bust(name: guessName, seed: '$team$guessRole', active: guessActive),
+            _Bust(
+              name: guessName,
+              seed: '$team$guessRole',
+              active: guessActive,
+              character: charactersByRole[guessRole],
+            ),
           ],
         ),
         Transform.translate(
@@ -363,10 +418,18 @@ class _TeamPodium extends StatelessWidget {
 /// gently bobs so the stage feels alive, and the whole bust scales up with a
 /// gold spotlight ring when it's that player's turn.
 class _Bust extends StatefulWidget {
-  const _Bust({required this.name, required this.seed, required this.active});
+  const _Bust({
+    required this.name,
+    required this.seed,
+    required this.active,
+    this.character,
+  });
   final String name;
   final String seed;
   final bool active;
+
+  /// The player's character to render. When null, a generic clay bust shows.
+  final Character? character;
 
   @override
   State<_Bust> createState() => _BustState();
@@ -446,20 +509,55 @@ class _BustState extends State<_Bust> with SingleTickerProviderStateMixin {
                   child: child,
                 );
               },
-              child: Image.asset(
-                _asset,
-                height: 70,
-                fit: BoxFit.contain,
-                filterQuality: FilterQuality.medium,
-                errorBuilder: (_, __, ___) => Icon(
-                  Icons.person_rounded,
-                  size: 48,
-                  color: Colors.white.withValues(alpha: 0.8),
-                ),
-              ),
+              child: _figure(),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// The player's actual character, cropped to head-and-shoulders, or the
+  /// generic clay bust when no character is available (demo / missing art).
+  Widget _figure() {
+    final character = widget.character;
+    if (character != null && character.base != null) {
+      // Render the full figure large, then show just the head/shoulders through
+      // a small window so it reads as a bust rising above the desk.
+      const box = Size(60, 70);
+      const render = 150.0; // full-figure square, scaled up
+      const focusY = 0.16; // fraction of the figure height to centre on
+      return SizedBox(
+        width: box.width,
+        height: box.height,
+        child: ClipRect(
+          child: OverflowBox(
+            minWidth: render,
+            maxWidth: render,
+            minHeight: render,
+            maxHeight: render,
+            alignment: Alignment.topCenter,
+            child: Transform.translate(
+              offset: const Offset(0, -(render * focusY) + 6),
+              child: CharacterPreview(
+                character: character,
+                size: render,
+                showBackdrop: false,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+    return Image.asset(
+      _asset,
+      height: 70,
+      fit: BoxFit.contain,
+      filterQuality: FilterQuality.medium,
+      errorBuilder: (_, __, ___) => Icon(
+        Icons.person_rounded,
+        size: 48,
+        color: Colors.white.withValues(alpha: 0.8),
       ),
     );
   }

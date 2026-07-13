@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/profile.dart';
 
@@ -18,16 +19,24 @@ class ProfileService {
     required String pinSalt,
     required bool grantTrial,
   }) async {
-    await _client.from('profiles').insert({
-      'id': userId,
-      'first_name': firstName.trim(),
-      'device_id': deviceId,
-      'pin_hash': pinHash,
-      'pin_salt': pinSalt,
-      'trial_used': grantTrial,
-      'trial_started_at':
-          grantTrial ? DateTime.now().toUtc().toIso8601String() : null,
-    });
+    try {
+      await _client.from('profiles').insert({
+        'id': userId,
+        'first_name': firstName.trim(),
+        'device_id': deviceId,
+        'pin_hash': pinHash,
+        'pin_salt': pinSalt,
+        'trial_used': grantTrial,
+        'trial_started_at':
+            grantTrial ? DateTime.now().toUtc().toIso8601String() : null,
+      });
+    } on PostgrestException catch (e) {
+      debugPrint(
+        '[ProfileService] createProfile failed: ${e.code} ${e.message} '
+        '(details: ${e.details}, hint: ${e.hint})',
+      );
+      rethrow;
+    }
   }
 
   /// Fetches the current signed-in user's profile, or null if none.
@@ -67,5 +76,18 @@ class ProfileService {
     await _client
         .from('profiles')
         .update({'pin_hash': pinHash, 'pin_salt': pinSalt}).eq('id', userId);
+  }
+
+  /// Updates the display first name for the current user. Used by quick-test
+  /// sign-in to give each device a distinct, friendly name instead of every
+  /// tester showing up as the same "Tester".
+  Future<void> updateFirstName(String firstName) async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) {
+      throw StateError('Cannot update name without a signed-in user.');
+    }
+    await _client
+        .from('profiles')
+        .update({'first_name': firstName.trim()}).eq('id', userId);
   }
 }

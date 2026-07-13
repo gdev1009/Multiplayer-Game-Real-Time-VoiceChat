@@ -8,6 +8,7 @@ import '../../core/widgets/app_page.dart';
 import '../../core/widgets/big_button.dart';
 import '../../core/widgets/big_text_field.dart';
 import '../../models/character.dart';
+import '../../services/character_service.dart';
 import 'character_catalog.dart';
 import 'character_controller.dart';
 import 'character_preview.dart';
@@ -80,6 +81,11 @@ class _CharacterCreationScreenState extends State<CharacterCreationScreen> {
         const SnackBar(content: Text('Your character is saved!')),
       );
       Navigator.of(context).pop(true);
+    } on CharacterSaveException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -461,10 +467,8 @@ class _OptionTile extends StatelessWidget {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(66 * 0.30),
               border: Border.all(
-                color: selected
-                    ? AppColors.deepPurple
-                    : Colors.white.withValues(alpha: 0.9),
-                width: selected ? 2.5 : 2,
+                color: Colors.white.withValues(alpha: 0.9),
+                width: 2,
               ),
               boxShadow: AppColors.tileShadow,
             ),

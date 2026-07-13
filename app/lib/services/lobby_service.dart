@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/game.dart';
@@ -35,8 +36,33 @@ class LobbyService {
       if (res['ok'] == true) return res;
       throw LobbyFailure.fromReason(res['reason'] as String?);
     } on PostgrestException catch (e) {
-      throw LobbyFailure('Something went wrong. Please try again.', code: e.code);
+      debugPrint(
+        '[LobbyService] $fn failed: ${e.code} ${e.message} '
+        '(details: ${e.details}, hint: ${e.hint})',
+      );
+      throw LobbyFailure(
+        _friendlyFor(e),
+        code: e.code,
+      );
     }
+  }
+
+  /// Turns a raw Postgres error into a calm, senior-friendly message while the
+  /// real cause is written to the debug log (see [_callOk]). A missing table or
+  /// function almost always means the Supabase schema was only partly applied
+  /// (see docs/Supabase Setup Guide.md, Step 3).
+  String _friendlyFor(PostgrestException e) {
+    final msg = e.message.toLowerCase();
+    final missingSchema = e.code == '42883' || // undefined_function
+        e.code == '42P01' || // undefined_table
+        e.code == 'PGRST202' || // function not found in schema cache
+        msg.contains('does not exist') ||
+        msg.contains('could not find');
+    if (missingSchema) {
+      return 'This game needs a quick setup on the server before it can be '
+          'played. Please contact support.';
+    }
+    return 'Something went wrong. Please try again.';
   }
 
   /// Creates a new game (private by default) and returns it.
@@ -122,7 +148,10 @@ class LobbyService {
           .map<Game>((r) => Game.fromMap(Map<String, dynamic>.from(r as Map)))
           .toList();
     } on PostgrestException catch (e) {
-      throw LobbyFailure('Something went wrong. Please try again.', code: e.code);
+      debugPrint(
+        '[LobbyService] mw_list_open_games failed: ${e.code} ${e.message}',
+      );
+      throw LobbyFailure(_friendlyFor(e), code: e.code);
     }
   }
 

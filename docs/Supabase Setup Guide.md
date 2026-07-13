@@ -17,14 +17,39 @@ This guide ensures your Supabase project is correctly configured for the Match W
    - **Anon Public Key** (the anon/public key, NOT the service role key)
 3. Keep these safe; you'll need them in the next step
 
-## Step 3: Create the Database Schema
+## Step 3: Create the Database Schema (apply ALL of it)
+
+> ⚠️ **This is the #1 cause of "Something went wrong".** The app needs the
+> **entire** schema, not just the first file. If you apply only
+> `0001_init.sql`, sign-in will work but **every** other action (save
+> character, start a game, join a game) will fail with "Something went wrong",
+> because the tables and functions those actions use live in later migrations.
+
+**Easiest way — one paste:**
 
 1. In Supabase, go to **SQL Editor**
 2. Click **New Query**
-3. Copy and paste the entire contents of `app/supabase/migrations/0001_init.sql`
-4. Click **Run** to execute the migration
-5. Verify the tables exist:
-   - Go to **Table Editor** and confirm you see `profiles` and `device_trials`
+3. Copy and paste the **entire** contents of
+   [app/supabase/schema.sql](../app/supabase/schema.sql). This single file
+   contains every migration (0001 → 0012) already stitched together in order.
+4. Click **Run**. It should finish with "Success. No rows returned."
+5. Verify the tables exist — go to **Table Editor** and confirm you see all of:
+   - `profiles`, `device_trials`
+   - `characters`
+   - `games`, `game_players`
+   - `game_rounds`, `game_turns` (gameplay)
+6. Verify the functions exist — go to **Database → Functions** and confirm you
+   see the `mw_*` functions (e.g. `mw_create_game`, `mw_join_game`,
+   `mw_start_game`, `mw_begin_play`).
+
+**Alternative — apply the numbered migrations one by one:** if you prefer, run
+each file in `app/supabase/migrations/` **in order** (0001 → 0002 → 0003 → …
+→ 0012). You must run **all twelve**. Re-running is safe (the schema uses
+`create ... if not exists` and `drop policy if exists`).
+
+> If you already applied only `0001` earlier, just paste
+> `app/supabase/schema.sql` now — it will add everything that is missing
+> without breaking the tables you already have.
 
 ## Step 4: Enable Email Authentication
 
@@ -138,6 +163,20 @@ Send a test email from Supabase (or trigger forgot-PIN) and confirm delivery
    - Test forgot PIN (check your inbox for the code)
 
 ## Troubleshooting
+
+**Every game/character action says "Something went wrong" (but sign-in works):**
+- This almost always means the database schema was only **partly** applied
+  (usually just `0001_init.sql`). Go back to **Step 3** and paste the full
+  [app/supabase/schema.sql](../app/supabase/schema.sql). Sign-in only needs the
+  `profiles` table (from 0001), but saving a character needs `characters`
+  (0002) and starting/joining games needs the `mw_*` functions (0004+).
+- After applying the full schema, confirm in **Database → Functions** that
+  `mw_create_game` and friends exist.
+- The app now prints the real reason to the device log (look for
+  `[LobbyService]`, `[GameplayService]`, `[ProfileService]`,
+  `[CharacterService]` lines in `flutter run`/`adb logcat`). A message like
+  `relation "characters" does not exist` or `function mw_create_game(...) does
+  not exist` confirms the schema is incomplete.
 
 **Account creation still fails after filling in credentials:**
 - Verify the email format is valid

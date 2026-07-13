@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -185,6 +186,7 @@ class AuthService {
   Future<Profile> quickTestSignIn() async {
     final deviceId = await _device.deviceId();
     final email = _quickTestEmail(deviceId);
+    final testName = _quickTestName(deviceId);
 
     try {
       await _client.auth.signInWithPassword(
@@ -210,9 +212,14 @@ class AuthService {
             email: email,
             password: _kQuickTestPassword,
           );
-        } on AuthException {
+        } on AuthException catch (e) {
+          debugPrint('[AuthService] quick-test sign-in failed: ${e.message}');
+          // The most common cause is that "Confirm email" is still ON in the
+          // Supabase dashboard, so the just-created account has no session yet.
           throw const AuthFailure(
-            'We could not sign in the test account. Please try again.',
+            'Quick sign-in needs "Confirm email" turned OFF in Supabase '
+            '(Authentication → Providers → Email). Please turn it off and try '
+            'again.',
           );
         }
       }
@@ -232,14 +239,29 @@ class AuthService {
       final salt = PinHasher.generateSalt();
       final hash = PinHasher.hash(_kQuickTestPin, salt);
 
-      await _profiles.createProfile(
-        userId: user.id,
-        firstName: _kQuickTestName,
-        deviceId: deviceId,
-        pinHash: hash,
-        pinSalt: salt,
-        grantTrial: grantTrial,
-      );
+      try {
+        await _profiles.createProfile(
+          userId: user.id,
+          firstName: testName,
+          deviceId: deviceId,
+          pinHash: hash,
+          pinSalt: salt,
+          grantTrial: grantTrial,
+        );
+      } on PostgrestException catch (e) {
+        debugPrint('[AuthService] quick-test createProfile failed: '
+            '${e.code} ${e.message}');
+        final msg = e.message.toLowerCase();
+        if (e.code == '42P01' || msg.contains('does not exist')) {
+          throw const AuthFailure(
+            'The server database is not fully set up yet. Please apply the '
+            'full schema (supabase/schema.sql) and try again.',
+          );
+        }
+        throw const AuthFailure(
+          'We could not finish creating the test account. Please try again.',
+        );
+      }
 
       if (grantTrial) {
         await _trials.recordTrialStart(deviceId);
@@ -254,12 +276,26 @@ class AuthService {
       );
     }
 
+    // Older quick-test accounts were all created as the literal "Tester". Give
+    // this device its distinct friendly name so multiple testers are told
+    // apart in the lobby and on the stage.
+    var result = profile;
+    if (result.firstName.trim() == _kQuickTestName &&
+        testName != _kQuickTestName) {
+      try {
+        await _profiles.updateFirstName(testName);
+        result = await _profiles.currentProfile() ?? result;
+      } catch (e) {
+        debugPrint('[AuthService] quick-test rename failed: $e');
+      }
+    }
+
     await _remember(
-      name: profile.firstName,
+      name: result.firstName,
       email: email,
       password: _kQuickTestPassword,
     );
-    return profile;
+    return result;
   }
 
   // ---------------------------------------------------------------------------
@@ -557,6 +593,29 @@ class AuthService {
         ? 'device'
         : slug.substring(0, slug.length > 20 ? 20 : slug.length);
     return 'tester+$short@matchword.local';
+  }
+
+  /// A friendly, deterministic display name for a quick-test account, unique
+  /// per device so two testers on different phones/emulators don't both show up
+  /// as the same "Tester". Derived from the device id so it stays stable for a
+  /// given device between sessions.
+  static const _kQuickTestNames = <String>[
+    'Rosie', 'Walter', 'Mabel', 'George', 'Pearl', 'Frank',
+    'Ada', 'Harold', 'Ivy', 'Stan', 'Ruth', 'Ernie',
+    'Nora', 'Cliff', 'Vera', 'Roy', 'Hazel', 'Gus',
+    'Edna', 'Marvin', 'Faye', 'Lou', 'Opal', 'Dot',
+  ];
+
+  String _quickTestName(String deviceId) {
+    final slug = deviceId.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').toLowerCase();
+    if (slug.isEmpty) return _kQuickTestName;
+    var hash = 0;
+    for (final unit in slug.codeUnits) {
+      hash = (hash * 31 + unit) & 0x7fffffff;
+    }
+    final name = _kQuickTestNames[hash % _kQuickTestNames.length];
+    final suffix = slug.substring(slug.length - 2).toUpperCase();
+    return '$name $suffix';
   }
 
   String _friendlySignUpError(AuthException e) {

@@ -125,7 +125,11 @@ class _MatchBody extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const SizedBox(height: AppSpacing.sm),
-        StudioStage(state: state),
+        StudioStage(
+          state: state,
+          viewerRole: controller.isLocal ? null : controller.myRole,
+          charactersByRole: controller.charactersByRole,
+        ),
         const SizedBox(height: AppSpacing.md),
         if (state.isOver)
           _GameOverPanel(state: state)
@@ -184,6 +188,81 @@ class _TurnBanner extends StatelessWidget {
               style: AppText.body.copyWith(fontWeight: FontWeight.w700),
             ),
           ],
+          const SizedBox(height: AppSpacing.sm),
+          _TurnMeter(state: state),
+        ],
+      ),
+    );
+  }
+}
+
+/// A calm, non-ticking indicator of how much the current word is worth and how
+/// many guesses remain before it passes to the other team. This replaces a
+/// stressful countdown clock (the design principle is "no rushed timers") with
+/// a gentle, glanceable status so players always know where they stand.
+class _TurnMeter extends StatelessWidget {
+  const _TurnMeter({required this.state});
+  final MatchState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final triesLeft =
+        (state.config.maxExchanges - state.exchangeCount).clamp(0, 99);
+    return Wrap(
+      alignment: WrapAlignment.center,
+      spacing: AppSpacing.sm,
+      runSpacing: 4,
+      children: [
+        _MeterChip(
+          icon: Icons.star_rounded,
+          label: 'Worth ${state.wordValue} '
+              '${state.wordValue == 1 ? 'point' : 'points'}',
+          color: AppColors.gold,
+        ),
+        _MeterChip(
+          icon: Icons.favorite_rounded,
+          label: '$triesLeft ${triesLeft == 1 ? 'try' : 'tries'} left',
+          color: AppColors.deepPurple,
+        ),
+      ],
+    );
+  }
+}
+
+class _MeterChip extends StatelessWidget {
+  const _MeterChip({
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
+  final IconData icon;
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: 4,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color, width: 1.5),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: AppText.body.copyWith(
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary,
+            ),
+          ),
         ],
       ),
     );
@@ -267,7 +346,9 @@ class _FeedLine extends StatelessWidget {
   }
 }
 
-/// The speak-or-type entry, shown only to the on-the-clock player's turn.
+/// The speak-or-type entry, shown only on the on-the-clock player's own device.
+/// Everyone else sees a calm "waiting for …" note so two people can't type into
+/// the same turn (and the computer-filled seats are played by the host).
 class _InputArea extends StatelessWidget {
   const _InputArea({required this.state, required this.controller});
   final MatchState state;
@@ -275,12 +356,59 @@ class _InputArea extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (!controller.isMyTurn) {
+      return _WaitingPanel(
+        name: controller.onClockName,
+        giving: state.step == TurnStep.awaitingClue,
+      );
+    }
     final giving = state.step == TurnStep.awaitingClue;
     return WordInput(
       key: ValueKey('${state.wordIndex}-${state.step}-${state.cluingTeam}'),
       label: giving ? 'Your clue' : 'Your guess',
       hint: giving ? 'One word…' : 'Your best guess…',
       onSubmit: giving ? controller.submitClue : controller.submitGuess,
+    );
+  }
+}
+
+/// Shown on the devices that are *not* on the clock, so only the active player
+/// types this turn.
+class _WaitingPanel extends StatelessWidget {
+  const _WaitingPanel({required this.name, required this.giving, this.message});
+  final String name;
+  final bool giving;
+  final String? message;
+
+  @override
+  Widget build(BuildContext context) {
+    final action = giving ? 'give a one-word clue' : 'make a guess';
+    final text = message ??
+        'Waiting for ${name.isEmpty ? 'the next player' : name} to $action…';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.warmBeige,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        border: Border.all(color: AppColors.gold, width: 2),
+      ),
+      child: Row(
+        children: [
+          const SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(strokeWidth: 2.5),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              text,
+              style: AppText.body,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -395,12 +523,19 @@ class _HalftimePanel extends StatelessWidget {
           ),
         ),
         const SizedBox(height: AppSpacing.md),
-        BigButton(
-          label: 'Start second half',
-          icon: Icons.play_arrow_rounded,
-          isLoading: controller.busy,
-          onPressed: controller.busy ? null : controller.beginSecondHalf,
-        ),
+        if (controller.isLocal || controller.isHost)
+          BigButton(
+            label: 'Start second half',
+            icon: Icons.play_arrow_rounded,
+            isLoading: controller.busy,
+            onPressed: controller.busy ? null : controller.beginSecondHalf,
+          )
+        else
+          const _WaitingPanel(
+            name: 'the host',
+            giving: false,
+            message: 'Waiting for the host to start the second half…',
+          ),
       ],
     );
   }
@@ -437,6 +572,13 @@ class _GameOverPanel extends StatelessWidget {
           const SizedBox(height: AppSpacing.md),
           const Text('Thanks for playing Match Word!',
               style: AppText.body, textAlign: TextAlign.center,),
+          const SizedBox(height: AppSpacing.lg),
+          BigButton(
+            label: 'Back to home',
+            icon: Icons.home_rounded,
+            onPressed: () =>
+                Navigator.of(context).popUntil((route) => route.isFirst),
+          ),
         ],
       ),
     );

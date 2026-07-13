@@ -174,13 +174,13 @@ class CharacterPartThumb extends StatelessWidget {
     // Where to centre the zoom (as a fraction of the stage height) and how
     // tight, tuned per layer so the relevant part fills the tile.
     final (double focusY, double zoom) = switch (layer) {
-      CharacterLayer.base => (0.30, 1.15),
+      CharacterLayer.base => (0.29, 1.15),
       CharacterLayer.outfit => (0.44, 1.55),
-      CharacterLayer.hair => (0.135, 2.45),
-      CharacterLayer.hat => (0.11, 2.45),
+      CharacterLayer.hair => (0.10, 2.45),
+      CharacterLayer.hat => (0.075, 2.45),
       CharacterLayer.accessory => (0.52, 1.20),
       // eyes-level parts — frame the face
-      _ => (0.175, 2.70),
+      _ => (0.14, 2.70),
     };
 
     final render = size * zoom;
