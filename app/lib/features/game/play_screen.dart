@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -6,30 +7,108 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text.dart';
 import '../../core/widgets/app_page.dart';
 import '../../core/widgets/big_button.dart';
-import '../../core/widgets/host_greeting.dart';
+import '../../services/audio_controller.dart';
+import '../host/host_stage.dart';
+import '../host/sound_settings.dart';
+import '../host/studio_stage.dart';
 import 'game_engine.dart';
 import 'gameplay_controller.dart';
 import 'word_input.dart';
 
-/// The live gameplay screen (Milestone 5).
+/// The live gameplay screen (Milestones 5–6).
 ///
-/// Presents the two desks (Team A / Team B) with Guy Smiley in the middle, a
-/// scoreboard, the host's turn banner (greeting the on-the-clock player by name
-/// *and* role — "Sunny, Player A1"), the shared clue/guess feed, and the
-/// speak-or-type input. Halftime and game-over get their own calm panels.
-class PlayScreen extends StatelessWidget {
-  const PlayScreen({super.key});
+/// Presents the two desks (Team A / Team B) with an animated Guy Smiley in the
+/// middle, a scoreboard, the host's turn banner, the shared clue/guess feed, and
+/// the speak-or-type input. The host narrates the whole game aloud: the
+/// [AudioController] plays the opening theme + announcer intro, round/steal/
+/// correct/halftime/winner cues, and — if a player drops — the full-screen
+/// disconnect alarm. A sound button in the app bar opens mute / volume controls.
+class PlayScreen extends StatefulWidget {
+  const PlayScreen({super.key, this.disconnectSignal});
+
+  /// Optional signal that fires the disconnect alarm. When it emits a non-null
+  /// message the alarm overlay appears (the real-time presence layer, or the
+  /// demo, feeds it). Null keeps the alarm dormant.
+  final ValueListenable<String?>? disconnectSignal;
+
+  @override
+  State<PlayScreen> createState() => _PlayScreenState();
+}
+
+class _PlayScreenState extends State<PlayScreen> {
+  MatchState? _prevState;
+  bool _startedShow = false;
+  String? _alarmMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.disconnectSignal?.addListener(_onDisconnectSignal);
+  }
+
+  @override
+  void dispose() {
+    widget.disconnectSignal?.removeListener(_onDisconnectSignal);
+    // Hush the room when leaving the game.
+    _audioMaybe?.stopAll();
+    super.dispose();
+  }
+
+  AudioController? get _audioMaybe {
+    try {
+      return context.read<AudioController>();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _onDisconnectSignal() {
+    final message = widget.disconnectSignal?.value;
+    if (message == null) return;
+    _audioMaybe?.playDisconnectAlarm();
+    setState(() => _alarmMessage = message);
+  }
+
+  /// Feed each game-state change to the host audio (after the frame so playback
+  /// never blocks the build).
+  void _reactToAudio(MatchState state) {
+    final audio = _audioMaybe;
+    if (audio == null) return;
+    final prev = _prevState;
+    if (identical(prev, state)) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (!_startedShow) {
+        _startedShow = true;
+        audio.reactToTransition(null, state); // opens the show (theme + intro)
+      } else {
+        audio.reactToTransition(prev, state);
+      }
+    });
+    _prevState = state;
+  }
 
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<GameplayController>();
     final state = controller.state;
+    if (state != null) _reactToAudio(state);
 
     return AppPage(
       title: 'Match Word',
+      actions: _audioMaybe == null ? null : const [SoundButton()],
       child: state == null
           ? const Center(child: CircularProgressIndicator())
-          : _MatchBody(state: state, controller: controller),
+          : Stack(
+              children: [
+                _MatchBody(state: state, controller: controller),
+                if (_alarmMessage != null)
+                  DisconnectAlarm(
+                    message: _alarmMessage!,
+                    onDismiss: () => setState(() => _alarmMessage = null),
+                  ),
+              ],
+            ),
     );
   }
 }
@@ -46,11 +125,7 @@ class _MatchBody extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const SizedBox(height: AppSpacing.sm),
-        _Scoreboard(state: state),
-        const SizedBox(height: AppSpacing.md),
-        _Desks(state: state),
-        const SizedBox(height: AppSpacing.md),
-        HostGreeting(message: state.hostLine),
+        StudioStage(state: state),
         const SizedBox(height: AppSpacing.md),
         if (state.isOver)
           _GameOverPanel(state: state)
@@ -70,227 +145,6 @@ class _MatchBody extends StatelessWidget {
         ],
         const SizedBox(height: AppSpacing.md),
       ],
-    );
-  }
-}
-
-/// The two team scores, big and clear, with the word counter between them.
-class _Scoreboard extends StatelessWidget {
-  const _Scoreboard({required this.state});
-  final MatchState state;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: _ScoreChip(
-            team: 'A',
-            score: state.scoreA,
-            active: state.isTurnActive && state.cluingTeam == 'A',
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-          child: Column(
-            children: [
-              Text(state.wordLabel, style: AppText.bodyMuted),
-              if (state.isTurnActive)
-                Text(
-                  'Worth ${state.wordValue}',
-                  style: AppText.bodyMuted.copyWith(
-                    fontSize: 16,
-                    color: AppColors.gold,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: _ScoreChip(
-            team: 'B',
-            score: state.scoreB,
-            active: state.isTurnActive && state.cluingTeam == 'B',
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _ScoreChip extends StatelessWidget {
-  const _ScoreChip({
-    required this.team,
-    required this.score,
-    required this.active,
-  });
-
-  final String team;
-  final int score;
-  final bool active;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        vertical: AppSpacing.sm,
-        horizontal: AppSpacing.md,
-      ),
-      decoration: BoxDecoration(
-        gradient: active ? AppColors.brandGradient : null,
-        color: active ? null : AppColors.surface,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-        border: Border.all(
-          color: active ? AppColors.gold : AppColors.divider,
-          width: active ? 3 : 2,
-        ),
-        boxShadow: AppColors.tileShadow,
-      ),
-      child: Column(
-        children: [
-          Text(
-            'Team $team',
-            style: AppText.body.copyWith(
-              fontWeight: FontWeight.w700,
-              color: active ? Colors.white : AppColors.textPrimary,
-            ),
-          ),
-          Text(
-            '$score',
-            style: AppText.display.copyWith(
-              color: active ? Colors.white : AppColors.deepPurple,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Two desks with Guy Smiley between them, highlighting the clue-giver and
-/// guesser for the on-the-clock team.
-class _Desks extends StatelessWidget {
-  const _Desks({required this.state});
-  final MatchState state;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        gradient: AppColors.stageGradient,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-        boxShadow: AppColors.tileShadow,
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(child: _DeskColumn(state: state, team: 'A')),
-          const _HostPodium(),
-          Expanded(child: _DeskColumn(state: state, team: 'B')),
-        ],
-      ),
-    );
-  }
-}
-
-class _DeskColumn extends StatelessWidget {
-  const _DeskColumn({required this.state, required this.team});
-  final MatchState state;
-  final String team;
-
-  @override
-  Widget build(BuildContext context) {
-    final onClock = state.isTurnActive && state.cluingTeam == team;
-    final clueRole = MatchEngine.clueGiverRole(team, state.phase);
-    final guessRole = MatchEngine.guesserRole(team, state.phase);
-    return Column(
-      children: [
-        _SeatChip(
-          name: state.names[clueRole] ?? 'Player $clueRole',
-          job: 'Clue-giver',
-          highlight: onClock && state.step == TurnStep.awaitingClue,
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        _SeatChip(
-          name: state.names[guessRole] ?? 'Player $guessRole',
-          job: 'Guesser',
-          highlight: onClock && state.step == TurnStep.awaitingGuess,
-        ),
-      ],
-    );
-  }
-}
-
-class _SeatChip extends StatelessWidget {
-  const _SeatChip({
-    required this.name,
-    required this.job,
-    required this.highlight,
-  });
-
-  final String name;
-  final String job;
-  final bool highlight;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.sm),
-      decoration: BoxDecoration(
-        color: highlight ? AppColors.gold : AppColors.surface,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-        border: Border.all(
-          color: highlight ? AppColors.deepPurple : AppColors.divider,
-          width: 2,
-        ),
-      ),
-      child: Column(
-        children: [
-          Text(
-            name,
-            style: AppText.body.copyWith(fontWeight: FontWeight.w700),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          Text(
-            job,
-            style: AppText.bodyMuted.copyWith(fontSize: 15),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _HostPodium extends StatelessWidget {
-  const _HostPodium();
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: const BoxDecoration(
-              gradient: AppColors.brandGradient,
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.emoji_emotions_rounded,
-                color: Colors.white, size: 34,),
-          ),
-          const SizedBox(height: 4),
-          const Text('Host', style: AppText.bodyMuted),
-        ],
-      ),
     );
   }
 }

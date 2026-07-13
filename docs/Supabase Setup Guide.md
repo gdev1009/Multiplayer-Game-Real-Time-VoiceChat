@@ -38,26 +38,69 @@ This guide ensures your Supabase project is correctly configured for the Match W
    ```
    (The exact format depends on your Supabase version; consult Supabase docs if unclear)
 
-## Step 5: Configure Custom SMTP (Mailgun)
+## Step 5: Send Auth Emails Through Mailgun
 
-1. In Supabase go to **Authentication -> Providers -> Email**.
-2. Keep **Enable email provider** ON.
-3. In **Sign In / Providers**, set:
-   - **Allow new users to sign up** = ON
-   - **Confirm email** = OFF (important for this app's Milestone 1 flow)
-4. Enable **Custom SMTP** and fill Mailgun values:
+Supabase Auth sends the forgot-PIN one-time code. There are two ways to route
+those emails through Mailgun. **Pick ONE.**
+
+### Which credential do I have?
+
+- A Mailgun **API key** (looks like `key-...` or `xxxxxxxx-xxxxxxxx-xxxxxxxx`)
+  is a **REST API** credential. It does **not** work in Supabase's SMTP fields.
+  Use **Option A** below.
+- A Mailgun **SMTP username + password** (`postmaster@<domain>` + password)
+  works in Supabase's built-in Custom SMTP fields. Use **Option B** below.
+
+> The key the client provided is an **API key**, so this project is wired for
+> **Option A**.
+
+### Option A — Send Email hook + Mailgun REST API (uses the API key)
+
+This uses the `send-email` Edge Function in `app/supabase/functions/send-email`,
+which calls Mailgun's REST API with the API key.
+
+1. Put the server secrets in `app/supabase/functions/.env` (copy from
+   `.env.example`). This file is gitignored and is **never** bundled into the
+   app. Set:
+   - `MAILGUN_API_KEY` — the Mailgun API key
+   - `MAILGUN_DOMAIN` — your verified sending domain (e.g. `mg.grandmamac.com`)
+   - `MAILGUN_BASE_URL` — `https://api.mailgun.net` (or `https://api.eu.mailgun.net` for EU)
+   - `MAILGUN_SENDER` — e.g. `Match Word <no-reply@mg.grandmamac.com>`
+   - `SEND_EMAIL_HOOK_SECRET` — generate with `openssl rand -base64 48`, prefixed
+     as `v1,whsec_<value>`
+2. Push the secrets and deploy the function:
+   ```bash
+   cd app
+   supabase secrets set --env-file ./supabase/functions/.env
+   supabase functions deploy send-email --no-verify-jwt
+   ```
+3. In Supabase go to **Authentication -> Hooks -> Send Email**, enable it, point
+   it at the deployed `send-email` function, and paste the **same**
+   `SEND_EMAIL_HOOK_SECRET` value.
+4. In **Authentication -> Providers -> Email**: keep **Enable email provider** ON,
+   **Allow new users to sign up** = ON, **Confirm email** = OFF.
+
+### Option B — Custom SMTP (only if you have Mailgun SMTP credentials)
+
+1. In Supabase go to **Authentication -> Providers -> Email**, keep **Enable
+   email provider** ON, set **Allow new users to sign up** = ON and
+   **Confirm email** = OFF.
+2. Enable **Custom SMTP** and fill Mailgun SMTP values:
    - **Host**: `smtp.mailgun.org`
    - **Port**: `587`
-   - **Username**: your Mailgun SMTP login (usually `postmaster@<your-domain>`)
-   - **Password**: your Mailgun SMTP password
+   - **Username**: Mailgun SMTP login (usually `postmaster@<your-domain>`)
+   - **Password**: Mailgun SMTP password
    - **Sender name**: `Match Word`
    - **Sender email**: a verified Mailgun sender/domain email
 
-Important:
-- Supabase Custom SMTP uses SMTP credentials, not Mailgun REST API calls.
-- The Mailgun REST **API key** and **Base URL** are not used directly in Supabase SMTP fields.
+### Both options
 
-5. Send a test email from Supabase and confirm delivery (inbox + spam check).
+Send a test email from Supabase (or trigger forgot-PIN) and confirm delivery
+(inbox + spam check).
+
+> Security: never put the Mailgun API key in `app/.env` — that file is bundled
+> into the app and would leak to every device. Server secrets belong only in
+> `app/supabase/functions/.env` / Supabase secrets.
 
 ## Step 6: Fill in App Credentials
 

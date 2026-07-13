@@ -8,6 +8,7 @@ import 'core/config/app_config.dart';
 import 'features/auth/auth_controller.dart';
 import 'features/character/character_controller.dart';
 import 'features/lobby/lobby_controller.dart';
+import 'services/audio_controller.dart';
 import 'services/auth_service.dart';
 import 'services/character_service.dart';
 import 'services/device_service.dart';
@@ -51,6 +52,7 @@ Future<void> main() async {
         ),
         ChangeNotifierProvider(create: (_) => LobbyController(lobbyService)),
         Provider<GameplayService>.value(value: gameplayService),
+        ChangeNotifierProvider(create: (_) => AudioController()),
       ],
       child: const MatchWordApp(),
     ),

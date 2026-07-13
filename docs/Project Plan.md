@@ -262,7 +262,7 @@ multi-device manual test pass; the speech-to-text provider is scoped with the M6
 ---
 
 
-## Milestone 6 — Guy Smiley Host + Audio System · $750 · 8–9 days
+## Milestone 6 — Guy Smiley Host + Audio System · $750 · 8–9 days · **COMPLETE (code)**
 
 **Scope**
 - Host character with voice (pre-recorded clips) + idle animations.
@@ -274,6 +274,49 @@ multi-device manual test pass; the speech-to-text provider is scoped with the M6
 **Dependency:** Guy Smiley art; licensed theme/announcer audio (developer-sourced).
 **Definition of done:** host narrates a full game; all audio cued correctly; disconnect alarm fires;
 volume/mute respected. *(ElevenLabs dynamic lines are a later phase.)*
+
+**Delivered:** pure cue mapper `features/host/host_audio.dart` (SoundCue → announcer/effect/voice,
+mapped from each game-state transition) + `services/audio_controller.dart` (theme loop, layered SFX,
+host voice, persisted mute + music/effects volume, silent-mode-respecting session). Animated Guy
+Smiley (`features/host/host_stage.dart`, idle bob + excited bounce/glow, real host art) and the
+full-screen `DisconnectAlarm` (red flash + host commentary + Keep Playing). Sound button + settings
+sheet (`features/host/sound_settings.dart`) wired into `PlayScreen`; `AudioController` provided in
+`main.dart`. Placeholder royalty-free audio via `tools/generate_audio_cues.py`; real theme/announcer/
+host voice are drop-in by filename (`assets/audio/`, `assets/audio/voice/README.md`). Validated:
+`flutter analyze` clean, 63 tests pass (13 new host-audio cue tests). Proof: screenshots + reel in
+`docs/screenshots/milestone6/` (kickoff, sound settings, correct celebration, disconnect alarm,
+halftime; `match-word-host-audio.mp4`/`.gif`).
+
+**Game-show studio stage (follow-up to `studio-concept-mockup.png`).** Rebuilt the play stage to
+match the approved concept: a deep-purple studio lit by soft spotlights (`features/host/
+studio_stage.dart`), a gold-framed **MATCH WORD** scoreboard, the current-word tile (shows the secret
+word to the clue-giver during the clue step, the word counter otherwise so the guesser can't read it),
+two team podiums with character busts + gold nameplates that glow gold for the active seat, and a
+full-body **Guy Smiley** centre-stage holding his microphone with a lavender speech bubble + gold
+nameplate. Uses a transparent cut-out of the delivered host art (`assets/images/host/host-stage.png`
+via `tools/cutout_host.py`). Wired into `PlayScreen` (replaces the old score-chip/desk widgets).
+Re-validated: `flutter analyze` clean, 63 tests pass. Live proof:
+`docs/screenshots/milestone6/studio-stage-live.png`.
+
+**Premium polish pass.** Podium busts are now the **real artist clay characters** — head-and-shoulders
+crops of the base bodies (`tools/build_busts.py` → `assets/images/host/bust-female.png` /
+`bust-male.png`), chosen per player, replacing the flat placeholder avatars. Added stage animations:
+per-seat idle head-bob, active-seat scale-up + gold spotlight halo, host bob + speaking bounce/tilt,
+pop-in speech bubble, and pop transitions on the word tile + team scores. **Host voice is now live**:
+seven spoken Guy Smiley lines in an **original male game-show-host voice** — generated offline with
+Piper neural TTS (voice `en_US-ryan-high`; warm, clear, senior-paced, North-American, original — no
+actor/celebrity impression) via `tools/generate_host_voice.py` → `assets/audio/voice/*.mp3`
+(rules_intro, your_turn, nice_guess, good_try, halftime, winner, disconnect). A studio voice-over drops
+in by the same filenames. Audition clip: `docs/screenshots/milestone6/host-voice-sample.mp3`. Verified
+the audio path plays them on device (`AssetSource('audio/voice/…')`; iOS ambient category still respects
+the silent switch).
+
+**Two-phone test build.** Release APKs built and published to `apks/` for live two-device testing over
+the existing Supabase online path (`MatchWord-M6-phone-arm64`, `-arm32`, `-LDPlayer-x86_64`).
+**Security hardening:** the app-bundled `app/.env` was carrying server secrets (`OPENAI_API_KEY`,
+`MAILGUN_API_KEY`) that would ship inside every APK — moved `OPENAI_API_KEY` to
+`supabase/functions/.env`, removed both from the client `.env` (only `SUPABASE_URL`/`SUPABASE_ANON_KEY`/
+`EASY_TEST_AUTH` remain), and hardened `.gitignore` to ignore `.env.*` backups.
 
 ---
 

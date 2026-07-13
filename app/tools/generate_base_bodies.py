@@ -11,9 +11,9 @@ registered so head-top ~ y90 and feet ~ y1200 (matches SAFE-ZONES.md).
 
 SECURITY
 --------
-The API key is read from the OPENAI_API_KEY environment variable. It is NEVER
-written to disk or printed. Do not paste your key into this file. After running,
-rotate the key at https://platform.openai.com/api-keys.
+The API key is read from the OPENAI_API_KEY environment variable, falling back
+to the app's local .env file. The key is never printed or written by this tool.
+Rotate the key at https://platform.openai.com/api-keys.
 
 USAGE
 -----

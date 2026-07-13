@@ -11,12 +11,16 @@ class AppPage extends StatelessWidget {
     this.title,
     this.showBack = false,
     this.onBack,
+    this.actions,
   });
 
   final Widget child;
   final String? title;
   final bool showBack;
   final VoidCallback? onBack;
+
+  /// Optional app-bar action widgets (e.g. the sound button).
+  final List<Widget>? actions;
 
   @override
   Widget build(BuildContext context) {
@@ -27,6 +31,7 @@ class AppPage extends StatelessWidget {
           : AppBar(
               title: Text(title!),
               automaticallyImplyLeading: showBack,
+              actions: actions,
               flexibleSpace: const DecoratedBox(
                 decoration: BoxDecoration(gradient: AppColors.brandGradient),
               ),
