@@ -10,7 +10,7 @@ import '../../core/widgets/big_button.dart';
 import '../../core/widgets/host_greeting.dart';
 import '../auth/auth_controller.dart';
 import '../character/character_controller.dart';
-import '../character/character_preview.dart';
+import '../character/idle_character_preview.dart';
 
 /// The Opening screen (Milestone 2).
 ///
@@ -30,7 +30,8 @@ class _OpeningScreenState extends State<OpeningScreen> {
     super.initState();
     // Reload the saved character whenever the Opening screen appears.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) context.read<CharacterController>().load();
+      if (!mounted) return;
+      context.read<CharacterController>().load();
     });
   }
 
@@ -48,7 +49,14 @@ class _OpeningScreenState extends State<OpeningScreen> {
   Widget build(BuildContext context) {
     final controller = context.watch<AuthController>();
     final profile = controller.profile;
-    final name = profile?.firstName ?? controller.rememberedName ?? 'friend';
+    // Prefer the name the player gave their character (what they think of as
+    // "their" name) over the account's first name, which for quick-test
+    // sign-ins is an auto-generated handle like "Tester 4138".
+    final characterName =
+        context.watch<CharacterController>().saved?.displayName.trim() ?? '';
+    final name = characterName.isNotEmpty
+        ? characterName
+        : (profile?.firstName ?? controller.rememberedName ?? 'friend');
     final trialDays = profile?.trialDaysRemaining ?? 0;
 
     return AppPage(
@@ -135,7 +143,7 @@ class _CharacterCard extends StatelessWidget {
       child: Row(
         children: [
           if (saved != null)
-            CharacterPreview(character: saved, size: 92)
+            IdleCharacterPreview(character: saved, size: 92)
           else
             Container(
               width: 92,

@@ -6,6 +6,7 @@ import 'core/theme/app_theme.dart';
 import 'features/auth/auth_controller.dart';
 import 'features/auth/auth_gate.dart';
 import 'features/character/character_creation_screen.dart';
+import 'features/friends/friends_screen.dart';
 import 'features/lobby/join_by_code_screen.dart';
 import 'features/lobby/lobby_room_screen.dart';
 import 'features/lobby/upcoming_games_screen.dart';
@@ -42,6 +43,7 @@ class _MatchWordAppState extends State<MatchWordApp> {
         AppRoutes.joinByCode: (_) => const JoinByCodeScreen(),
         AppRoutes.studio: (_) => const StudioScreen(),
         AppRoutes.character: (_) => const CharacterCreationScreen(),
+        AppRoutes.friends: (_) => const FriendsScreen(),
       },
     );
   }

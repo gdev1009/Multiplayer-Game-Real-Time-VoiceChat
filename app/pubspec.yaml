@@ -79,3 +79,5 @@ flutter:
     - assets/images/character/hat/
     - assets/images/character/earrings/
     - assets/images/character/accessory/
+    - assets/images/character/poses/female/
+    - assets/images/character/poses/male/

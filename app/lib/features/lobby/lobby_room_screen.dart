@@ -13,6 +13,7 @@ import '../../models/game.dart';
 import '../../models/game_player.dart';
 import '../../services/gameplay_service.dart';
 import '../auth/auth_controller.dart';
+import '../character/character_controller.dart';
 import '../game/gameplay_controller.dart';
 import '../game/play_screen.dart';
 import 'lobby_controller.dart';
@@ -93,9 +94,16 @@ class _LobbyBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final name = context.read<AuthController>().profile?.firstName ??
-        context.read<AuthController>().rememberedName ??
-        'friend';
+    // Prefer the name the player gave their character over the account's first
+    // name (a quick-test handle like "Tester 6499"), so the greeting matches
+    // the name shown on their seat.
+    final characterName =
+        context.watch<CharacterController>().saved?.displayName.trim() ?? '';
+    final name = characterName.isNotEmpty
+        ? characterName
+        : (context.read<AuthController>().profile?.firstName ??
+            context.read<AuthController>().rememberedName ??
+            'friend');
     final isHost = lobby.isHost;
 
     return Column(

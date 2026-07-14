@@ -20,4 +20,7 @@ class AppRoutes {
 
   /// Character builder — create or edit the player's paper-doll character.
   static const String character = '/character';
+
+  /// Friends list, requests and invitations (M7).
+  static const String friends = '/friends';
 }

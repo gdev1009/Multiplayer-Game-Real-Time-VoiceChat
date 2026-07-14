@@ -41,18 +41,9 @@ class GameStateRow {
   final int maxExchanges;
   final int wordValue;
 
-  /// When the server last wrote this row. Used to ignore stale realtime rows
-  /// that would otherwise clobber a fresher snapshot (fixes scores/turn info
-  /// flickering backwards when realtime delivers rows out of order).
+  /// When the server last wrote this row. Used to drop stale / out-of-order
+  /// realtime updates so a late row can never revert a fresher score/phase.
   final DateTime updatedAt;
-
-  static DateTime _time(dynamic v) {
-    if (v is String) {
-      return DateTime.tryParse(v)?.toUtc() ??
-          DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
-    }
-    return DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
-  }
 
   static GamePhase _phase(String? v) => switch (v) {
         'halftime' => GamePhase.halftime,
@@ -87,7 +78,9 @@ class GameStateRow {
         wordsPerHalf: (m['words_per_half'] as num?)?.toInt() ?? 4,
         maxExchanges: (m['max_exchanges'] as num?)?.toInt() ?? 5,
         wordValue: (m['word_value'] as num?)?.toInt() ?? 5,
-        updatedAt: _time(m['updated_at']),
+        updatedAt: DateTime.tryParse((m['updated_at'] as String?) ?? '')
+                ?.toUtc() ??
+            DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
       );
 }
 
@@ -193,17 +186,6 @@ class GameplayService {
         .eq('game_id', gameId)
         .maybeSingle();
     return row == null ? null : GameStateRow.fromMap(row);
-  }
-
-  /// Fetches the current shared clue/guess feed once (not a stream), oldest
-  /// first — a polling fallback for when realtime is delayed or off.
-  Future<List<PlayEntry>> loadPlays(String gameId) async {
-    final rows = await _client
-        .from('game_plays')
-        .select()
-        .eq('game_id', gameId)
-        .order('created_at');
-    return rows.map(playEntryFromMap).toList();
   }
 
   /// Loads every seated human's saved character, keyed by their seat role

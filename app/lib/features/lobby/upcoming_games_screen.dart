@@ -27,7 +27,8 @@ class _UpcomingGamesScreenState extends State<UpcomingGamesScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) context.read<LobbyController>().refreshOpenGames();
+      if (!mounted) return;
+      context.read<LobbyController>().refreshOpenGames();
     });
   }
 

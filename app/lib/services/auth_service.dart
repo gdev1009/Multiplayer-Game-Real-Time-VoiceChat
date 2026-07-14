@@ -186,7 +186,6 @@ class AuthService {
   Future<Profile> quickTestSignIn() async {
     final deviceId = await _device.deviceId();
     final email = _quickTestEmail(deviceId);
-    final testName = _quickTestName(deviceId);
 
     try {
       await _client.auth.signInWithPassword(
@@ -242,7 +241,7 @@ class AuthService {
       try {
         await _profiles.createProfile(
           userId: user.id,
-          firstName: testName,
+          firstName: _quickTestName(deviceId),
           deviceId: deviceId,
           pinHash: hash,
           pinSalt: salt,
@@ -276,26 +275,12 @@ class AuthService {
       );
     }
 
-    // Older quick-test accounts were all created as the literal "Tester". Give
-    // this device its distinct friendly name so multiple testers are told
-    // apart in the lobby and on the stage.
-    var result = profile;
-    if (result.firstName.trim() == _kQuickTestName &&
-        testName != _kQuickTestName) {
-      try {
-        await _profiles.updateFirstName(testName);
-        result = await _profiles.currentProfile() ?? result;
-      } catch (e) {
-        debugPrint('[AuthService] quick-test rename failed: $e');
-      }
-    }
-
     await _remember(
-      name: result.firstName,
+      name: profile.firstName,
       email: email,
       password: _kQuickTestPassword,
     );
-    return result;
+    return profile;
   }
 
   // ---------------------------------------------------------------------------
@@ -595,27 +580,19 @@ class AuthService {
     return 'tester+$short@matchword.local';
   }
 
-  /// A friendly, deterministic display name for a quick-test account, unique
-  /// per device so two testers on different phones/emulators don't both show up
-  /// as the same "Tester". Derived from the device id so it stays stable for a
-  /// given device between sessions.
-  static const _kQuickTestNames = <String>[
-    'Rosie', 'Walter', 'Mabel', 'George', 'Pearl', 'Frank',
-    'Ada', 'Harold', 'Ivy', 'Stan', 'Ruth', 'Ernie',
-    'Nora', 'Cliff', 'Vera', 'Roy', 'Hazel', 'Gus',
-    'Edna', 'Marvin', 'Faye', 'Lou', 'Opal', 'Dot',
-  ];
-
+  /// A friendly, stable-per-device name for quick-test players so two devices
+  /// (e.g. an emulator and a phone) don't both show up as "Tester". Derives a
+  /// short 4-digit tag from the device id so the same device always keeps the
+  /// same name.
   String _quickTestName(String deviceId) {
     final slug = deviceId.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').toLowerCase();
     if (slug.isEmpty) return _kQuickTestName;
     var hash = 0;
-    for (final unit in slug.codeUnits) {
-      hash = (hash * 31 + unit) & 0x7fffffff;
+    for (final code in slug.codeUnits) {
+      hash = (hash * 31 + code) & 0x7fffffff;
     }
-    final name = _kQuickTestNames[hash % _kQuickTestNames.length];
-    final suffix = slug.substring(slug.length - 2).toUpperCase();
-    return '$name $suffix';
+    final tag = (hash % 9000) + 1000; // 1000..9999
+    return '$_kQuickTestName $tag';
   }
 
   String _friendlySignUpError(AuthException e) {

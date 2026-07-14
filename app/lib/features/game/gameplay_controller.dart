@@ -42,19 +42,32 @@ class GameplayController extends ChangeNotifier {
 
   StreamSubscription<GameStateRow?>? _stateSub;
   StreamSubscription<List<PlayEntry>>? _playsSub;
-  Timer? _pollTimer;
-
-  /// The server timestamp of the most recently applied state row. Used to
-  /// ignore stale realtime rows that would otherwise roll the score/turn back.
-  DateTime? _lastAppliedAt;
 
   // Server roster / identity, captured when the online match starts.
   Map<String, bool> _aiByRole = const {}; // role -> is this seat a computer?
   String? _myRole; // the local human's seat role (A1/A2/B1/B2), or null.
+
+  // Other seated humans (not me, not computers), for the post-game "Add friend"
+  // offer (Milestone 7). Empty in a solo/AI-only game.
+  List<({String profileId, String name})> _humanCoPlayers = const [];
+
+  /// The other human players in this match — used by the end-of-game screen to
+  /// let the player add them as friends.
+  List<({String profileId, String name})> get humanCoPlayers => _humanCoPlayers;
   List<String> _words = const []; // the dealt secret words, in play order.
   bool _isHost = false;
   Timer? _aiTimer;
-  String? _lastAiBeat; // guards against driving the same beat twice.
+  String? _pendingBeat; // the beat a host action is scheduled for (move/advance).
+
+  Map<String, String> _names = const {}; // role -> display name, for polling.
+  Timer? _pollTimer; // realtime fallback: re-fetch state on a short interval.
+  bool _reloadingWords = false; // guards a single word re-fetch at a time.
+
+  /// The server timestamp of the last state row we applied. A row that is not
+  /// strictly newer is dropped, so a late / out-of-order realtime UPDATE can
+  /// never revert a fresher score or phase back to an earlier value (which was
+  /// making earned points disappear).
+  DateTime _lastAppliedAt = DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
 
   // role (A1/A2/B1/B2) -> the character to show on that podium.
   Map<String, Character> _charactersByRole = const {};
@@ -134,14 +147,19 @@ class GameplayController extends ChangeNotifier {
     _aiByRole = {for (final p in players) p.role: p.isAi};
     final names = {for (final p in players) p.role: p.displayName};
     _myRole = null;
-    if (uid != null) {
-      for (final p in players) {
-        if (p.profileId == uid) {
-          _myRole = p.role;
-          break;
-        }
+    // Remember the other *human* seats so the end-of-game screen can offer to
+    // add them as friends (Milestone 7). Computer seats and myself are skipped.
+    final coPlayers = <({String profileId, String name})>[];
+    for (final p in players) {
+      if (uid != null && p.profileId == uid) {
+        _myRole = p.role;
+        continue;
+      }
+      if (!p.isAi && p.profileId != null) {
+        coPlayers.add((profileId: p.profileId!, name: p.displayName));
       }
     }
+    _humanCoPlayers = coPlayers;
 
     // Seed each podium with a look right away: computer seats get a generated
     // character; humans get a placeholder until their saved character loads.
@@ -190,6 +208,7 @@ class GameplayController extends ChangeNotifier {
     String gameId,
     Map<String, String> names,
   ) {
+    _names = names;
     _stateSub?.cancel();
     _playsSub?.cancel();
     _pollTimer?.cancel();
@@ -209,36 +228,37 @@ class GameplayController extends ChangeNotifier {
       },
       onError: (Object _) {},
     );
-    // Realtime replication can be delayed or disabled on a project, which left
-    // the score/turn/host line stale on the devices that weren't acting. Poll
-    // the authoritative state + feed on a gentle cadence as a fallback so every
-    // device catches up within about a second even without realtime.
+    // Realtime replication is not guaranteed to be enabled on every Supabase
+    // project, and even when it is a row can arrive late. Poll the
+    // authoritative state on a short interval so every device converges quickly
+    // (this is what makes the busts / scores sync promptly across phones).
     _pollTimer = Timer.periodic(const Duration(milliseconds: 1200), (_) async {
       try {
         final row = await service.loadState(gameId);
-        if (row != null) _applyServerState(row, names);
-        final feed = await service.loadPlays(gameId);
-        final s = _state;
-        if (s != null && feed.length != s.feed.length) {
-          _state = s.copyWith(feed: feed);
-          notifyListeners();
-        }
+        if (row != null) _applyServerState(row, _names);
       } catch (_) {
-        // Ignore transient poll errors; the next tick retries.
+        // Ignore transient poll failures; the next tick retries.
       }
     });
   }
 
   /// Rebuilds the local [MatchState] from an authoritative server row so the
-  /// two never drift. Stale rows (older than the last one applied) are ignored
-  /// so out-of-order realtime/poll deliveries can't roll the match backwards.
+  /// two never drift.
   void _applyServerState(
     GameStateRow row,
     Map<String, String> names,
   ) {
-    final last = _lastAppliedAt;
-    if (last != null && row.updatedAt.isBefore(last)) return;
+    // Drop stale / out-of-order rows: only advance when the server wrote this
+    // row at or after the last one we applied. This stops a delayed realtime
+    // UPDATE from wiping a freshly earned score back to zero.
+    if (row.updatedAt.isBefore(_lastAppliedAt)) return;
     _lastAppliedAt = row.updatedAt;
+
+    // If we somehow started without the dealt words, the secret word would be
+    // empty and no guess could ever match. Re-fetch them once in the
+    // background so scoring works.
+    if (_words.isEmpty) _reloadWords(names);
+
     final s = _state;
     _state = MatchState(
       config: MatchConfig(
@@ -247,7 +267,7 @@ class GameplayController extends ChangeNotifier {
         wordValue: row.wordValue,
       ),
       words: _words,
-      names: names,
+      names: names.isNotEmpty ? names : (s?.names ?? const {}),
       phase: row.phase,
       wordIndex: row.wordIndex,
       cluingTeam: row.cluingTeam,
@@ -264,44 +284,142 @@ class GameplayController extends ChangeNotifier {
     _maybeDriveComputer();
   }
 
+  /// Background one-shot re-fetch of the dealt words when the local cache is
+  /// empty, so the host can drive computer guesses and scoring can match.
+  Future<void> _reloadWords(Map<String, String> names) async {
+    if (_reloadingWords) return;
+    final service = _service;
+    final gameId = _gameId;
+    if (service == null || gameId == null) return;
+    _reloadingWords = true;
+    try {
+      final words = await service.loadWords(gameId);
+      if (words.isNotEmpty) {
+        _words = words;
+        final row = await service.loadState(gameId);
+        if (row != null) {
+          _lastAppliedAt =
+              DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+          _applyServerState(row, names);
+        }
+      }
+    } catch (_) {
+      // Ignore; the periodic poll will try again.
+    } finally {
+      _reloadingWords = false;
+    }
+  }
+
   // ---------------------------------------------------------------------------
-  // Computer-filled seats (host-driven)
+  // Host-driven flow: play computer seats + keep the match moving
   // ---------------------------------------------------------------------------
 
-  /// When the on-the-clock seat is a computer, the host device plays it after a
-  /// short, natural pause so the studio players take their turns automatically
-  /// instead of stalling the game. Only the host runs this; every other device
-  /// just watches the realtime result.
+  /// The host device keeps the whole match flowing so a table that includes
+  /// computer players actually plays through and scores accrue:
+  ///  * it plays any computer-filled seat that is on the clock (a gentle clue
+  ///    for a filled clue-giver, the answer for a filled guesser),
+  ///  * it advances the short "resolved" celebration beat to the next word, and
+  ///  * it leaves halftime for the second half after a calm pause.
+  ///
+  /// Only the host runs this; every other device just renders the authoritative
+  /// result. Each action is scheduled per game "beat" and is *retried* if that
+  /// beat recurs (e.g. the authoritative state reverted after a dropped
+  /// request), so the game can never get permanently stuck waiting on a
+  /// computer seat — the bug that left matches frozen at 0 – 0.
   void _maybeDriveComputer() {
     if (isLocal || !_isHost) return;
     final s = _state;
-    if (s == null || !s.isTurnActive) {
+    if (s == null) {
       _aiTimer?.cancel();
+      _pendingBeat = null;
+      return;
+    }
+
+    // Leave halftime for the second half after a pause to read the switch.
+    if (s.phase == GamePhase.halftime) {
+      _scheduleHostBeat(
+        'half|${s.wordIndex}',
+        const Duration(milliseconds: 4500),
+        beginSecondHalf,
+      );
+      return;
+    }
+
+    // Advance the resolved beat (word guessed or revealed) to the next word.
+    if (s.step == TurnStep.resolved &&
+        (s.phase == GamePhase.firstHalf || s.phase == GamePhase.secondHalf)) {
+      _scheduleHostBeat(
+        'next|${s.wordIndex}|${s.lastOutcome}',
+        const Duration(milliseconds: 3000),
+        nextWord,
+      );
+      return;
+    }
+
+    // Otherwise there's nothing to drive unless a turn is active.
+    if (!s.isTurnActive) {
+      _aiTimer?.cancel();
+      _pendingBeat = null;
       return;
     }
 
     final role = onClockRole;
     if (role == null || !(_aiByRole[role] ?? false)) {
-      // A human is on the clock — nothing for the computer to do.
+      // A human is on the clock — wait for them (cancel any stale AI timer).
+      _aiTimer?.cancel();
+      _pendingBeat = null;
       return;
     }
 
-    // Only schedule once per distinct beat (word + step + team + exchanges).
-    final beat = '${s.wordIndex}|${s.step}|${s.cluingTeam}|${s.exchangeCount}';
-    if (beat == _lastAiBeat) return;
-    _lastAiBeat = beat;
+    // A computer seat is on the clock — play it after a short, natural pause.
+    // If the secret word hasn't arrived yet, wait (and kick a reload); empty
+    // guesses would never score and burn exchanges down to a 0-point reveal.
+    if (s.secretWord.trim().isEmpty) {
+      _aiTimer?.cancel();
+      _pendingBeat = null;
+      if (_words.isEmpty) _reloadWords(_names);
+      return;
+    }
 
+    _scheduleHostBeat(
+      'ai|${s.wordIndex}|${s.step}|${s.cluingTeam}|${s.exchangeCount}',
+      const Duration(milliseconds: 1600),
+      () {
+        final cur = _state;
+        if (cur == null || !cur.isTurnActive) return;
+        final curRole = onClockRole;
+        if (curRole == null || !(_aiByRole[curRole] ?? false)) return;
+        final secret = cur.secretWord.trim();
+        if (secret.isEmpty) return;
+        if (cur.step == TurnStep.awaitingClue) {
+          // Vary the clue by word so repeat games don't feel scripted.
+          submitClue(AiPlayer.clueFor(secret, variant: cur.wordIndex));
+        } else {
+          // Seed the guess by word + exchange so a studio player's occasional
+          // miss is stable for this turn but differs across turns.
+          submitGuess(
+            AiPlayer.guessFor(
+              secret,
+              seed: cur.wordIndex * 31 + cur.exchangeCount,
+            ),
+          );
+        }
+      },
+    );
+  }
+
+  /// Schedules a single host-driven [action] for a game [beat]. While that beat
+  /// is still pending (its timer is live) we don't double-schedule; once the
+  /// timer fires the guard clears, so a beat that recurs — because the
+  /// authoritative state reverted after a failed/late request — is retried
+  /// rather than stalling the match.
+  void _scheduleHostBeat(String beat, Duration delay, VoidCallback action) {
+    if (beat == _pendingBeat && (_aiTimer?.isActive ?? false)) return;
+    _pendingBeat = beat;
     _aiTimer?.cancel();
-    _aiTimer = Timer(const Duration(milliseconds: 1600), () {
-      final cur = _state;
-      if (cur == null || !cur.isTurnActive) return;
-      final curRole = onClockRole;
-      if (curRole == null || !(_aiByRole[curRole] ?? false)) return;
-      if (cur.step == TurnStep.awaitingClue) {
-        submitClue(AiPlayer.clueFor(cur.secretWord));
-      } else {
-        submitGuess(AiPlayer.guessFor(cur.secretWord));
-      }
+    _aiTimer = Timer(delay, () {
+      _pendingBeat = null;
+      action();
     });
   }
 

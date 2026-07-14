@@ -7,11 +7,13 @@ import 'app.dart';
 import 'core/config/app_config.dart';
 import 'features/auth/auth_controller.dart';
 import 'features/character/character_controller.dart';
+import 'features/friends/friend_controller.dart';
 import 'features/lobby/lobby_controller.dart';
 import 'services/audio_controller.dart';
 import 'services/auth_service.dart';
 import 'services/character_service.dart';
 import 'services/device_service.dart';
+import 'services/friend_service.dart';
 import 'services/gameplay_service.dart';
 import 'services/lobby_service.dart';
 import 'services/profile_service.dart';
@@ -42,6 +44,7 @@ Future<void> main() async {
   final characterService = CharacterService(client);
   final lobbyService = LobbyService(client);
   final gameplayService = GameplayService(client);
+  final friendService = FriendService(client);
 
   runApp(
     MultiProvider(
@@ -51,6 +54,7 @@ Future<void> main() async {
           create: (_) => CharacterController(characterService),
         ),
         ChangeNotifierProvider(create: (_) => LobbyController(lobbyService)),
+        ChangeNotifierProvider(create: (_) => FriendController(friendService)),
         Provider<GameplayService>.value(value: gameplayService),
         ChangeNotifierProvider(create: (_) => AudioController()),
       ],

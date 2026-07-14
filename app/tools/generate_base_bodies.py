@@ -1,33 +1,33 @@
 #!/usr/bin/env python3
 """
-Generate the two Match Word base bodies with OpenAI's image model, then align
-each to the Character Studio safe-zone landmarks and export spec-perfect PNGs:
+Generate Match Word base bodies with OpenAI's image model (OPTIONAL TOOL).
 
-    app/assets/images/character/base/body-female.png
-    app/assets/images/character/base/body-male.png
+ ⚠️  SOURCE OF TRUTH FOR SHIPPED BODIES
+ --------------------------------------
+ The bodies currently in `assets/images/character/base/` come from the artist's
+ pack, imported by `tools/import_character_art.py`. They are **not** produced by
+ this script. Landmark registration for hair/outfit/glasses/hat is locked to
+ those artist PNGs (head-top ≈ y114–116, feet ≈ y1047–1049 on the 1254 canvas).
 
-Each output is 1254 x 1254, transparent, front-facing, centered, with the figure
-registered so head-top ~ y90 and feet ~ y1200 (matches SAFE-ZONES.md).
+ The landmark targets below (HEAD_TOP_Y=90, FEET_BASE_Y=1200) are the *older*
+ AI-body convention and **do not match** the shipped artist bodies. Running this
+ tool and writing into `base/` would replace the artist bodies with differently-
+ registered figures and break every layered part.
 
-SECURITY
---------
-The API key is read from the OPENAI_API_KEY environment variable, falling back
-to the app's local .env file. The key is never printed or written by this tool.
-Rotate the key at https://platform.openai.com/api-keys.
+ Use this script only when deliberately producing a new AI body pair for review
+ in `tools/out/`. To install into `base/` you must pass `--force-overwrite-artist`.
+
+ Prefer editing the *current* bodies instead when generating idle poses — see
+ `tools/generate_idle_poses.py`.
 
 USAGE
 -----
     cd app
-    python3 -m pip install --user openai pillow numpy      # one-time
-    export OPENAI_API_KEY="sk-...your-key..."
-    python3 tools/generate_base_bodies.py                  # both bodies
-    python3 tools/generate_base_bodies.py --only female     # just one
-    python3 tools/generate_base_bodies.py --raw-only        # skip alignment
-    python3 tools/generate_base_bodies.py --no-write-base   # keep out of base/
-    python3 tools/generate_base_bodies.py --dry-run         # print prompt+cost, spend nothing
-
-Outputs land in tools/out/ (raw + aligned). Aligned copies are also written into
-assets/images/character/base/ unless --no-write-base is given.
+    python3 -m pip install --user openai pillow numpy
+    export OPENAI_API_KEY="sk-..."   # or set in app/.env
+    python3 tools/generate_base_bodies.py --dry-run
+    python3 tools/generate_base_bodies.py --no-write-base   # review in tools/out/
+    python3 tools/generate_base_bodies.py --force-overwrite-artist  # DANGEROUS
 """
 
 from __future__ import annotations
@@ -38,16 +38,14 @@ import os
 import sys
 from pathlib import Path
 
-# ---- Spec ------------------------------------------------------------------
+# ---- Spec (LEGACY AI-body landmarks — not the shipped artist pack) ---------
 CANVAS = 1254
 CENTER_X = 627
-HEAD_TOP_Y = 90       # from SAFE-ZONES.md
-FEET_BASE_Y = 1200    # from SAFE-ZONES.md
-GEN_SIZE = "1024x1024"  # gpt-image-1 square; upscaled to CANVAS on align
-GEN_QUALITY = "high"    # gpt-image-1 quality tier
+HEAD_TOP_Y = 90       # legacy AI target; artist bodies sit ~y114
+FEET_BASE_Y = 1200    # legacy AI target; artist bodies sit ~y1048
+GEN_SIZE = "1024x1024"
+GEN_QUALITY = "high"
 
-# Approx gpt-image-1 output-image price (USD) per image, by size + quality.
-# Source: OpenAI image pricing for gpt-image-1. Update if pricing changes.
 IMAGE_PRICE_USD = {
     ("1024x1024", "low"): 0.011,
     ("1024x1024", "medium"): 0.042,
@@ -62,11 +60,7 @@ PROMPTS = {
         "standing straight and symmetrical, arms relaxed but slightly away from "
         "the body, feet together and fully visible. Cute stylized proportions "
         "with a BIG ROUND HEAD (head about one third of total height), soft "
-        "rounded body, warm friendly face, gentle smile, small nose. A clearly "
-        "visible, natural, gently-tapered human neck of realistic length that "
-        "connects the head smoothly to the shoulders (NOT a stiff cylinder and "
-        "NOT the head sitting directly on the torso), with soft, believable jaw "
-        "and collarbone anatomy. Soft matte "
+        "rounded body, warm friendly face, gentle smile, small nose. Soft matte "
         "clay / plasticine material with subtle sheen, smooth surfaces, soft "
         "studio top light, soft contact shadow. Bald / no hair, wearing only "
         "plain simple fitted neutral basewear (like a plain leotard), neutral "
@@ -80,11 +74,7 @@ PROMPTS = {
         "standing straight and symmetrical, arms relaxed but slightly away from "
         "the body, feet together and fully visible. Cute stylized proportions "
         "with a BIG ROUND HEAD (head about one third of total height), soft "
-        "rounded body, warm friendly face, gentle smile, small nose. A clearly "
-        "visible, natural, gently-tapered human neck of realistic length that "
-        "connects the head smoothly to the shoulders (NOT a stiff cylinder and "
-        "NOT the head sitting directly on the torso), with soft, believable jaw "
-        "and collarbone anatomy. Soft matte "
+        "rounded body, warm friendly face, gentle smile, small nose. Soft matte "
         "clay / plasticine material with subtle sheen, smooth surfaces, soft "
         "studio top light, soft contact shadow. Bald / no hair, wearing only "
         "plain simple fitted neutral basewear (plain shorts), neutral warm skin "
@@ -95,7 +85,7 @@ PROMPTS = {
     ),
 }
 
-ROOT = Path(__file__).resolve().parent.parent          # app/
+ROOT = Path(__file__).resolve().parent.parent
 OUT_DIR = Path(__file__).resolve().parent / "out"
 BASE_DIR = ROOT / "assets" / "images" / "character" / "base"
 
@@ -106,8 +96,6 @@ def die(msg: str, code: int = 1):
 
 
 def load_api_key() -> str | None:
-    """Return the OpenAI key from the environment, falling back to the app's
-    local .env file. The key is never printed or written anywhere."""
     key = os.environ.get("OPENAI_API_KEY")
     if key:
         return key
@@ -127,8 +115,9 @@ def estimate_cost_usd(count: int) -> float | None:
 
 
 def print_dry_run(kinds: list[str]):
-    """Show exactly what would be sent and the estimated spend. No API calls."""
-    print("DRY RUN \u2014 no API calls, no charges.\n")
+    print("DRY RUN — no API calls, no charges.\n")
+    print("NOTE: shipped bodies come from import_character_art.py, not this tool.")
+    print("      Prefer tools/generate_idle_poses.py to edit the CURRENT bodies.\n")
     print(f"model    : gpt-image-1")
     print(f"size     : {GEN_SIZE}")
     print(f"quality  : {GEN_QUALITY}")
@@ -139,17 +128,12 @@ def print_dry_run(kinds: list[str]):
         print()
     est = estimate_cost_usd(len(kinds))
     if est is None:
-        print("estimated cost: unknown (no price entry for this size/quality)")
+        print("estimated cost: unknown")
     else:
-        print(f"estimated cost: ~${est:.2f} USD "
-              f"(~${est / max(1, len(kinds)):.3f} per image, output tokens extra)")
-    print("\nNote: this is an estimate of the image output price only. Actual "
-          "billing also includes a small text-input token charge and may vary "
-          "with OpenAI pricing. Remove --dry-run to generate for real.")
+        print(f"estimated cost: ~${est:.2f} USD")
 
 
 def generate_raw(kind: str, client) -> Path:
-    """Call the image API and save the raw transparent PNG."""
     print(f"[{kind}] requesting image from gpt-image-1 ...")
     resp = client.images.generate(
         model="gpt-image-1",
@@ -168,8 +152,6 @@ def generate_raw(kind: str, client) -> Path:
 
 
 def align_to_canvas(kind: str, raw_path: Path) -> Path:
-    """Trim to the opaque figure, scale so head-top->feet map to the landmark
-    lines, and center on the 1254x1254 canvas."""
     from PIL import Image
     import numpy as np
 
@@ -184,7 +166,7 @@ def align_to_canvas(kind: str, raw_path: Path) -> Path:
     left, right = int(xs.min()), int(xs.max())
     fig = im.crop((left, top, right + 1, bot + 1))
 
-    target_h = FEET_BASE_Y - HEAD_TOP_Y          # 1110 px
+    target_h = FEET_BASE_Y - HEAD_TOP_Y
     scale = target_h / fig.height
     new_w = max(1, round(fig.width * scale))
     new_h = max(1, round(fig.height * scale))
@@ -197,21 +179,28 @@ def align_to_canvas(kind: str, raw_path: Path) -> Path:
 
     aligned = OUT_DIR / f"body-{kind}.png"
     canvas.save(aligned)
-    print(f"[{kind}] aligned -> {aligned}  (figure {new_w}x{new_h}, "
-          f"head_top y={paste_y}, feet y={paste_y + new_h})")
+    print(f"[{kind}] aligned -> {aligned}  "
+          f"(legacy landmarks y={HEAD_TOP_Y}..{FEET_BASE_Y})")
     return aligned
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Generate Match Word base bodies.")
+    ap = argparse.ArgumentParser(
+        description="Generate Match Word base bodies (optional AI tool).",
+    )
     ap.add_argument("--only", choices=["female", "male"], help="generate one")
     ap.add_argument("--raw-only", action="store_true",
                     help="only generate; skip landmark alignment")
     ap.add_argument("--no-write-base", action="store_true",
                     help="do not copy aligned PNGs into assets/.../base/")
+    ap.add_argument(
+        "--force-overwrite-artist",
+        action="store_true",
+        help="REQUIRED to write into base/ — overwrites the artist's shipped "
+             "bodies and will break layered part registration",
+    )
     ap.add_argument("--dry-run", action="store_true",
-                    help="print the exact prompt(s) and estimated cost, then "
-                         "exit without calling the API or spending anything")
+                    help="print prompt(s) and estimated cost; spend nothing")
     args = ap.parse_args()
 
     kinds = [args.only] if args.only else ["female", "male"]
@@ -219,6 +208,20 @@ def main():
     if args.dry_run:
         print_dry_run(kinds)
         return
+
+    write_base = not args.no_write_base
+    if write_base and not args.force_overwrite_artist:
+        die(
+            "Refusing to overwrite the artist's shipped bodies in "
+            "assets/images/character/base/.\n"
+            "  • Those bodies come from tools/import_character_art.py and every "
+            "hair/outfit/glasses layer is registered to them.\n"
+            "  • Re-run with --no-write-base to review AI bodies in tools/out/, OR\n"
+            "  • Pass --force-overwrite-artist if you truly mean to replace them "
+            "(breaks layer registration).\n"
+            "  • For idle poses on the CURRENT bodies, use "
+            "tools/generate_idle_poses.py instead."
+        )
 
     key = load_api_key()
     if not key:
@@ -230,7 +233,7 @@ def main():
     except ImportError:
         die("The 'openai' package is missing. Run: pip install --user openai")
 
-    client = OpenAI(api_key=key)  # key sourced from env or app/.env
+    client = OpenAI(api_key=key)
 
     est = estimate_cost_usd(len(kinds))
     if est is not None:
@@ -242,14 +245,16 @@ def main():
         if args.raw_only:
             continue
         aligned = align_to_canvas(kind, raw)
-        if not args.no_write_base:
+        if write_base:
             BASE_DIR.mkdir(parents=True, exist_ok=True)
             dest = BASE_DIR / f"body-{kind}.png"
             dest.write_bytes(aligned.read_bytes())
-            print(f"[{kind}] installed -> {dest}")
+            print(f"[{kind}] FORCE-installed over artist body -> {dest}")
 
-    print("\nDone. Review the images in tools/out/ (and base/ if installed).")
-    print("Reminder: rotate your OpenAI API key now that generation is complete.")
+    print("\nDone. Review the images in tools/out/.")
+    if write_base:
+        print("WARNING: artist bodies in base/ were overwritten. Re-import with "
+              "import_character_art.py if you need them back.")
 
 
 if __name__ == "__main__":

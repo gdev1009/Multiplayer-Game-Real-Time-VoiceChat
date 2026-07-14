@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../models/character.dart';
 import 'character_catalog.dart';
+import 'character_poses.dart';
 
 /// Premium "Character Studio" preview.
 ///
@@ -14,6 +15,11 @@ import 'character_catalog.dart';
 ///   1. Spotlight backdrop + floor shadow.
 ///   2. Body → outfit → hair → earrings → glasses → hat → held item.
 ///
+/// When [pose] is set, the neutral base body is swapped for the matching
+/// posed PNG (generated from the same artist body by
+/// `tools/generate_idle_poses.py`) so idle expressions/gestures can play while
+/// the rest of the layers stay registered.
+///
 /// If any single art file is missing the layer is skipped gracefully (the rest
 /// of the figure still renders), and a friendly placeholder shows when no body
 /// has been chosen yet.
@@ -23,6 +29,7 @@ class CharacterPreview extends StatelessWidget {
     required this.character,
     this.size = 260,
     this.showBackdrop = true,
+    this.pose,
   });
 
   final Character character;
@@ -30,6 +37,9 @@ class CharacterPreview extends StatelessWidget {
 
   /// When false the studio backdrop/border is omitted (for tight inline uses).
   final bool showBackdrop;
+
+  /// Optional named idle pose — swaps only the base body layer.
+  final CharacterPose? pose;
 
   /// The layers to paint, back to front. Earrings sit above hair so they show,
   /// glasses above the face, the hat above the hair, and a held item in front.
@@ -57,6 +67,21 @@ class CharacterPreview extends StatelessWidget {
   Widget build(BuildContext context) {
     final layers = <Widget>[];
     for (final layer in _paintOrder) {
+      if (layer == CharacterLayer.base && pose != null) {
+        final posePath = poseAssetPath(character.base, pose!);
+        if (posePath != null) {
+          layers.add(
+            Image.asset(
+              posePath,
+              fit: BoxFit.contain,
+              gaplessPlayback: true,
+              filterQuality: FilterQuality.medium,
+              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+            ),
+          );
+          continue;
+        }
+      }
       final id = _idFor(layer);
       if (id == null) continue;
       final option = CharacterCatalog.find(layer, id);

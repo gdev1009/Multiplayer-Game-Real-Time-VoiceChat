@@ -188,81 +188,6 @@ class _TurnBanner extends StatelessWidget {
               style: AppText.body.copyWith(fontWeight: FontWeight.w700),
             ),
           ],
-          const SizedBox(height: AppSpacing.sm),
-          _TurnMeter(state: state),
-        ],
-      ),
-    );
-  }
-}
-
-/// A calm, non-ticking indicator of how much the current word is worth and how
-/// many guesses remain before it passes to the other team. This replaces a
-/// stressful countdown clock (the design principle is "no rushed timers") with
-/// a gentle, glanceable status so players always know where they stand.
-class _TurnMeter extends StatelessWidget {
-  const _TurnMeter({required this.state});
-  final MatchState state;
-
-  @override
-  Widget build(BuildContext context) {
-    final triesLeft =
-        (state.config.maxExchanges - state.exchangeCount).clamp(0, 99);
-    return Wrap(
-      alignment: WrapAlignment.center,
-      spacing: AppSpacing.sm,
-      runSpacing: 4,
-      children: [
-        _MeterChip(
-          icon: Icons.star_rounded,
-          label: 'Worth ${state.wordValue} '
-              '${state.wordValue == 1 ? 'point' : 'points'}',
-          color: AppColors.gold,
-        ),
-        _MeterChip(
-          icon: Icons.favorite_rounded,
-          label: '$triesLeft ${triesLeft == 1 ? 'try' : 'tries'} left',
-          color: AppColors.deepPurple,
-        ),
-      ],
-    );
-  }
-}
-
-class _MeterChip extends StatelessWidget {
-  const _MeterChip({
-    required this.icon,
-    required this.label,
-    required this.color,
-  });
-  final IconData icon;
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.sm,
-        vertical: 4,
-      ),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color, width: 1.5),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 18, color: color),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: AppText.body.copyWith(
-              fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
-            ),
-          ),
         ],
       ),
     );
@@ -365,8 +290,8 @@ class _InputArea extends StatelessWidget {
     final giving = state.step == TurnStep.awaitingClue;
     return WordInput(
       key: ValueKey('${state.wordIndex}-${state.step}-${state.cluingTeam}'),
-      label: giving ? 'Your clue' : 'Your guess',
-      hint: giving ? 'One word…' : 'Your best guess…',
+      label: giving ? 'Your one-word clue' : 'Your guess',
+      hint: giving ? 'A word that hints at it…' : 'What is the word?',
       onSubmit: giving ? controller.submitClue : controller.submitGuess,
     );
   }

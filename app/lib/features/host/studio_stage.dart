@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -39,32 +40,34 @@ class StudioStage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // The stage keeps a portrait TV-frame aspect so the composition matches the
-    // mockup on any width. The whole composition is authored against a fixed
-    // 360×480 canvas and then uniformly scaled to fit the device via FittedBox,
-    // so the host, podiums and busts always keep the same relative positions
-    // and never overlap on narrower phones.
+    // The stage is composed at a fixed design canvas and then scaled to fit any
+    // width with a FittedBox. That way the layout (podiums, host, scoreboard)
+    // keeps the exact same proportions on a small phone as on a wide tablet, so
+    // the host can never overlap the podiums the way it did when the children
+    // used raw pixel offsets against a shrinking phone-width stage.
+    const designW = 400.0;
+    const designH = designW * 4 / 3; // portrait TV frame (3:4)
     return AspectRatio(
       aspectRatio: 3 / 4,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(24),
-        child: DecoratedBox(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                AppColors.deepPurpleDark,
-                AppColors.deepPurple,
-                Color(0xFF4A2578),
-              ],
-            ),
-          ),
-          child: FittedBox(
-            fit: BoxFit.fill,
-            child: SizedBox(
-              width: 360,
-              height: 480,
+        child: FittedBox(
+          fit: BoxFit.cover,
+          child: SizedBox(
+            width: designW,
+            height: designH,
+            child: DecoratedBox(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    AppColors.deepPurpleDark,
+                    AppColors.deepPurple,
+                    Color(0xFF4A2578),
+                  ],
+                ),
+              ),
               child: Stack(
                 fit: StackFit.expand,
                 children: [
@@ -79,17 +82,45 @@ class StudioStage extends StatelessWidget {
                     child: Column(
                       children: [
                         _Scoreboard(state: state),
-                        const SizedBox(height: 10),
+                        const SizedBox(height: 8),
                         _WordTile(state: state, viewerRole: viewerRole),
                       ],
                     ),
                   ),
 
-                  // Podiums flank the lower third; the host stands between them.
+                  // Host caption sits low in the clear centre column — above the
+                  // host's head, well below the word tile, and narrow enough to
+                  // stay between the two podiums so it never covers a player.
+                  // Halftime / game-over copy already lives in the panels below
+                  // the stage, so keep the bubble for active play turns only.
+                  if (state.isTurnActive || state.isResolved)
+                    Positioned(
+                      top: 232,
+                      left: 0,
+                      right: 0,
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 172),
+                          child: _SpeechBubble(message: state.hostLine),
+                        ),
+                      ),
+                    ),
+
+                  // Host figure centre-stage (no nameplate — the character is
+                  // already obvious). Drawn *behind* the podiums so a tall host
+                  // can't cover the players either.
                   Positioned(
-                    left: 8,
-                    bottom: 96,
-                    width: 132,
+                    left: 0,
+                    right: 0,
+                    bottom: 4,
+                    child: _HostCentre(state: state),
+                  ),
+
+                  // Team podiums last so every player's bust stays fully visible.
+                  Positioned(
+                    left: 6,
+                    bottom: 78,
+                    width: 126,
                     child: _TeamPodium(
                       state: state,
                       team: 'A',
@@ -97,22 +128,14 @@ class StudioStage extends StatelessWidget {
                     ),
                   ),
                   Positioned(
-                    right: 8,
-                    bottom: 96,
-                    width: 132,
+                    right: 6,
+                    bottom: 78,
+                    width: 126,
                     child: _TeamPodium(
                       state: state,
                       team: 'B',
                       charactersByRole: charactersByRole,
                     ),
-                  ),
-
-                  // Guy Smiley, centre-stage, with his nameplate + speech bubble.
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: 8,
-                    child: _HostCentre(state: state),
                   ),
                 ],
               ),
@@ -320,34 +343,61 @@ class _WordTile extends StatelessWidget {
         state.isTurnActive && state.step == TurnStep.awaitingClue && amClueGiver;
     final label = revealSecret ? state.secretWord.toUpperCase() : state.wordLabel;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 8),
       decoration: BoxDecoration(
         color: AppColors.warmBeige,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.gold, width: 2.5),
         boxShadow: AppColors.tileShadow,
       ),
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 320),
-        transitionBuilder: (child, anim) => FadeTransition(
-          opacity: anim,
-          child: ScaleTransition(
-            scale: Tween<double>(begin: 0.8, end: 1.0).animate(
-              CurvedAnimation(parent: anim, curve: Curves.easeOutBack),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // When the secret word is shown, the clue-giver needs to know this is
+          // the answer they must lead their teammate to say — not the clue.
+          if (revealSecret)
+            Text(
+              'YOUR SECRET WORD',
+              style: AppText.bodyMuted.copyWith(
+                color: AppColors.deepPurpleLight,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.5,
+                fontSize: 13,
+              ),
             ),
-            child: child,
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 320),
+            transitionBuilder: (child, anim) => FadeTransition(
+              opacity: anim,
+              child: ScaleTransition(
+                scale: Tween<double>(begin: 0.8, end: 1.0).animate(
+                  CurvedAnimation(parent: anim, curve: Curves.easeOutBack),
+                ),
+                child: child,
+              ),
+            ),
+            child: Text(
+              label,
+              key: ValueKey<String>(label),
+              style: AppText.display.copyWith(
+                color: AppColors.deepPurple,
+                fontSize: revealSecret ? 32 : 24,
+                letterSpacing: revealSecret ? 2 : 0.5,
+              ),
+              textAlign: TextAlign.center,
+            ),
           ),
-        ),
-        child: Text(
-          label,
-          key: ValueKey<String>(label),
-          style: AppText.display.copyWith(
-            color: AppColors.deepPurple,
-            fontSize: revealSecret ? 34 : 24,
-            letterSpacing: revealSecret ? 2 : 0.5,
-          ),
-          textAlign: TextAlign.center,
-        ),
+          if (revealSecret)
+            Text(
+              "Get your team to say it — don't say it yourself!",
+              textAlign: TextAlign.center,
+              style: AppText.bodyMuted.copyWith(
+                color: AppColors.deepPurple,
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -388,7 +438,7 @@ class _TeamPodium extends StatelessWidget {
               active: clueActive,
               character: charactersByRole[clueRole],
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: 4),
             _Bust(
               name: guessName,
               seed: '$team$guessRole',
@@ -398,7 +448,7 @@ class _TeamPodium extends StatelessWidget {
           ],
         ),
         Transform.translate(
-          offset: const Offset(0, -14),
+          offset: const Offset(0, -8),
           child: _Desk(
             team: team,
             clueName: clueName,
@@ -475,8 +525,8 @@ class _BustState extends State<_Bust> with SingleTickerProviderStateMixin {
       duration: const Duration(milliseconds: 280),
       curve: Curves.easeOutBack,
       child: SizedBox(
-        width: 62,
-        height: 72,
+        width: 58,
+        height: 70,
         child: Stack(
           alignment: Alignment.bottomCenter,
           clipBehavior: Clip.none,
@@ -486,8 +536,8 @@ class _BustState extends State<_Bust> with SingleTickerProviderStateMixin {
               Positioned(
                 bottom: 4,
                 child: Container(
-                  width: 60,
-                  height: 60,
+                  width: 56,
+                  height: 56,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     gradient: RadialGradient(
@@ -524,9 +574,9 @@ class _BustState extends State<_Bust> with SingleTickerProviderStateMixin {
     if (character != null && character.base != null) {
       // Render the full figure large, then show just the head/shoulders through
       // a small window so it reads as a bust rising above the desk.
-      const box = Size(60, 70);
+      const box = Size(56, 66);
       const render = 150.0; // full-figure square, scaled up
-      const focusY = 0.16; // fraction of the figure height to centre on
+      const focusY = 0.13; // fraction of the figure height to centre on
       return SizedBox(
         width: box.width,
         height: box.height,
@@ -551,7 +601,7 @@ class _BustState extends State<_Bust> with SingleTickerProviderStateMixin {
     }
     return Image.asset(
       _asset,
-      height: 70,
+      height: 66,
       fit: BoxFit.contain,
       filterQuality: FilterQuality.medium,
       errorBuilder: (_, __, ___) => Icon(
@@ -660,23 +710,25 @@ class _NamePlate extends StatelessWidget {
               ]
             : null,
       ),
-      child: Text(
-        name,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        textAlign: TextAlign.center,
-        style: AppText.body.copyWith(
-          color: AppColors.deepPurpleDark,
-          fontWeight: FontWeight.w700,
-          fontSize: 16,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(
+          name,
+          maxLines: 1,
+          textAlign: TextAlign.center,
+          style: AppText.body.copyWith(
+            color: AppColors.deepPurpleDark,
+            fontWeight: FontWeight.w700,
+            fontSize: 16,
+          ),
         ),
       ),
     );
   }
 }
 
-/// Guy Smiley centre-stage: an idle-bobbing full-body figure with a speech
-/// bubble above and a gold nameplate below.
+/// Guy Smiley centre-stage: an idle-bobbing full-body figure. Speech lives in
+/// a caption under the word tile; there is intentionally no nameplate.
 class _HostCentre extends StatefulWidget {
   const _HostCentre({required this.state});
   final MatchState state;
@@ -698,51 +750,94 @@ class _HostCentreState extends State<_HostCentre>
     duration: const Duration(milliseconds: 620),
   );
 
+  // A fast head-nod / squash cycle that runs while the host is "speaking", so
+  // he reads as a lively presenter talking to the room rather than a static
+  // cut-out. (True mouth/eye lipsync would need a rigged, multi-frame asset;
+  // this procedural motion is the closest lively approximation on the single
+  // clay render we have.)
+  late final AnimationController _talk = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 300),
+  );
+
+  bool _speaking = false;
+  Timer? _talkStop;
+
+  @override
+  void initState() {
+    super.initState();
+    // Greet the room with a little talking burst as the stage opens.
+    _startTalking();
+  }
+
+  void _startTalking() {
+    _speaking = true;
+    if (!_talk.isAnimating) _talk.repeat(reverse: true);
+    _talkStop?.cancel();
+    // Talk for a natural couple of seconds, then settle back to idle breathing.
+    _talkStop = Timer(const Duration(milliseconds: 2600), () {
+      if (!mounted) return;
+      _speaking = false;
+      _talk.stop();
+      _talk.animateTo(0, duration: const Duration(milliseconds: 200));
+    });
+  }
+
   @override
   void didUpdateWidget(_HostCentre oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.state.hostLine != widget.state.hostLine) {
       _gesture.forward(from: 0);
+      _startTalking();
     }
   }
 
   @override
   void dispose() {
+    _talkStop?.cancel();
     _idle.dispose();
     _gesture.dispose();
+    _talk.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // Speech bubble with the host's current line.
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 40),
-          child: _SpeechBubble(message: widget.state.hostLine),
-        ),
-        const SizedBox(height: 6),
-        // The bobbing host, with a bounce + tilt when he speaks.
-        AnimatedBuilder(
-          animation: Listenable.merge([_idle, _gesture]),
-          builder: (context, child) {
-            final bob = math.sin(_idle.value * math.pi) * 3;
-            final pop = Curves.elasticOut.transform(_gesture.value);
-            final scale = 1 + (pop.clamp(0.0, 1.0)) * 0.06;
-            final tilt = math.sin(_gesture.value * math.pi * 2) * 0.03;
-            return Transform.translate(
-              offset: Offset(0, -bob),
-              child: Transform.rotate(
-                angle: tilt,
-                child: Transform.scale(scale: scale, child: child),
+    // Host figure only — the speech bubble sits under the word tile (see
+    // StudioStage) so it never covers the players, and there is no nameplate.
+    return AnimatedBuilder(
+      animation: Listenable.merge([_idle, _gesture, _talk]),
+      builder: (context, child) {
+        final bob = math.sin(_idle.value * math.pi) * 3;
+        final breathe = 1 + math.sin(_idle.value * math.pi) * 0.012;
+        final pop = Curves.elasticOut.transform(_gesture.value);
+        final scale = 1 + (pop.clamp(0.0, 1.0)) * 0.06;
+        final tilt = math.sin(_gesture.value * math.pi * 2) * 0.03 +
+            math.sin(_idle.value * math.pi * 2) * 0.008;
+        final talkBob = _speaking ? math.sin(_talk.value * math.pi) * 2.2 : 0.0;
+        final talkSquash = _speaking ? _talk.value * 0.02 : 0.0;
+        return Transform.translate(
+          offset: Offset(0, -bob - talkBob),
+          child: Transform.rotate(
+            angle: tilt,
+            child: Transform(
+              alignment: Alignment.bottomCenter,
+              transform: Matrix4.diagonal3Values(
+                scale * (1 + talkSquash * 0.5),
+                scale * breathe * (1 - talkSquash),
+                1,
               ),
-            );
-          },
-          child: SizedBox(
-            height: 210,
-            child: Image.asset(
+              child: child,
+            ),
+          ),
+        );
+      },
+      child: SizedBox(
+        height: 200,
+        child: Stack(
+          alignment: Alignment.topCenter,
+          children: [
+            Image.asset(
               'assets/images/host/host-stage.png',
               fit: BoxFit.contain,
               filterQuality: FilterQuality.medium,
@@ -752,30 +847,29 @@ class _HostCentreState extends State<_HostCentre>
                 size: 120,
               ),
             ),
-          ),
-        ),
-        // Gold "GUY SMILEY" nameplate.
-        Transform.translate(
-          offset: const Offset(0, -6),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 6),
-            decoration: BoxDecoration(
-              color: AppColors.gold,
-              borderRadius: BorderRadius.circular(10),
-              boxShadow: AppColors.tileShadow,
-            ),
-            child: Text(
-              'GUY SMILEY',
-              style: AppText.body.copyWith(
-                color: AppColors.deepPurpleDark,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 2,
-                fontSize: 16,
+            if (_speaking)
+              Positioned(
+                top: 18,
+                child: Opacity(
+                  opacity: (0.35 + 0.35 * _talk.value).clamp(0.0, 1.0),
+                  child: Container(
+                    width: 70,
+                    height: 70,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [
+                          AppColors.goldLight.withValues(alpha: 0.30),
+                          AppColors.goldLight.withValues(alpha: 0.0),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               ),
-            ),
-          ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }
@@ -814,9 +908,13 @@ class _SpeechBubble extends StatelessWidget {
               message,
               key: ValueKey<String>(message),
               textAlign: TextAlign.center,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
               style: AppText.body.copyWith(
                 color: AppColors.deepPurple,
                 fontWeight: FontWeight.w700,
+                fontSize: 16,
+                height: 1.25,
               ),
             ),
           ),

@@ -36,6 +36,24 @@ class CharacterService {
       await _client
           .from('characters')
           .upsert(character.toMap(profileId), onConflict: 'profile_id');
+      // Keep the account's name in step with the character's name. Seats in the
+      // lobby and the in-game roster are labelled from `profiles.first_name`
+      // (the server copies it into each `game_players` row), so syncing it here
+      // is what makes a player show up as e.g. "As" instead of the auto-created
+      // quick-test handle like "Tester 6499". Best-effort: a failure here never
+      // blocks saving the character itself.
+      final name = character.displayName.trim();
+      if (name.isNotEmpty) {
+        try {
+          await _client
+              .from('profiles')
+              .update({'first_name': name}).eq('id', profileId);
+        } on PostgrestException catch (e) {
+          debugPrint(
+            '[CharacterService] first_name sync failed: ${e.code} ${e.message}',
+          );
+        }
+      }
     } on PostgrestException catch (e) {
       debugPrint(
         '[CharacterService] saveCharacter failed: ${e.code} ${e.message} '

@@ -7,9 +7,21 @@ Run from the app/ directory:  python3 tools/import_character_art.py
 import os
 import shutil
 
+from PIL import Image
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # app/
 SRC = os.path.join(ROOT, "assets", "images", "All (1)")
 DST = os.path.join(ROOT, "assets", "images", "character")
+
+# Per-asset vertical nudges (destination id -> pixels to move UP on the 1254
+# canvas). A few source garments are drawn a little lower than the rest, so
+# their collar/shoulders leave the body's shoulders bare. Nudging them up aligns
+# them with the other outfits. Applied after copying so re-imports stay fixed.
+NUDGE_UP = {
+    # The navy blazer sits ~38px lower than the other male outfits, exposing the
+    # shoulders; lift it so the collar meets the neck like the rest.
+    "outfit-m4": 38,
+}
 
 # (source-relative-path, destination folder, destination id)
 MAP = [
@@ -83,6 +95,13 @@ def main():
             continue
         shutil.copyfile(src, dst)
         copied += 1
+        dy = NUDGE_UP.get(dst_id)
+        if dy:
+            img = Image.open(dst).convert("RGBA")
+            out = Image.new("RGBA", img.size, (0, 0, 0, 0))
+            out.alpha_composite(img, (0, -dy))
+            out.save(dst)
+            print(f"  nudged {dst_id} up {dy}px to cover the shoulders")
     print(f"copied {copied} files")
     if missing:
         print("MISSING sources:")
