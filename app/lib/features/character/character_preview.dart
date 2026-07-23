@@ -30,6 +30,7 @@ class CharacterPreview extends StatelessWidget {
     this.size = 260,
     this.showBackdrop = true,
     this.pose,
+    this.mouthOpen = 0,
   });
 
   final Character character;
@@ -40,6 +41,9 @@ class CharacterPreview extends StatelessWidget {
 
   /// Optional named idle pose — swaps only the base body layer.
   final CharacterPose? pose;
+
+  /// Lipsync amplitude 0..1 — overlays a mouth sprite on the face.
+  final double mouthOpen;
 
   /// The layers to paint, back to front. Earrings sit above hair so they show,
   /// glasses above the face, the hat above the hair, and a held item in front.
@@ -66,9 +70,18 @@ class CharacterPreview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final layers = <Widget>[];
+    final wearingHat =
+        character.hat != null && character.hat!.trim().isNotEmpty;
+    final talkPose = CharacterPose.talkFromAmplitude(mouthOpen);
+    final effectivePose = talkPose ?? pose;
+
     for (final layer in _paintOrder) {
-      if (layer == CharacterLayer.base && pose != null) {
-        final posePath = poseAssetPath(character.base, pose!);
+      // Hats aren't authored to sit over voluminous hair — skip hair when
+      // hatted so crown/brim don't float above a second hair dome.
+      if (layer == CharacterLayer.hair && wearingHat) continue;
+
+      if (layer == CharacterLayer.base && effectivePose != null) {
+        final posePath = poseAssetPath(character.base, effectivePose);
         if (posePath != null) {
           layers.add(
             Image.asset(
@@ -76,7 +89,18 @@ class CharacterPreview extends StatelessWidget {
               fit: BoxFit.contain,
               gaplessPlayback: true,
               filterQuality: FilterQuality.medium,
-              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+              errorBuilder: (_, __, ___) {
+                final id = character.base;
+                if (id == null) return const SizedBox.shrink();
+                final option = CharacterCatalog.find(CharacterLayer.base, id);
+                if (option == null) return const SizedBox.shrink();
+                return Image.asset(
+                  option.assetPath,
+                  fit: BoxFit.contain,
+                  gaplessPlayback: true,
+                  filterQuality: FilterQuality.medium,
+                );
+              },
             ),
           );
           continue;
@@ -86,15 +110,37 @@ class CharacterPreview extends StatelessWidget {
       if (id == null) continue;
       final option = CharacterCatalog.find(layer, id);
       if (option == null) continue;
-      layers.add(
-        Image.asset(
-          option.assetPath,
-          fit: BoxFit.contain,
-          gaplessPlayback: true,
-          filterQuality: FilterQuality.medium,
-          errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+      Widget image = Image.asset(
+        option.assetPath,
+        fit: BoxFit.contain,
+        gaplessPlayback: true,
+        filterQuality: FilterQuality.medium,
+        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+      );
+      // Pull hats down onto the crown so they don't float above the skull.
+      if (layer == CharacterLayer.hat) {
+        image = Transform.translate(
+          offset: Offset(0, size * 0.012),
+          child: image,
+        );
+      }
+      layers.add(image);
+    }
+
+    // Soft skin bridge under the chin so outfit collars never flash a hole
+    // (the grey diamond neck artifact on the studio bust).
+    if (character.base != null) {
+      final bridge = CustomPaint(
+        size: Size(size, size),
+        painter: _NeckBridgePainter(
+          female: character.base == 'body-female',
         ),
       );
+      // Insert after base (index 0 or 1 if backdrop shadow…) — layers start
+      // with base as first character layer; put bridge right after first layer.
+      if (layers.isNotEmpty) {
+        layers.insert(1, bridge);
+      }
     }
 
     final stage = SizedBox(
@@ -104,7 +150,7 @@ class CharacterPreview extends StatelessWidget {
         fit: StackFit.expand,
         children: [
           if (showBackdrop) const _StageBackdrop(),
-          _FloorShadow(size: size),
+          if (showBackdrop) _FloorShadow(size: size),
           if (character.base == null)
             _EmptyFigure(size: size)
           else
@@ -241,6 +287,40 @@ class CharacterPartThumb extends StatelessWidget {
 // ---------------------------------------------------------------------------
 // Backdrop + grounding
 // ---------------------------------------------------------------------------
+
+/// Soft skin oval under the chin so open collars never show a hole / diamond.
+class _NeckBridgePainter extends CustomPainter {
+  _NeckBridgePainter({required this.female});
+  final bool female;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final skin = female
+        ? const Color(0xFFF6C49A)
+        : const Color(0xFFF9C28B);
+    final w = size.width;
+    final h = size.height;
+    // Chin ~ y 360/1254 ≈ 0.287; shoulders ~ 0.375 — fill that band.
+    final rect = Rect.fromCenter(
+      center: Offset(w * 0.5, h * 0.325),
+      width: w * 0.18,
+      height: h * 0.085,
+    );
+    final paint = Paint()
+      ..color = skin
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, w * 0.012);
+    canvas.drawOval(rect, paint);
+    // Slightly denser core so thin collar gaps stay filled.
+    canvas.drawOval(
+      rect.deflate(w * 0.02),
+      Paint()..color = skin.withValues(alpha: 0.95),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _NeckBridgePainter oldDelegate) =>
+      oldDelegate.female != female;
+}
 
 class _StageBackdrop extends StatelessWidget {
   const _StageBackdrop();

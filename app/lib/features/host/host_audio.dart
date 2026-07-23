@@ -1,4 +1,4 @@
-/// Match Word — host + audio cue model (Milestone 6).
+/// Match Word — host + audio cue model.
 ///
 /// This is a **pure Dart** mapping layer with no Flutter or plugin dependency,
 /// so the "which sound plays when" logic can be unit-tested in isolation. The
@@ -9,7 +9,8 @@
 /// royalty-free — see `tools/generate_audio_cues.py`) and, optionally, a Guy
 /// Smiley **voice** line. Voice-over clips are a pure drop-in by filename (see
 /// `assets/audio/voice/README.md`); until one is present it simply no-ops while
-/// the on-screen speech bubble and the effect sound still play.
+/// the host lipsync animation (envelope-driven mouth overlay) and the effect
+/// sound still play.
 library;
 
 import '../game/game_engine.dart';
@@ -99,16 +100,19 @@ class HostAudio {
         );
       case SoundCue.correct:
         return const CueSounds(
-          effects: ['$_sfx/correct.mp3', '$_sfx/cheer.mp3'],
+          effects: ['$_sfx/ding.mp3', '$_sfx/correct.mp3', '$_sfx/cheer.mp3'],
           voice: '$_vox/nice_guess.mp3',
         );
       case SoundCue.steal:
         return const CueSounds(
-          effects: ['$_sfx/steal.mp3'],
+          effects: ['$_sfx/buzzer.mp3', '$_sfx/steal.mp3'],
           voice: '$_vox/good_try.mp3',
         );
       case SoundCue.reveal:
-        return const CueSounds(effects: ['$_sfx/reveal.mp3']);
+        return const CueSounds(
+          effects: ['$_sfx/reveal.mp3'],
+          voice: '$_vox/word_revealed.mp3',
+        );
       case SoundCue.halftime:
         return const CueSounds(
           effects: ['$_sfx/halftime.mp3'],
@@ -155,17 +159,23 @@ class HostAudio {
       return cues;
     }
 
-    // Word outcomes — a correct guess or a reveal.
+    // Word outcomes — a correct guess, a miss/steal, or a reveal.
     if (next.lastOutcome == WordOutcome.guessed &&
         prev.lastOutcome != WordOutcome.guessed) {
       cues.add(SoundCue.correct);
+    } else if (next.lastOutcome == WordOutcome.wrong &&
+        prev.lastOutcome != WordOutcome.wrong) {
+      cues.add(SoundCue.steal);
     } else if (next.lastOutcome == WordOutcome.revealed &&
         prev.lastOutcome != WordOutcome.revealed) {
       cues.add(SoundCue.reveal);
     }
 
     // A steal — control passed to the other team on a wrong guess (still live).
-    final stole = next.step == TurnStep.awaitingClue &&
+    // Prefer the lastOutcome cue above; keep this as a fallback when the server
+    // clears last_outcome before the client sees 'wrong'.
+    final stole = next.lastOutcome != WordOutcome.wrong &&
+        next.step == TurnStep.awaitingClue &&
         !next.isResolved &&
         (next.phase == GamePhase.firstHalf ||
             next.phase == GamePhase.secondHalf) &&

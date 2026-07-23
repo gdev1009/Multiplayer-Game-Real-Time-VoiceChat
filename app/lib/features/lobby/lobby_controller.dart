@@ -19,7 +19,7 @@ class LobbyController extends ChangeNotifier {
   /// studio (AI) players fill the empty seats. This is the adjustable "dial" —
   /// raise it to give real matches more of a chance, lower it to start sooner.
   /// Set to [Duration.zero] to fill immediately (no wait).
-  static Duration quickMatchFillDelay = const Duration(seconds: 8);
+  static Duration quickMatchFillDelay = const Duration(seconds: 90);
 
   // ---- Current room ---------------------------------------------------------
   Game? _game;

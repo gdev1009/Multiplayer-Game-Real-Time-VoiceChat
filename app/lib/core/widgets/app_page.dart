@@ -12,6 +12,9 @@ class AppPage extends StatelessWidget {
     this.showBack = false,
     this.onBack,
     this.actions,
+    this.compactAppBar = false,
+    this.studioFocus = false,
+    this.actionsOnlyBar = false,
   });
 
   final Widget child;
@@ -22,14 +25,35 @@ class AppPage extends StatelessWidget {
   /// Optional app-bar action widgets (e.g. the sound button).
   final List<Widget>? actions;
 
+  /// A shorter app bar so more vertical space goes to the game studio.
+  final bool compactAppBar;
+
+  /// When true the body fills the screen without an app bar or scroll padding —
+  /// used on the live play screen so the studio dominates the layout.
+  final bool studioFocus;
+
+  /// Thin app bar with no title — only [actions] (e.g. sound button).
+  final bool actionsOnlyBar;
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
-      appBar: title == null
+      // Opaque so a disposed play route can never show through Home.
+      backgroundColor: AppColors.deepPurpleDark,
+      appBar: (studioFocus ||
+              (title == null && !(actionsOnlyBar && actions != null)))
           ? null
           : AppBar(
-              title: Text(title!),
+              title: actionsOnlyBar
+                  ? const SizedBox.shrink()
+                  : Text(title!),
+              toolbarHeight: (compactAppBar || actionsOnlyBar) ? 36 : null,
+              titleTextStyle: compactAppBar
+                  ? Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                      )
+                  : null,
               automaticallyImplyLeading: showBack,
               actions: actions,
               flexibleSpace: const DecoratedBox(
@@ -37,26 +61,49 @@ class AppPage extends StatelessWidget {
               ),
               leading: showBack
                   ? IconButton(
-                      icon: const Icon(Icons.arrow_back, size: 30),
+                      icon: Icon(Icons.arrow_back, size: compactAppBar ? 26 : 30),
                       tooltip: 'Go back',
-                      onPressed: onBack ?? () => Navigator.of(context).maybePop(),
+                      onPressed:
+                          onBack ?? () => Navigator.of(context).maybePop(),
                     )
                   : null,
             ),
       body: Container(
-        decoration: const BoxDecoration(gradient: AppColors.pageGradient),
+        decoration: BoxDecoration(
+          gradient: studioFocus
+              ? const LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color(0xFF2A1548),
+                    AppColors.deepPurpleDark,
+                    Color(0xFF4A2578),
+                  ],
+                )
+              : AppColors.pageGradient,
+        ),
         child: SafeArea(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              return SingleChildScrollView(
-                padding: const EdgeInsets.all(AppSpacing.pagePadding),
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                  child: IntrinsicHeight(child: child),
+          // Studio is full-bleed; only keep the home-indicator inset.
+          top: false,
+          bottom: !studioFocus ? true : true,
+          minimum: EdgeInsets.zero,
+          child: studioFocus
+              ? Padding(
+                  padding: const EdgeInsets.fromLTRB(0, 2, 0, 2),
+                  child: child,
+                )
+              : LayoutBuilder(
+                  builder: (context, constraints) {
+                    return SingleChildScrollView(
+                      padding: const EdgeInsets.all(AppSpacing.pagePadding),
+                      child: ConstrainedBox(
+                        constraints:
+                            BoxConstraints(minHeight: constraints.maxHeight),
+                        child: IntrinsicHeight(child: child),
+                      ),
+                    );
+                  },
                 ),
-              );
-            },
-          ),
         ),
       ),
     );

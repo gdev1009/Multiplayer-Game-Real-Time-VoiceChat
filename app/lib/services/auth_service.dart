@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:math';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -37,16 +36,7 @@ class EmailSignInResult {
   final String? name;
 }
 
-/// Coordinates the whole Sign In & Account System (Milestone 1).
-///
-/// Login model (per spec):
-///  - Account creation (once): first name + email + 4-digit PIN.
-///  - Daily login: first name + 4-digit PIN.
-///  - The email lives in Supabase Auth for recovery only and is never shown.
-///
-/// Under the hood, each account uses Supabase email/password auth. The PIN is
-/// the local gate; a strong random password backs the Supabase session and is
-/// stored in secure storage so the device can re-authenticate silently.
+/// Sign-in and account flows for Match Word.
 class AuthService {
   AuthService({
     required SupabaseClient client,
@@ -63,10 +53,6 @@ class AuthService {
   static const _kName = 'mw_remembered_name';
   static const _kEmail = 'mw_account_email';
   static const _kPassword = 'mw_account_password';
-  static const _kQuickTestName = 'Tester';
-  static const _kQuickTestPin = '1234';
-  static const _kQuickTestPassword = 'MatchWord-Test-Only-2026!';
-
   final SupabaseClient _client;
   final DeviceService _device;
   final ProfileService _profiles;
@@ -175,111 +161,6 @@ class AuthService {
     if (profile == null) {
       throw const AuthFailure('We could not load your account. Please retry.');
     }
-    return profile;
-  }
-
-  /// One-tap testing path for Milestones 2/3/4.
-  ///
-  /// Creates or signs in a deterministic per-device test account and returns a
-  /// valid signed-in [Profile] without asking the tester to go through the
-  /// full production auth flow. This is intended for APK testing only.
-  Future<Profile> quickTestSignIn() async {
-    final deviceId = await _device.deviceId();
-    final email = _quickTestEmail(deviceId);
-
-    try {
-      await _client.auth.signInWithPassword(
-        email: email,
-        password: _kQuickTestPassword,
-      );
-    } on AuthException {
-      final AuthResponse res;
-      try {
-        res = await _client.auth.signUp(
-          email: email,
-          password: _kQuickTestPassword,
-        );
-      } on AuthException {
-        throw const AuthFailure(
-          'We could not start the test account. Please try again.',
-        );
-      }
-
-      if (_client.auth.currentUser == null && res.user != null) {
-        try {
-          await _client.auth.signInWithPassword(
-            email: email,
-            password: _kQuickTestPassword,
-          );
-        } on AuthException catch (e) {
-          debugPrint('[AuthService] quick-test sign-in failed: ${e.message}');
-          // The most common cause is that "Confirm email" is still ON in the
-          // Supabase dashboard, so the just-created account has no session yet.
-          throw const AuthFailure(
-            'Quick sign-in needs "Confirm email" turned OFF in Supabase '
-            '(Authentication → Providers → Email). Please turn it off and try '
-            'again.',
-          );
-        }
-      }
-    }
-
-    final user = _client.auth.currentUser;
-    if (user == null) {
-      throw const AuthFailure(
-        'We could not sign in the test account. Please try again.',
-      );
-    }
-
-    var profile = await _profiles.currentProfile();
-    if (profile == null) {
-      final trialUsedBefore = await _trials.hasUsedTrial(deviceId);
-      final grantTrial = !trialUsedBefore;
-      final salt = PinHasher.generateSalt();
-      final hash = PinHasher.hash(_kQuickTestPin, salt);
-
-      try {
-        await _profiles.createProfile(
-          userId: user.id,
-          firstName: _quickTestName(deviceId),
-          deviceId: deviceId,
-          pinHash: hash,
-          pinSalt: salt,
-          grantTrial: grantTrial,
-        );
-      } on PostgrestException catch (e) {
-        debugPrint('[AuthService] quick-test createProfile failed: '
-            '${e.code} ${e.message}');
-        final msg = e.message.toLowerCase();
-        if (e.code == '42P01' || msg.contains('does not exist')) {
-          throw const AuthFailure(
-            'The server database is not fully set up yet. Please apply the '
-            'full schema (supabase/schema.sql) and try again.',
-          );
-        }
-        throw const AuthFailure(
-          'We could not finish creating the test account. Please try again.',
-        );
-      }
-
-      if (grantTrial) {
-        await _trials.recordTrialStart(deviceId);
-      }
-
-      profile = await _profiles.currentProfile();
-    }
-
-    if (profile == null) {
-      throw const AuthFailure(
-        'The test account was created but could not load. Please try again.',
-      );
-    }
-
-    await _remember(
-      name: profile.firstName,
-      email: email,
-      password: _kQuickTestPassword,
-    );
     return profile;
   }
 
@@ -570,29 +451,6 @@ class AuthService {
     final random = Random.secure();
     final bytes = List<int>.generate(24, (_) => random.nextInt(256));
     return 'Mw!${base64Url.encode(bytes)}';
-  }
-
-  String _quickTestEmail(String deviceId) {
-    final slug = deviceId.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').toLowerCase();
-    final short = slug.isEmpty
-        ? 'device'
-        : slug.substring(0, slug.length > 20 ? 20 : slug.length);
-    return 'tester+$short@matchword.local';
-  }
-
-  /// A friendly, stable-per-device name for quick-test players so two devices
-  /// (e.g. an emulator and a phone) don't both show up as "Tester". Derives a
-  /// short 4-digit tag from the device id so the same device always keeps the
-  /// same name.
-  String _quickTestName(String deviceId) {
-    final slug = deviceId.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').toLowerCase();
-    if (slug.isEmpty) return _kQuickTestName;
-    var hash = 0;
-    for (final code in slug.codeUnits) {
-      hash = (hash * 31 + code) & 0x7fffffff;
-    }
-    final tag = (hash % 9000) + 1000; // 1000..9999
-    return '$_kQuickTestName $tag';
   }
 
   String _friendlySignUpError(AuthException e) {

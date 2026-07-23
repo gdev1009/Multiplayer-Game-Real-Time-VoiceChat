@@ -91,17 +91,18 @@ which calls Mailgun's REST API with the API key.
    - `MAILGUN_DOMAIN` — your verified sending domain (e.g. `mg.grandmamac.com`)
    - `MAILGUN_BASE_URL` — `https://api.mailgun.net` (or `https://api.eu.mailgun.net` for EU)
    - `MAILGUN_SENDER` — e.g. `Match Word <no-reply@mg.grandmamac.com>`
-   - `SEND_EMAIL_HOOK_SECRET` — generate with `openssl rand -base64 48`, prefixed
-     as `v1,whsec_<value>`
+   - `SEND_EMAIL_HOOK_SECRET` — create the Supabase Send Email HTTPS hook,
+     click **Generate Secret**, and copy the full `v1,whsec_...` value
 2. Push the secrets and deploy the function:
    ```bash
    cd app
    supabase secrets set --env-file ./supabase/functions/.env
    supabase functions deploy send-email --no-verify-jwt
    ```
-3. In Supabase go to **Authentication -> Hooks -> Send Email**, enable it, point
-   it at the deployed `send-email` function, and paste the **same**
-   `SEND_EMAIL_HOOK_SECRET` value.
+3. In Supabase go to **Authentication → Hooks**, create a **Send Email** HTTPS
+   hook, point it at the deployed `send-email` function, and click **Generate
+   Secret**. Save the hook, put the generated value in
+   `supabase/functions/.env`, and run the secrets command again.
 4. In **Authentication -> Providers -> Email**: keep **Enable email provider** ON,
    **Allow new users to sign up** = ON, **Confirm email** = OFF.
 

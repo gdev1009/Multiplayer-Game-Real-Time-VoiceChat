@@ -13,7 +13,7 @@ class FriendFailure implements Exception {
   String toString() => message;
 }
 
-/// Server-authoritative friend + invite operations for Milestone 7.
+/// Server-authoritative friend and invite operations.
 ///
 /// Mirrors [LobbyService]: every mutation calls a `SECURITY DEFINER` Postgres
 /// function (see `supabase/migrations/0014_friends.sql`); the client never

@@ -1,144 +1,694 @@
-import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text.dart';
 import '../../models/character.dart';
-import '../character/character_preview.dart';
+import '../../services/audio_controller.dart';
+import '../character/idle_character_preview.dart';
 import '../game/game_engine.dart';
+import 'host_actions.dart';
 
-/// The Milestone 6 "game-show studio" stage.
-///
-/// Renders the live match the way the concept mockup shows it: a deep-purple
-/// set lit by soft spotlights, a gold-framed scoreboard and the current word
-/// tile up top, two team podiums with the players' character busts, and a
-/// full-body Guy Smiley centre-stage holding his microphone with a speech
-/// bubble and gold nameplate below him.
-///
-/// It is a pure presentation widget driven entirely by [state]; all inputs,
-/// buttons and audio live around it in `play_screen.dart`.
+// ─── Stage art (reference: Studio Pass concept) ─────────────────────────────
+
+const _kBg = 'assets/images/Studio_background.png';
+const _kSeatOn = 'assets/images/Seat_on.png';
+const _kSeatOff = 'assets/images/Seat_off.png';
+
+const _kBgW = 1024.0;
+const _kBgH = 1535.0;
+const _kSeatAspect = 558 / 447; // Seat_on height / width
+const _kHostAspect = 880 / 1348; // host-stage width / height
+
+/// Stage play-rectangle: below MATCH WORD, above the dock. Seats fill it in
+/// two rows (Sunny/Rosa top, Walter/Mabel bottom); host fills the centre.
+class _RefLayout {
+  const _RefLayout._();
+
+  // Play rectangle — matches match-word-studio-updated.png proportions.
+  static const rectTop = 0.318; // just under WORD letters
+  static const dockZone = 0.118;
+  static const rowGap = 0.012; // gap between upper & lower seat rows
+
+  // Horizontal: seats flank the host without swallowing the aisle.
+  static const seatOverhang = 0.045;
+  static const maxSeatWidth = 0.50;
+
+  // Host — dominant centre figure; slight right nudge so A1 clears his shoulder.
+  static const hostWidth = 0.50;
+  static const hostShiftX = 0.018;
+
+  // Seat PNG interior — avatar fills the blue chair back above the nameplate.
+  static const avatarBottom = 0.36;
+  // Active (Seat_on) gold fill — keep text inside the yellow (fitWidth overflowed).
+  static const nameplateTopOn = 0.628;
+  static const nameplateHeightOn = 0.058;
+  static const nameplateInsetXOn = 0.255;
+  // Inactive (Seat_off) dark title fill.
+  static const nameplateTopOff = 0.580;
+  static const nameplateHeightOff = 0.095;
+  static const nameplateInsetXOff = 0.150;
+
+  // Intrinsic seat art sizes (on/off canvases differ — keep overlays in art space).
+  static const seatOnW = 447.0;
+  static const seatOnH = 558.0;
+  static const seatOffW = 454.0;
+  static const seatOffH = 550.0;
+}
+
+double _clamp(double v, double min, double max) => v.clamp(min, max).toDouble();
+
+/// Seat + host metrics packed into the play rectangle.
+class _StageMetrics {
+  const _StageMetrics({
+    required this.seatW,
+    required this.seatH,
+    required this.upperTop,
+    required this.lowerTop,
+    required this.aLeft,
+    required this.bLeft,
+    required this.hostW,
+    required this.hostH,
+    required this.hostLeft,
+    required this.hostTop,
+  });
+
+  final double seatW;
+  final double seatH;
+  final double upperTop;
+  final double lowerTop;
+  final double aLeft;
+  final double bLeft;
+  final double hostW;
+  final double hostH;
+  final double hostLeft;
+  final double hostTop;
+
+  static _StageMetrics compute(double w, double h, {double bottomInset = 0}) {
+    final dockReserve =
+        bottomInset > 0 ? bottomInset + 6 : h * _RefLayout.dockZone;
+    final rectTop = h * _RefLayout.rectTop;
+    final rectBottom = h - dockReserve;
+    final rectH = math.max(120.0, rectBottom - rectTop);
+    final gap = h * _RefLayout.rowGap;
+
+    // Largest seat that fits two rows in the rectangle.
+    var seatH = (rectH - gap) / 2;
+    var seatW = seatH / _kSeatAspect;
+    final maxW = w * _RefLayout.maxSeatWidth;
+    if (seatW > maxW) {
+      seatW = maxW;
+      seatH = seatW * _kSeatAspect;
+    }
+
+    final upperTop = rectTop;
+    final lowerTop = rectBottom - seatH;
+    final oh = w * _RefLayout.seatOverhang;
+    final aLeft = -oh;
+    final bLeft = w - seatW + oh;
+
+    // Host stands on the stage floor between the pods (ref screenshot).
+    var hostH = rectH * 0.78;
+    var hostW = hostH * _kHostAspect;
+    final maxHostW = _clamp(w * _RefLayout.hostWidth, 200.0, 360.0);
+    if (hostW > maxHostW) {
+      hostW = maxHostW;
+      hostH = hostW / _kHostAspect;
+    }
+    final hostLeft = (w - hostW) / 2 + w * _RefLayout.hostShiftX;
+    // Feet land near the lower-seat platform line.
+    final hostTop = (lowerTop + seatH * 0.62 - hostH)
+        .clamp(rectTop - hostH * 0.04, rectBottom - hostH * 0.85)
+        .toDouble();
+
+    return _StageMetrics(
+      seatW: seatW,
+      seatH: seatH,
+      upperTop: upperTop,
+      lowerTop: lowerTop,
+      aLeft: aLeft,
+      bLeft: bLeft,
+      hostW: hostW,
+      hostH: hostH,
+      hostLeft: hostLeft,
+      hostTop: hostTop,
+    );
+  }
+}
+
+/// Computed stage geometry for overlaying play UI under seat columns.
+class StudioStageGeometry {
+  const StudioStageGeometry({
+    required this.seatA1,
+    required this.seatB1,
+    required this.seatA2,
+    required this.seatB2,
+    required this.scoreA,
+    required this.scoreB,
+  });
+
+  final Rect seatA1;
+  final Rect seatB1;
+  final Rect seatA2;
+  final Rect seatB2;
+  final Rect scoreA;
+  final Rect scoreB;
+
+  static StudioStageGeometry compute(Size size, {double bottomInset = 0}) {
+    final w = size.width;
+    final h = size.height;
+    final m = _StageMetrics.compute(w, h, bottomInset: bottomInset);
+
+    Rect bgRect(double ix, double iy, double iw, double ih) {
+      final fittedW = h * (_kBgW / _kBgH);
+      final cropL = (fittedW - w) / 2;
+      return Rect.fromLTWH(
+        ix * fittedW - cropL,
+        iy * h,
+        iw * fittedW,
+        ih * h,
+      );
+    }
+
+    return StudioStageGeometry(
+      seatA1: Rect.fromLTWH(m.aLeft, m.upperTop, m.seatW, m.seatH),
+      seatB1: Rect.fromLTWH(m.bLeft, m.upperTop, m.seatW, m.seatH),
+      seatA2: Rect.fromLTWH(m.aLeft, m.lowerTop, m.seatW, m.seatH),
+      seatB2: Rect.fromLTWH(m.bLeft, m.lowerTop, m.seatW, m.seatH),
+      scoreA: bgRect(0.292, 0.108, 0.136, 0.044),
+      scoreB: bgRect(0.570, 0.108, 0.136, 0.044),
+    );
+  }
+}
+
+/// Live game-show stage built from [Studio_background] + four [Seat_on]/[Seat_off]
+/// podiums, dynamic contestant avatars, and the animated host.
 class StudioStage extends StatelessWidget {
   const StudioStage({
     super.key,
     required this.state,
     this.viewerRole,
     this.charactersByRole = const {},
+    this.bottomInset = 0,
+    this.showScoreboards = false,
   });
 
   final MatchState state;
-
-  /// The role (A1/A2/B1/B2) of the player looking at this device, or null for a
-  /// single-device / demo game. Used so the secret word is only ever revealed
-  /// on the clue-giver's own screen — never on the guesser's device.
   final String? viewerRole;
-
-  /// Each seat role's character (the player's saved character, or a generated
-  /// look for a computer seat). Empty falls back to a generic clay bust.
   final Map<String, Character> charactersByRole;
+  final double bottomInset;
+  final bool showScoreboards;
+
+  /// Map a normalised rect on Studio_background into screen space under
+  /// [BoxFit.cover] + [Alignment.topCenter].
+  static Rect _bgRect(
+    double width,
+    double height,
+    double ix,
+    double iy,
+    double iw,
+    double ih,
+  ) {
+    final fittedW = height * (_kBgW / _kBgH);
+    final cropL = (fittedW - width) / 2;
+    return Rect.fromLTWH(
+      ix * fittedW - cropL,
+      iy * height,
+      iw * fittedW,
+      ih * height,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    // The stage is composed at a fixed design canvas and then scaled to fit any
-    // width with a FittedBox. That way the layout (podiums, host, scoreboard)
-    // keeps the exact same proportions on a small phone as on a wide tablet, so
-    // the host can never overlap the podiums the way it did when the children
-    // used raw pixel offsets against a shrinking phone-width stage.
-    const designW = 400.0;
-    const designH = designW * 4 / 3; // portrait TV frame (3:4)
-    return AspectRatio(
-      aspectRatio: 3 / 4,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(24),
-        child: FittedBox(
-          fit: BoxFit.cover,
-          child: SizedBox(
-            width: designW,
-            height: designH,
-            child: DecoratedBox(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    AppColors.deepPurpleDark,
-                    AppColors.deepPurple,
-                    Color(0xFF4A2578),
-                  ],
+    return ColoredBox(
+      color: const Color(0xFF0C071C),
+      child: LayoutBuilder(
+        builder: (context, box) {
+          final w = box.maxWidth;
+          final h = box.maxHeight;
+          final m = _StageMetrics.compute(w, h, bottomInset: bottomInset);
+
+          final upperW = m.seatW;
+          final upperH = m.seatH;
+          final upperTop = m.upperTop;
+          final lowerW = m.seatW;
+          final lowerH = m.seatH;
+          final lowerTop = m.lowerTop;
+          final aLeft = m.aLeft;
+          final bLeft = m.bLeft;
+          final a2Left = m.aLeft;
+          final b2Left = m.bLeft;
+          final hostW = m.hostW;
+          final hostH = m.hostH;
+          final hostLeft = m.hostLeft;
+          final hostTop = m.hostTop;
+
+          // Baked scoreboard dark interiors on Studio_background.
+          final scoreA = _bgRect(w, h, 0.292, 0.108, 0.136, 0.044);
+          final scoreB = _bgRect(w, h, 0.570, 0.108, 0.136, 0.044);
+
+          Widget seatPod({
+            required String role,
+            required bool foreground,
+            required double left,
+            required double top,
+            required double seatW,
+            required double seatH,
+          }) {
+            return Positioned(
+              left: left,
+              top: top,
+              width: seatW,
+              height: seatH,
+              child: IgnorePointer(
+                child: _SeatPod(
+                  state: state,
+                  role: role,
+                  width: seatW,
+                  height: seatH,
+                  character: charactersByRole[role],
+                  foreground: foreground,
                 ),
               ),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  // Spotlights + studio floor behind everything.
-                  const Positioned.fill(child: _StudioBackdrop()),
+            );
+          }
 
-                  // Scoreboard + word tile pinned to the top.
-                  Positioned(
-                    top: 12,
-                    left: 12,
-                    right: 12,
-                    child: Column(
-                      children: [
-                        _Scoreboard(state: state),
-                        const SizedBox(height: 8),
-                        _WordTile(state: state, viewerRole: viewerRole),
-                      ],
-                    ),
+          return Stack(
+            fit: StackFit.expand,
+            clipBehavior: Clip.none,
+            children: [
+              // 1. Full background — curtains, arch, MATCH WORD, floor.
+              const Positioned.fill(
+                child: Image(
+                  image: AssetImage(_kBg),
+                  fit: BoxFit.cover,
+                  alignment: Alignment.topCenter,
+                  filterQuality: FilterQuality.high,
+                ),
+              ),
+
+              // 2–3. Upper row (behind host).
+              seatPod(
+                role: 'A1',
+                foreground: false,
+                left: aLeft,
+                top: upperTop,
+                seatW: upperW,
+                seatH: upperH,
+              ),
+              seatPod(
+                role: 'B1',
+                foreground: false,
+                left: bLeft,
+                top: upperTop,
+                seatW: upperW,
+                seatH: upperH,
+              ),
+
+              // 4. Host (dynamic — not part of the three stage PNGs).
+              Positioned(
+                left: hostLeft,
+                top: hostTop,
+                width: hostW,
+                height: hostH,
+                child: ExcludeFocus(
+                  child: _HostCentre(
+                    state: state,
+                    maxWidth: hostW,
+                    maxHeight: hostH,
                   ),
+                ),
+              ),
 
-                  // Host caption sits low in the clear centre column — above the
-                  // host's head, well below the word tile, and narrow enough to
-                  // stay between the two podiums so it never covers a player.
-                  // Halftime / game-over copy already lives in the panels below
-                  // the stage, so keep the bubble for active play turns only.
-                  if (state.isTurnActive || state.isResolved)
+              // 5–6. Lower row — Walter under Sunny, Mabel under Rosa.
+              seatPod(
+                role: 'A2',
+                foreground: true,
+                left: a2Left,
+                top: lowerTop,
+                seatW: lowerW,
+                seatH: lowerH,
+              ),
+              seatPod(
+                role: 'B2',
+                foreground: true,
+                left: b2Left,
+                top: lowerTop,
+                seatW: lowerW,
+                seatH: lowerH,
+              ),
+
+              // 7. Team scores in the baked top rectangles.
+              if (showScoreboards) ...[
+                Positioned.fromRect(
+                  rect: scoreA,
+                  child: _Scoreboard(
+                    value: state.scoreA,
+                    boardWidth: scoreA.width,
+                    boardHeight: scoreA.height,
+                  ),
+                ),
+                Positioned.fromRect(
+                  rect: scoreB,
+                  child: _Scoreboard(
+                    value: state.scoreB,
+                    boardWidth: scoreB.width,
+                    boardHeight: scoreB.height,
+                  ),
+                ),
+              ],
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+// ─── Score digits (frames baked into Studio_background) ─────────────────────
+
+class _Scoreboard extends StatelessWidget {
+  const _Scoreboard({
+    required this.value,
+    required this.boardWidth,
+    required this.boardHeight,
+  });
+
+  final int value;
+  final double boardWidth;
+  final double boardHeight;
+
+  @override
+  Widget build(BuildContext context) {
+    final digits = value.clamp(0, 99).toString().padLeft(2, '0');
+    final padH = boardWidth * 0.06;
+    final padV = boardHeight * 0.05;
+    return IgnorePointer(
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: padH, vertical: padV),
+        child: CustomPaint(
+          size: Size(boardWidth - padH * 2, boardHeight - padV * 2),
+          painter: _SevenSegPainter(digits: digits),
+        ),
+      ),
+    );
+  }
+}
+
+class _SevenSegPainter extends CustomPainter {
+  _SevenSegPainter({required this.digits});
+  final String digits;
+
+  static const _map = <String, int>{
+    '0': 0x3F,
+    '1': 0x06,
+    '2': 0x5B,
+    '3': 0x4F,
+    '4': 0x66,
+    '5': 0x6D,
+    '6': 0x7D,
+    '7': 0x07,
+    '8': 0x7F,
+    '9': 0x6F,
+  };
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final n = digits.length;
+    final gap = size.width * 0.10;
+    final digitH = size.height * 0.96;
+    final digitW = math.min(
+      (size.width - gap * (n - 1).clamp(0, 8)) / n,
+      digitH * 0.62,
+    );
+    final top = (size.height - digitH) / 2;
+    var x = (size.width - (digitW * n + gap * (n - 1))) / 2;
+    for (final ch in digits.split('')) {
+      _paintDigit(
+        canvas,
+        Rect.fromLTWH(x, top, digitW, digitH),
+        _map[ch] ?? 0x3F,
+      );
+      x += digitW + gap;
+    }
+  }
+
+  void _paintDigit(Canvas canvas, Rect box, int bits) {
+    final t = (box.shortestSide * 0.19).clamp(4.0, 13.0);
+    final inset = t * 0.4;
+    final glow = Paint()
+      ..color = const Color(0xFFFFB000).withValues(alpha: 0.75)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4.5);
+    final lit = Paint()..color = const Color(0xFFFFF1A0);
+    final dim = Paint()..color = const Color(0x55FFE566);
+
+    Path horiz(double y) {
+      final left = box.left + inset;
+      final right = box.right - inset;
+      return Path()
+        ..moveTo(left + t * 0.55, y)
+        ..lineTo(left + t, y - t * 0.45)
+        ..lineTo(right - t, y - t * 0.45)
+        ..lineTo(right - t * 0.55, y)
+        ..lineTo(right - t, y + t * 0.45)
+        ..lineTo(left + t, y + t * 0.45)
+        ..close();
+    }
+
+    Path vert(double x, double y0, double y1) {
+      return Path()
+        ..moveTo(x, y0 + t * 0.55)
+        ..lineTo(x - t * 0.45, y0 + t)
+        ..lineTo(x - t * 0.45, y1 - t)
+        ..lineTo(x, y1 - t * 0.55)
+        ..lineTo(x + t * 0.45, y1 - t)
+        ..lineTo(x + t * 0.45, y0 + t)
+        ..close();
+    }
+
+    final segs = <Path>[
+      horiz(box.top + t * 0.55),
+      vert(box.right - t * 0.55, box.top, box.center.dy),
+      vert(box.right - t * 0.55, box.center.dy, box.bottom),
+      horiz(box.bottom - t * 0.55),
+      vert(box.left + t * 0.55, box.center.dy, box.bottom),
+      vert(box.left + t * 0.55, box.top, box.center.dy),
+      horiz(box.center.dy),
+    ];
+
+    for (var i = 0; i < 7; i++) {
+      final on = (bits & (1 << i)) != 0;
+      if (on) {
+        canvas.drawPath(segs[i], glow);
+        canvas.drawPath(segs[i], lit);
+      } else {
+        canvas.drawPath(segs[i], dim);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _SevenSegPainter old) => old.digits != digits;
+}
+
+// ─── Seat pod (Seat_on / Seat_off + avatar + name text) ─────────────────────
+
+class _SeatPod extends StatelessWidget {
+  const _SeatPod({
+    required this.state,
+    required this.role,
+    required this.width,
+    required this.height,
+    this.character,
+    this.foreground = false,
+  });
+
+  final MatchState state;
+  final String role;
+  final double width;
+  final double height;
+  final Character? character;
+  final bool foreground;
+
+  bool get _active {
+    if (!state.isTurnActive) return false;
+    if (state.step == TurnStep.awaitingClue) {
+      return role == state.clueGiverRole;
+    }
+    if (state.step == TurnStep.awaitingGuess) {
+      return role == state.guesserRole;
+    }
+    return false;
+  }
+
+  PlayEntry? get _line {
+    if (state.isResolved || state.isHalftime || state.isOver) return null;
+    // Quiet during the opening welcome — no leftover bubbles on stage.
+    if (state.wordIndex == 0 && state.feed.isEmpty) return null;
+    for (var i = state.feed.length - 1; i >= 0; i--) {
+      final e = state.feed[i];
+      if (e.role != role || e.wordIndex != state.wordIndex) continue;
+      // Hide a stale clue while this seat is composing the next one.
+      if (state.step == TurnStep.awaitingClue &&
+          e.kind == PlayKind.clue &&
+          role == state.clueGiverRole) {
+        return null;
+      }
+      return e;
+    }
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final name = state.names[role] ?? role;
+    final team = role.isNotEmpty ? role[0] : '?';
+    final active = _active;
+    final line = _line;
+
+    final artW = active ? _RefLayout.seatOnW : _RefLayout.seatOffW;
+    final artH = active ? _RefLayout.seatOnH : _RefLayout.seatOffH;
+    final inset = foreground ? 0.10 : 0.12;
+    // Chair-back opening: head/shoulders fill the blue pad above the plate.
+    final avatarTopFrac = foreground ? 0.06 : 0.08;
+    final plateTop = active
+        ? _RefLayout.nameplateTopOn
+        : _RefLayout.nameplateTopOff;
+    final plateH = active
+        ? _RefLayout.nameplateHeightOn
+        : _RefLayout.nameplateHeightOff;
+    final plateInsetX = active
+        ? _RefLayout.nameplateInsetXOn
+        : _RefLayout.nameplateInsetXOff;
+
+    final pod = AnimatedScale(
+      scale: active ? 1.01 : 1.0,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+      alignment: Alignment.bottomCenter,
+      child: SizedBox(
+        width: width,
+        height: height,
+        // Keep overlays in the painted seat-art box (on/off canvases differ).
+        child: Align(
+          alignment: Alignment.bottomCenter,
+          child: AspectRatio(
+            aspectRatio: artW / artH,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final aw = constraints.maxWidth;
+                final ah = constraints.maxHeight;
+                final avatarTop = ah * avatarTopFrac;
+                final avatarBottom = ah * _RefLayout.avatarBottom;
+                return Stack(
+                  clipBehavior: Clip.none,
+                  fit: StackFit.expand,
+                  children: [
+                    Image.asset(
+                      active ? _kSeatOn : _kSeatOff,
+                      fit: BoxFit.fill,
+                      filterQuality: FilterQuality.high,
+                    ),
                     Positioned(
-                      top: 232,
-                      left: 0,
-                      right: 0,
-                      child: Center(
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 172),
-                          child: _SpeechBubble(message: state.hostLine),
+                      left: aw * inset,
+                      right: aw * inset,
+                      top: avatarTop,
+                      bottom: avatarBottom,
+                      child: ClipRect(
+                        child: _PlayerBust(
+                          name: name,
+                          seed: role,
+                          character: character,
+                          width: aw * (1 - inset * 2),
+                          height: ah - avatarTop - avatarBottom,
+                          foreground: foreground,
                         ),
                       ),
                     ),
-
-                  // Host figure centre-stage (no nameplate — the character is
-                  // already obvious). Drawn *behind* the podiums so a tall host
-                  // can't cover the players either.
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: 4,
-                    child: _HostCentre(state: state),
-                  ),
-
-                  // Team podiums last so every player's bust stays fully visible.
-                  Positioned(
-                    left: 6,
-                    bottom: 78,
-                    width: 126,
-                    child: _TeamPodium(
-                      state: state,
-                      team: 'A',
-                      charactersByRole: charactersByRole,
+                    Positioned(
+                      left: aw * plateInsetX,
+                      right: aw * plateInsetX,
+                      top: ah * plateTop,
+                      height: ah * plateH,
+                      child: _NameplateText(
+                        team: team,
+                        name: name,
+                        active: active,
+                      ),
                     ),
-                  ),
-                  Positioned(
-                    right: 6,
-                    bottom: 78,
-                    width: 126,
-                    child: _TeamPodium(
-                      state: state,
-                      team: 'B',
-                      charactersByRole: charactersByRole,
-                    ),
-                  ),
-                ],
-              ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (line == null) return pod;
+
+    // Just under the nameplate (not below the whole pod — that floated onto
+    // the host / other seats / the dock).
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        pod,
+        Positioned(
+          left: width * 0.08,
+          right: width * 0.08,
+          top: height * 0.70,
+          child: Center(
+            child: _PlayerBubble(entry: line),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Text only — plate colour comes from Seat_on / Seat_off artwork.
+class _NameplateText extends StatelessWidget {
+  const _NameplateText({
+    required this.team,
+    required this.name,
+    required this.active,
+  });
+
+  final String team;
+  final String name;
+  final bool active; // plate chrome (gold vs dark)
+
+  @override
+  Widget build(BuildContext context) {
+    // White on gold and dark plates.
+    const color = Color(0xFFFFFFFF);
+    // Fill the seat label without spilling past the gold/dark chrome.
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: active ? 4 : 5,
+        vertical: active ? 2 : 2,
+      ),
+      child: SizedBox.expand(
+        child: FittedBox(
+          fit: BoxFit.contain,
+          alignment: Alignment.center,
+          child: Text(
+            '$team  $name',
+            key: ValueKey<bool>(active),
+            maxLines: 1,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontFamily: 'Roboto',
+              color: color,
+              fontWeight: FontWeight.w900,
+              fontSize: active ? 48 : 44,
+              height: 1.0,
+              letterSpacing: 0.3,
+              shadows: const [],
+              decoration: TextDecoration.none,
             ),
           ),
         ),
@@ -147,345 +697,176 @@ class StudioStage extends StatelessWidget {
   }
 }
 
-/// Soft ceiling spotlights and a pale studio floor disc.
-class _StudioBackdrop extends StatelessWidget {
-  const _StudioBackdrop();
+// ─── Speech bubble ───────────────────────────────────────────────────────────
+
+class _PlayerBubble extends StatelessWidget {
+  const _PlayerBubble({required this.entry});
+
+  final PlayEntry entry;
+
+  static const _tailH = 8.0;
+  static const _radius = 16.0;
 
   @override
   Widget build(BuildContext context) {
-    return CustomPaint(painter: _BackdropPainter());
-  }
-}
+    final correct = entry.correct == true;
+    final wrong = entry.correct == false;
+    final bg = correct
+        ? const Color(0xFFC8E6C9)
+        : wrong
+            ? const Color(0xFFFFCDD2)
+            : Colors.white;
+    final fg = correct
+        ? AppColors.success
+        : wrong
+            ? AppColors.error
+            : AppColors.deepPurpleDark;
+    final border = correct
+        ? AppColors.success
+        : wrong
+            ? AppColors.error
+            : const Color(0xFFAA5BAC).withValues(alpha: 0.55);
+    final raw = entry.text.trim();
+    final isTimeout = raw == '…' || raw.toLowerCase() == 'time';
+    final label = entry.kind == PlayKind.clue
+        ? '“$raw”'
+        : isTimeout
+            ? 'TIME'
+            : raw;
 
-class _BackdropPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final w = size.width;
-    final h = size.height;
-
-    // Three cone spotlights beaming down from the top.
-    final beam = Paint()..blendMode = BlendMode.plus;
-    void spotlight(double topX, double floorX) {
-      final path = Path()
-        ..moveTo(topX - 10, -4)
-        ..lineTo(topX + 10, -4)
-        ..lineTo(floorX + w * 0.14, h * 0.62)
-        ..lineTo(floorX - w * 0.14, h * 0.62)
-        ..close();
-      beam.shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [
-          Colors.white.withValues(alpha: 0.16),
-          Colors.white.withValues(alpha: 0.02),
-        ],
-      ).createShader(Rect.fromLTWH(0, 0, w, h * 0.62));
-      canvas.drawPath(path, beam);
-    }
-
-    spotlight(w * 0.22, w * 0.24);
-    spotlight(w * 0.5, w * 0.5);
-    spotlight(w * 0.78, w * 0.76);
-
-    // Pale elliptical studio floor the host stands on.
-    final floor = Paint()
-      ..shader = RadialGradient(
-        colors: [
-          Colors.white.withValues(alpha: 0.85),
-          Colors.white.withValues(alpha: 0.35),
-          Colors.white.withValues(alpha: 0.0),
-        ],
-        stops: const [0.0, 0.6, 1.0],
-      ).createShader(
-        Rect.fromCenter(
-          center: Offset(w * 0.5, h * 0.9),
-          width: w * 1.1,
-          height: h * 0.42,
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 220, minWidth: 96),
+      child: CustomPaint(
+        painter: _SpeechBubblePainter(
+          fill: bg.withValues(alpha: 0.98),
+          border: border,
+          borderWidth: correct || wrong ? 2.4 : 1.4,
+          radius: _radius,
+          tailHeight: _tailH,
         ),
-      );
-    canvas.drawOval(
-      Rect.fromCenter(
-        center: Offset(w * 0.5, h * 0.9),
-        width: w * 1.05,
-        height: h * 0.4,
-      ),
-      floor,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _BackdropPainter oldDelegate) => false;
-}
-
-/// Gold-framed "MATCH WORD" scoreboard with both team scores.
-class _Scoreboard extends StatelessWidget {
-  const _Scoreboard({required this.state});
-  final MatchState state;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: BoxDecoration(
-        color: AppColors.deepPurple.withValues(alpha: 0.92),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.gold, width: 2.5),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.gold.withValues(alpha: 0.35),
-            blurRadius: 18,
-            spreadRadius: -2,
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Text(
-            'MATCH WORD',
-            style: AppText.body.copyWith(
-              color: AppColors.goldLight,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 3,
-              fontSize: 18,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.center,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 10 + _tailH, 14, 10),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _ScoreEnd(label: 'TEAM A', score: state.scoreA),
-              Text(
-                '—',
-                style: AppText.display.copyWith(
-                  color: Colors.white,
-                  fontSize: 34,
+              if (correct || wrong) ...[
+                Icon(
+                  correct ? Icons.check_circle_rounded : Icons.cancel_rounded,
+                  color: fg,
+                  size: 26,
+                ),
+                const SizedBox(width: 6),
+              ],
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppText.body.copyWith(
+                    color: fg,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 28,
+                    height: 1.0,
+                  ),
                 ),
               ),
-              _ScoreEnd(label: 'TEAM B', score: state.scoreB, alignEnd: true),
             ],
           ),
-        ],
+        ),
       ),
     );
   }
 }
 
-class _ScoreEnd extends StatelessWidget {
-  const _ScoreEnd({
-    required this.label,
-    required this.score,
-    this.alignEnd = false,
+class _SpeechBubblePainter extends CustomPainter {
+  _SpeechBubblePainter({
+    required this.fill,
+    required this.border,
+    required this.borderWidth,
+    required this.radius,
+    required this.tailHeight,
   });
-  final String label;
-  final int score;
-  final bool alignEnd;
+
+  final Color fill;
+  final Color border;
+  final double borderWidth;
+  final double radius;
+  final double tailHeight;
 
   @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        if (alignEnd)
-          Padding(
-            padding: const EdgeInsets.only(right: 10),
-            child: _bigScore(),
-          ),
-        Text(
-          label,
-          style: AppText.bodyMuted.copyWith(
-            color: Colors.white.withValues(alpha: 0.85),
-            fontWeight: FontWeight.w700,
-            fontSize: 15,
-            letterSpacing: 1,
-          ),
-        ),
-        if (!alignEnd)
-          Padding(
-            padding: const EdgeInsets.only(left: 10),
-            child: _bigScore(),
-          ),
-      ],
+  void paint(Canvas canvas, Size size) {
+    final path = _path(size);
+    canvas.drawShadow(path, Colors.black.withValues(alpha: 0.22), 3, false);
+    canvas.drawPath(path, Paint()..color = fill);
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = border
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = borderWidth
+        ..strokeJoin = StrokeJoin.round,
     );
   }
 
-  Widget _bigScore() => AnimatedSwitcher(
-        duration: const Duration(milliseconds: 350),
-        transitionBuilder: (child, anim) => ScaleTransition(
-          scale: Tween<double>(begin: 0.4, end: 1.0).animate(
-            CurvedAnimation(parent: anim, curve: Curves.elasticOut),
-          ),
-          child: FadeTransition(opacity: anim, child: child),
-        ),
-        child: Text(
-          '$score',
-          key: ValueKey<int>(score),
-          style: AppText.display.copyWith(color: Colors.white, fontSize: 40),
-        ),
-      );
-}
-
-/// The cream word tile. Shows the secret word only to the clue-giver (during
-/// the clue step); otherwise it shows the word counter so the guesser can never
-/// read the answer. The label pops when it changes.
-class _WordTile extends StatelessWidget {
-  const _WordTile({required this.state, this.viewerRole});
-  final MatchState state;
-  final String? viewerRole;
+  /// Bubble body with a short upward tail (sits under the seat).
+  Path _path(Size size) {
+    final w = size.width;
+    final h = size.height;
+    final th = tailHeight;
+    final top = th;
+    final r = radius.clamp(0.0, (h - th) / 2).toDouble();
+    final midX = w * 0.5;
+    const tw = 9.0; // short tail half-width
+    return Path()
+      ..moveTo(midX, 0)
+      ..lineTo(midX + tw, top)
+      ..lineTo(w - r, top)
+      ..arcToPoint(Offset(w, top + r), radius: Radius.circular(r))
+      ..lineTo(w, h - r)
+      ..arcToPoint(Offset(w - r, h), radius: Radius.circular(r))
+      ..lineTo(r, h)
+      ..arcToPoint(Offset(0, h - r), radius: Radius.circular(r))
+      ..lineTo(0, top + r)
+      ..arcToPoint(Offset(r, top), radius: Radius.circular(r))
+      ..lineTo(midX - tw, top)
+      ..close();
+  }
 
   @override
-  Widget build(BuildContext context) {
-    // Reveal the word during the clue step, but only on the clue-giver's own
-    // device. In a single-device / demo game (viewerRole == null) the one
-    // screen is the clue-giver, so it shows as before.
-    final amClueGiver =
-        viewerRole == null || viewerRole == state.clueGiverRole;
-    final revealSecret =
-        state.isTurnActive && state.step == TurnStep.awaitingClue && amClueGiver;
-    final label = revealSecret ? state.secretWord.toUpperCase() : state.wordLabel;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 8),
-      decoration: BoxDecoration(
-        color: AppColors.warmBeige,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.gold, width: 2.5),
-        boxShadow: AppColors.tileShadow,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // When the secret word is shown, the clue-giver needs to know this is
-          // the answer they must lead their teammate to say — not the clue.
-          if (revealSecret)
-            Text(
-              'YOUR SECRET WORD',
-              style: AppText.bodyMuted.copyWith(
-                color: AppColors.deepPurpleLight,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 1.5,
-                fontSize: 13,
-              ),
-            ),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 320),
-            transitionBuilder: (child, anim) => FadeTransition(
-              opacity: anim,
-              child: ScaleTransition(
-                scale: Tween<double>(begin: 0.8, end: 1.0).animate(
-                  CurvedAnimation(parent: anim, curve: Curves.easeOutBack),
-                ),
-                child: child,
-              ),
-            ),
-            child: Text(
-              label,
-              key: ValueKey<String>(label),
-              style: AppText.display.copyWith(
-                color: AppColors.deepPurple,
-                fontSize: revealSecret ? 32 : 24,
-                letterSpacing: revealSecret ? 2 : 0.5,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ),
-          if (revealSecret)
-            Text(
-              "Get your team to say it — don't say it yourself!",
-              textAlign: TextAlign.center,
-              style: AppText.bodyMuted.copyWith(
-                color: AppColors.deepPurple,
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
-              ),
-            ),
-        ],
-      ),
-    );
-  }
+  bool shouldRepaint(covariant _SpeechBubblePainter old) =>
+      old.fill != fill ||
+      old.border != border ||
+      old.borderWidth != borderWidth ||
+      old.radius != radius ||
+      old.tailHeight != tailHeight;
 }
 
-/// A team podium with two character busts above a gold-trimmed desk holding the
-/// team name and the two seat nameplates. The active seat glows gold.
-class _TeamPodium extends StatelessWidget {
-  const _TeamPodium({
-    required this.state,
-    required this.team,
-    this.charactersByRole = const {},
-  });
-  final MatchState state;
-  final String team;
-  final Map<String, Character> charactersByRole;
+// ─── Contestant bust ─────────────────────────────────────────────────────────
 
-  @override
-  Widget build(BuildContext context) {
-    final onClock = state.isTurnActive && state.cluingTeam == team;
-    final clueRole = MatchEngine.clueGiverRole(team, state.phase);
-    final guessRole = MatchEngine.guesserRole(team, state.phase);
-    final clueName = state.names[clueRole] ?? 'Player $clueRole';
-    final guessName = state.names[guessRole] ?? 'Player $guessRole';
-    final clueActive = onClock && state.step == TurnStep.awaitingClue;
-    final guessActive = onClock && state.step == TurnStep.awaitingGuess;
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // Two busts peeking above the desk.
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            _Bust(
-              name: clueName,
-              seed: '$team$clueRole',
-              active: clueActive,
-              character: charactersByRole[clueRole],
-            ),
-            const SizedBox(width: 4),
-            _Bust(
-              name: guessName,
-              seed: '$team$guessRole',
-              active: guessActive,
-              character: charactersByRole[guessRole],
-            ),
-          ],
-        ),
-        Transform.translate(
-          offset: const Offset(0, -8),
-          child: _Desk(
-            team: team,
-            clueName: clueName,
-            guessName: guessName,
-            clueActive: clueActive,
-            guessActive: guessActive,
-            onClock: onClock,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// A realistic character bust for the podium: the artist's clay head-and-
-/// shoulders art (cropped from the base bodies) rising above the desk. The head
-/// gently bobs so the stage feels alive, and the whole bust scales up with a
-/// gold spotlight ring when it's that player's turn.
-class _Bust extends StatefulWidget {
-  const _Bust({
+class _PlayerBust extends StatefulWidget {
+  const _PlayerBust({
     required this.name,
     required this.seed,
-    required this.active,
+    required this.width,
+    required this.height,
     this.character,
+    this.foreground = false,
   });
+
   final String name;
   final String seed;
-  final bool active;
-
-  /// The player's character to render. When null, a generic clay bust shows.
+  final double width;
+  final double height;
   final Character? character;
+  final bool foreground;
 
   @override
-  State<_Bust> createState() => _BustState();
+  State<_PlayerBust> createState() => _PlayerBustState();
 }
 
-class _BustState extends State<_Bust> with SingleTickerProviderStateMixin {
+class _PlayerBustState extends State<_PlayerBust>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _idle = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 3000),
@@ -494,10 +875,8 @@ class _BustState extends State<_Bust> with SingleTickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    // Stagger each bust so the two heads don't bob in lockstep.
-    final phase = (widget.seed.hashCode % 1000) / 1000.0;
     _idle
-      ..value = phase
+      ..value = (widget.seed.hashCode % 1000) / 1000.0
       ..repeat(reverse: true);
   }
 
@@ -507,231 +886,94 @@ class _BustState extends State<_Bust> with SingleTickerProviderStateMixin {
     super.dispose();
   }
 
-  /// Pick a base body deterministically so a player always looks the same.
-  String get _asset {
-    final h = widget.seed.codeUnits.fold<int>(
-      7,
-      (a, c) => (a * 31 + c) & 0x7fffffff,
-    );
-    return h.isEven
-        ? 'assets/images/host/bust-female.png'
-        : 'assets/images/host/bust-male.png';
-  }
-
   @override
   Widget build(BuildContext context) {
-    return AnimatedScale(
-      scale: widget.active ? 1.12 : 1.0,
-      duration: const Duration(milliseconds: 280),
-      curve: Curves.easeOutBack,
-      child: SizedBox(
-        width: 58,
-        height: 70,
-        child: Stack(
-          alignment: Alignment.bottomCenter,
-          clipBehavior: Clip.none,
-          children: [
-            // Gold spotlight halo behind the active player.
-            if (widget.active)
-              Positioned(
-                bottom: 4,
-                child: Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: RadialGradient(
-                      colors: [
-                        AppColors.gold.withValues(alpha: 0.75),
-                        AppColors.gold.withValues(alpha: 0.0),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            // The bobbing bust.
-            AnimatedBuilder(
-              animation: _idle,
-              builder: (context, child) {
-                final bob = math.sin(_idle.value * math.pi) * 2.2;
-                return Transform.translate(
-                  offset: Offset(0, -bob),
-                  child: child,
-                );
-              },
-              child: _figure(),
-            ),
-          ],
-        ),
-      ),
+    return AnimatedBuilder(
+      animation: _idle,
+      builder: (context, child) {
+        final bob = math.sin(_idle.value * math.pi) * 0.15;
+        return Transform.translate(offset: Offset(0, -bob), child: child);
+      },
+      child: _figure(),
     );
   }
 
-  /// The player's actual character, cropped to head-and-shoulders, or the
-  /// generic clay bust when no character is available (demo / missing art).
   Widget _figure() {
     final character = widget.character;
+    final boxW = widget.width;
+    final boxH = widget.height;
     if (character != null && character.base != null) {
-      // Render the full figure large, then show just the head/shoulders through
-      // a small window so it reads as a bust rising above the desk.
-      const box = Size(56, 66);
-      const render = 150.0; // full-figure square, scaled up
-      const focusY = 0.13; // fraction of the figure height to centre on
+      // Sitting look from standing art: clip to the chair back and zoom into
+      // head + shoulders only (never show legs / full standing body).
+      final bustScale = widget.foreground ? 2.85 : 2.70;
+      final render = math.max(boxW, boxH) * 1.12;
       return SizedBox(
-        width: box.width,
-        height: box.height,
+        width: boxW,
+        height: boxH,
         child: ClipRect(
-          child: OverflowBox(
-            minWidth: render,
-            maxWidth: render,
-            minHeight: render,
-            maxHeight: render,
-            alignment: Alignment.topCenter,
+          child: ShaderMask(
+            blendMode: BlendMode.dstIn,
+            shaderCallback: (bounds) {
+              return const LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.white,
+                  Colors.white,
+                  Color(0x00FFFFFF),
+                ],
+                // Soft fade at the chest so it reads as a seated bust.
+                stops: [0.0, 0.62, 0.92],
+              ).createShader(bounds);
+            },
             child: Transform.translate(
-              offset: const Offset(0, -(render * focusY) + 6),
-              child: CharacterPreview(
-                character: character,
-                size: render,
-                showBackdrop: false,
+              // Nudge down so shoulders sit on the nameplate line.
+              offset: Offset(0, boxH * 0.10),
+              child: Transform.scale(
+                scale: bustScale,
+                // Pivot near the head so legs stay clipped away.
+                alignment: const Alignment(0, -0.88),
+                child: IdleCharacterPreview(
+                  character: character,
+                  size: render,
+                  showBackdrop: false,
+                  animatePoses: false,
+                  idleIntensity: 0.18,
+                ),
               ),
             ),
           ),
         ),
       );
     }
-    return Image.asset(
-      _asset,
-      height: 66,
-      fit: BoxFit.contain,
-      filterQuality: FilterQuality.medium,
-      errorBuilder: (_, __, ___) => Icon(
-        Icons.person_rounded,
-        size: 48,
-        color: Colors.white.withValues(alpha: 0.8),
+    return Align(
+      alignment: const Alignment(0, 0.35),
+      child: Image.asset(
+        widget.seed.hashCode.isEven
+            ? 'assets/images/host/bust-female.png'
+            : 'assets/images/host/bust-male.png',
+        width: boxW * 0.85,
+        height: boxH * 0.85,
+        fit: BoxFit.contain,
+        alignment: Alignment.topCenter,
+        filterQuality: FilterQuality.high,
       ),
     );
   }
 }
 
-/// The gold-trimmed team desk with the team name and two seat nameplates.
-class _Desk extends StatelessWidget {
-  const _Desk({
-    required this.team,
-    required this.clueName,
-    required this.guessName,
-    required this.clueActive,
-    required this.guessActive,
-    required this.onClock,
-  });
-  final String team;
-  final String clueName;
-  final String guessName;
-  final bool clueActive;
-  final bool guessActive;
-  final bool onClock;
+// ─── Host (gameplay layer — not part of the three stage PNGs) ────────────────
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(8, 8, 8, 10),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            AppColors.deepPurpleLight,
-            AppColors.deepPurple,
-          ],
-        ),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: onClock ? AppColors.gold : Colors.white.withValues(alpha: 0.18),
-          width: onClock ? 2.5 : 1.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.3),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Text(
-            'TEAM $team',
-            style: AppText.body.copyWith(
-              color: AppColors.goldLight,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 2,
-              fontSize: 16,
-            ),
-          ),
-          const SizedBox(height: 6),
-          _NamePlate(name: clueName, active: clueActive),
-          const SizedBox(height: 4),
-          _NamePlate(name: guessName, active: guessActive),
-          const SizedBox(height: 6),
-          // Gold desk trim.
-          Container(
-            height: 6,
-            decoration: BoxDecoration(
-              color: AppColors.gold,
-              borderRadius: BorderRadius.circular(4),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _NamePlate extends StatelessWidget {
-  const _NamePlate({required this.name, required this.active});
-  final String name;
-  final bool active;
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 250),
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 8),
-      decoration: BoxDecoration(
-        color: active ? AppColors.gold : AppColors.warmBeige,
-        borderRadius: BorderRadius.circular(8),
-        boxShadow: active
-            ? [
-                BoxShadow(
-                  color: AppColors.gold.withValues(alpha: 0.6),
-                  blurRadius: 10,
-                  spreadRadius: 1,
-                ),
-              ]
-            : null,
-      ),
-      child: FittedBox(
-        fit: BoxFit.scaleDown,
-        child: Text(
-          name,
-          maxLines: 1,
-          textAlign: TextAlign.center,
-          style: AppText.body.copyWith(
-            color: AppColors.deepPurpleDark,
-            fontWeight: FontWeight.w700,
-            fontSize: 16,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Guy Smiley centre-stage: an idle-bobbing full-body figure. Speech lives in
-/// a caption under the word tile; there is intentionally no nameplate.
 class _HostCentre extends StatefulWidget {
-  const _HostCentre({required this.state});
+  const _HostCentre({
+    required this.state,
+    required this.maxWidth,
+    required this.maxHeight,
+  });
+
   final MatchState state;
+  final double maxWidth;
+  final double maxHeight;
 
   @override
   State<_HostCentre> createState() => _HostCentreState();
@@ -741,214 +983,193 @@ class _HostCentreState extends State<_HostCentre>
     with TickerProviderStateMixin {
   late final AnimationController _idle = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 2600),
+    duration: const Duration(milliseconds: 2800),
   )..repeat(reverse: true);
 
-  // A quick, warm bounce whenever the host says something new.
   late final AnimationController _gesture = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 620),
   );
 
-  // A fast head-nod / squash cycle that runs while the host is "speaking", so
-  // he reads as a lively presenter talking to the room rather than a static
-  // cut-out. (True mouth/eye lipsync would need a rigged, multi-frame asset;
-  // this procedural motion is the closest lively approximation on the single
-  // clay render we have.)
-  late final AnimationController _talk = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 300),
-  );
+  HostAction _shown = HostAction.listening;
+  DateTime _stickyUntil = DateTime.fromMillisecondsSinceEpoch(0);
 
-  bool _speaking = false;
-  Timer? _talkStop;
+  HostAction get _desired => HostActions.forState(widget.state);
+
+  static Duration _holdFor(HostAction action) => switch (action) {
+        HostAction.correct => const Duration(milliseconds: 5200),
+        HostAction.wrong => const Duration(milliseconds: 5200),
+        HostAction.reveal => const Duration(milliseconds: 4500),
+        // Long ElevenLabs welcome intro — keep wave+lipsync for the full line.
+        HostAction.welcome => const Duration(milliseconds: 75000),
+        HostAction.winner => const Duration(milliseconds: 6000),
+        HostAction.listening => Duration.zero,
+      };
+
+  void _syncAction({bool force = false}) {
+    final next = _desired;
+    final now = DateTime.now();
+    if (!force && now.isBefore(_stickyUntil) && next == HostAction.listening) {
+      return;
+    }
+    if (next != _shown) {
+      _shown = next;
+      final hold = _holdFor(next);
+      _stickyUntil = hold == Duration.zero ? now : now.add(hold);
+      if (hold > Duration.zero) {
+        Future<void>.delayed(hold, () {
+          if (!mounted) return;
+          if (DateTime.now().isBefore(_stickyUntil)) return;
+          final catchUp = _desired;
+          if (catchUp != _shown) {
+            setState(() {
+              _shown = catchUp;
+              _stickyUntil = DateTime.now();
+            });
+          }
+        });
+      }
+    }
+  }
 
   @override
   void initState() {
     super.initState();
-    // Greet the room with a little talking burst as the stage opens.
-    _startTalking();
-  }
-
-  void _startTalking() {
-    _speaking = true;
-    if (!_talk.isAnimating) _talk.repeat(reverse: true);
-    _talkStop?.cancel();
-    // Talk for a natural couple of seconds, then settle back to idle breathing.
-    _talkStop = Timer(const Duration(milliseconds: 2600), () {
-      if (!mounted) return;
-      _speaking = false;
-      _talk.stop();
-      _talk.animateTo(0, duration: const Duration(milliseconds: 200));
-    });
+    _shown = _desired;
+    _syncAction(force: true);
   }
 
   @override
   void didUpdateWidget(_HostCentre oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.state.hostLine != widget.state.hostLine) {
+    final before = _shown;
+    _syncAction();
+    if (before != _shown || oldWidget.state.hostLine != widget.state.hostLine) {
       _gesture.forward(from: 0);
-      _startTalking();
     }
   }
 
   @override
   void dispose() {
-    _talkStop?.cancel();
     _idle.dispose();
     _gesture.dispose();
-    _talk.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Host figure only — the speech bubble sits under the word tile (see
-    // StudioStage) so it never covers the players, and there is no nameplate.
+    final openingBeat =
+        widget.state.wordIndex == 0 && widget.state.feed.isEmpty;
+    bool voicePlaying = false;
+    bool introPlaying = false;
+    try {
+      voicePlaying =
+          context.select<AudioController, bool>((a) => a.voicePlaying);
+      introPlaying =
+          context.select<AudioController, bool>((a) => a.hostIntroPlaying);
+    } catch (_) {
+      // Demo / screenshot hosts may omit AudioController.
+    }
+
+    // Welcome wave for the whole intro — no mouth overlay (it left a blotch).
+    final useWelcome = _shown == HostAction.welcome ||
+        ((introPlaying || voicePlaying) && openingBeat);
+    final useListening = !useWelcome && _shown == HostAction.listening;
+
     return AnimatedBuilder(
-      animation: Listenable.merge([_idle, _gesture, _talk]),
+      animation: Listenable.merge([_idle, _gesture]),
       builder: (context, child) {
-        final bob = math.sin(_idle.value * math.pi) * 3;
-        final breathe = 1 + math.sin(_idle.value * math.pi) * 0.012;
-        final pop = Curves.elasticOut.transform(_gesture.value);
-        final scale = 1 + (pop.clamp(0.0, 1.0)) * 0.06;
-        final tilt = math.sin(_gesture.value * math.pi * 2) * 0.03 +
-            math.sin(_idle.value * math.pi * 2) * 0.008;
-        final talkBob = _speaking ? math.sin(_talk.value * math.pi) * 2.2 : 0.0;
-        final talkSquash = _speaking ? _talk.value * 0.02 : 0.0;
-        return Transform.translate(
-          offset: Offset(0, -bob - talkBob),
-          child: Transform.rotate(
-            angle: tilt,
-            child: Transform(
-              alignment: Alignment.bottomCenter,
-              transform: Matrix4.diagonal3Values(
-                scale * (1 + talkSquash * 0.5),
-                scale * breathe * (1 - talkSquash),
-                1,
+        final bob = math.sin(_idle.value * math.pi) * 0.4;
+        final breathe = 1 + math.sin(_idle.value * math.pi) * 0.005;
+        final pop = Curves.easeOutCubic.transform(_gesture.value);
+        final scale = 1 + pop.clamp(0.0, 1.0) * 0.02;
+
+        // Action clips are 480×480 with transparent padding — scale up a bit.
+        final frameScale = useListening
+            ? 1.0
+            : (widget.maxHeight / (widget.maxWidth * 0.95)).clamp(1.12, 1.50);
+
+        Widget figure;
+        if (useWelcome) {
+          figure = Transform.scale(
+            scale: frameScale,
+            alignment: Alignment.topCenter,
+            child: Image.asset(
+              HostActions.webpFor(HostAction.welcome),
+              key: const ValueKey('welcome-wave'),
+              fit: BoxFit.contain,
+              alignment: Alignment.topCenter,
+              filterQuality: FilterQuality.high,
+              gaplessPlayback: true,
+              errorBuilder: (_, __, ___) => Image.asset(
+                HostActions.gifFor(HostAction.welcome),
+                fit: BoxFit.contain,
+                alignment: Alignment.topCenter,
+                filterQuality: FilterQuality.high,
+                errorBuilder: (_, __, ___) => Image.asset(
+                  'assets/images/host/host-idle.png',
+                  fit: BoxFit.contain,
+                  alignment: Alignment.topCenter,
+                  filterQuality: FilterQuality.high,
+                ),
               ),
-              child: child,
+            ),
+          );
+        } else if (useListening) {
+          // Idle listening pose — no lipsync.
+          figure = Image.asset(
+            'assets/images/host/host-idle.png',
+            fit: BoxFit.contain,
+            alignment: Alignment.topCenter,
+            filterQuality: FilterQuality.high,
+            errorBuilder: (_, __, ___) => Image.asset(
+              'assets/images/host/host-stage.png',
+              fit: BoxFit.contain,
+              alignment: Alignment.topCenter,
+              filterQuality: FilterQuality.high,
+            ),
+          );
+        } else {
+          // Outcome actions: authored WebP/GIF clip as-is.
+          figure = Transform.scale(
+            scale: frameScale,
+            alignment: Alignment.topCenter,
+            child: Image.asset(
+              HostActions.webpFor(_shown),
+              key: ValueKey(_shown),
+              fit: BoxFit.contain,
+              alignment: Alignment.topCenter,
+              filterQuality: FilterQuality.high,
+              gaplessPlayback: true,
+              errorBuilder: (_, __, ___) => Image.asset(
+                HostActions.gifFor(_shown),
+                fit: BoxFit.contain,
+                alignment: Alignment.topCenter,
+                filterQuality: FilterQuality.high,
+                errorBuilder: (_, __, ___) => Image.asset(
+                  HostActions.framesFor(_shown)[1],
+                  fit: BoxFit.contain,
+                  alignment: Alignment.topCenter,
+                  filterQuality: FilterQuality.high,
+                ),
+              ),
+            ),
+          );
+        }
+
+        return Transform.translate(
+          offset: Offset(0, -bob),
+          child: Transform.scale(
+            scale: scale * breathe,
+            alignment: Alignment.topCenter,
+            child: SizedBox(
+              width: widget.maxWidth,
+              height: widget.maxHeight,
+              child: figure,
             ),
           ),
         );
       },
-      child: SizedBox(
-        height: 200,
-        child: Stack(
-          alignment: Alignment.topCenter,
-          children: [
-            Image.asset(
-              'assets/images/host/host-stage.png',
-              fit: BoxFit.contain,
-              filterQuality: FilterQuality.medium,
-              errorBuilder: (_, __, ___) => const Icon(
-                Icons.emoji_emotions_rounded,
-                color: Colors.white,
-                size: 120,
-              ),
-            ),
-            if (_speaking)
-              Positioned(
-                top: 18,
-                child: Opacity(
-                  opacity: (0.35 + 0.35 * _talk.value).clamp(0.0, 1.0),
-                  child: Container(
-                    width: 70,
-                    height: 70,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: RadialGradient(
-                        colors: [
-                          AppColors.goldLight.withValues(alpha: 0.30),
-                          AppColors.goldLight.withValues(alpha: 0.0),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
     );
   }
-}
-
-/// A rounded speech bubble (cream) with a little downward tail. The text pops
-/// in whenever the host says something new.
-class _SpeechBubble extends StatelessWidget {
-  const _SpeechBubble({required this.message});
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-          decoration: BoxDecoration(
-            color: AppColors.warmBeige,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: AppColors.deepPurpleLight, width: 2),
-            boxShadow: AppColors.tileShadow,
-          ),
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 300),
-            transitionBuilder: (child, anim) => FadeTransition(
-              opacity: anim,
-              child: ScaleTransition(
-                scale: Tween<double>(begin: 0.92, end: 1.0).animate(
-                  CurvedAnimation(parent: anim, curve: Curves.easeOutBack),
-                ),
-                child: child,
-              ),
-            ),
-            child: Text(
-              message,
-              key: ValueKey<String>(message),
-              textAlign: TextAlign.center,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              style: AppText.body.copyWith(
-                color: AppColors.deepPurple,
-                fontWeight: FontWeight.w700,
-                fontSize: 16,
-                height: 1.25,
-              ),
-            ),
-          ),
-        ),
-        // Tail.
-        CustomPaint(size: const Size(20, 10), painter: _BubbleTailPainter()),
-      ],
-    );
-  }
-}
-
-class _BubbleTailPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final fill = Paint()..color = AppColors.warmBeige;
-    final border = Paint()
-      ..color = AppColors.deepPurpleLight
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
-    final path = Path()
-      ..moveTo(0, 0)
-      ..lineTo(size.width, 0)
-      ..lineTo(size.width / 2, size.height)
-      ..close();
-    canvas.drawPath(path, fill);
-    canvas.drawPath(
-      Path()
-        ..moveTo(0, 0)
-        ..lineTo(size.width / 2, size.height)
-        ..lineTo(size.width, 0),
-      border,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _BubbleTailPainter oldDelegate) => false;
 }

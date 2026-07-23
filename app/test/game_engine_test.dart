@@ -100,11 +100,23 @@ void main() {
   });
 
   group('steal mechanic', () {
+    test('guessing the clue is a foul and steals', () {
+      var s = _startGame();
+      s = MatchEngine.submitClue(s, 'fruit');
+      s = MatchEngine.submitGuess(s, 'FRUIT'); // same as clue
+      expect(s.cluingTeam, 'B');
+      expect(s.lastOutcome, WordOutcome.wrong);
+      expect(s.feed.last.correct, isFalse);
+      expect(s.hostLine.toLowerCase(), contains('foul'));
+      expect(s.scoreA, 0);
+    });
+
     test('a wrong guess hands control to the other team for less value', () {
       var s = _startGame();
       s = MatchEngine.submitClue(s, 'fruit');
       s = MatchEngine.submitGuess(s, 'wrong');
       expect(s.cluingTeam, 'B'); // steal — other team now clues
+      expect(s.lastOutcome, WordOutcome.wrong);
       expect(s.step, TurnStep.awaitingClue);
       expect(s.exchangeCount, 1);
       expect(s.wordValue, 4); // value dropped by one
@@ -216,6 +228,16 @@ void main() {
     test('beginSecondHalf only works at halftime', () {
       final s = _startGame();
       expect(identical(MatchEngine.beginSecondHalf(s), s), isTrue);
+    });
+
+    test('nextWord is a no-op at halftime (cannot skip to game over)', () {
+      var s = _startGame();
+      s = _guessCorrect(s);
+      s = _guessCorrect(s);
+      expect(s.phase, GamePhase.halftime);
+      final stuck = MatchEngine.nextWord(s);
+      expect(identical(stuck, s), isTrue);
+      expect(stuck.phase, GamePhase.halftime);
     });
   });
 

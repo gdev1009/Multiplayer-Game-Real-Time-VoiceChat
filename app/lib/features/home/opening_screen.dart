@@ -8,11 +8,12 @@ import '../../core/theme/app_text.dart';
 import '../../core/widgets/app_page.dart';
 import '../../core/widgets/big_button.dart';
 import '../../core/widgets/host_greeting.dart';
+import '../../services/entitlement_service.dart';
 import '../auth/auth_controller.dart';
 import '../character/character_controller.dart';
 import '../character/idle_character_preview.dart';
 
-/// The Opening screen (Milestone 2).
+/// The Opening screen.
 ///
 /// Shown right after sign-in. Greets the player by name with the show host and
 /// offers the two main actions: *Check Upcoming Games* and *Enter the Studio*.
@@ -49,15 +50,15 @@ class _OpeningScreenState extends State<OpeningScreen> {
   Widget build(BuildContext context) {
     final controller = context.watch<AuthController>();
     final profile = controller.profile;
-    // Prefer the name the player gave their character (what they think of as
-    // "their" name) over the account's first name, which for quick-test
-    // sign-ins is an auto-generated handle like "Tester 4138".
+    // Prefer the character display name over the account first name.
     final characterName =
         context.watch<CharacterController>().saved?.displayName.trim() ?? '';
     final name = characterName.isNotEmpty
         ? characterName
         : (profile?.firstName ?? controller.rememberedName ?? 'friend');
     final trialDays = profile?.trialDaysRemaining ?? 0;
+    final entitlement = context.read<EntitlementService>();
+    final access = entitlement.evaluate(profile: profile);
 
     return AppPage(
       child: Column(
@@ -75,9 +76,18 @@ class _OpeningScreenState extends State<OpeningScreen> {
             message: 'Hello $name! So glad you are here. '
                 'What would you like to do today?',
           ),
-          if (trialDays > 0) ...[
+          if (access == AccessLevel.expired) ...[
             const SizedBox(height: AppSpacing.lg),
-            _TrialBanner(daysLeft: trialDays),
+            const _TrialBanner(
+              daysLeft: 0,
+              expired: true,
+            ),
+          ] else if (trialDays > 0) ...[
+            const SizedBox(height: AppSpacing.lg),
+            _TrialBanner(
+              daysLeft: trialDays,
+              countdown: access == AccessLevel.trialCountdown,
+            ),
           ],
           const SizedBox(height: AppSpacing.lg),
           _CharacterCard(
@@ -88,14 +98,20 @@ class _OpeningScreenState extends State<OpeningScreen> {
           BigButton(
             label: 'Check Upcoming Games',
             icon: Icons.event_available_rounded,
-            onPressed: () =>
-                Navigator.of(context).pushNamed(AppRoutes.upcomingGames),
+            onPressed: () => _goPlay(context, access, AppRoutes.upcomingGames),
           ),
           const SizedBox(height: AppSpacing.md),
           BigButton(
             label: 'Enter the Studio',
             icon: Icons.theater_comedy_rounded,
-            onPressed: () => Navigator.of(context).pushNamed(AppRoutes.studio),
+            onPressed: () => _goPlay(context, access, AppRoutes.studio),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          BigButton(
+            label: 'Prize Room',
+            icon: Icons.emoji_events_rounded,
+            onPressed: () =>
+                Navigator.of(context).pushNamed(AppRoutes.prizeRoom),
           ),
           const SizedBox(height: AppSpacing.lg),
           Center(
@@ -117,10 +133,23 @@ class _OpeningScreenState extends State<OpeningScreen> {
       ),
     );
   }
+
+  Future<void> _goPlay(
+    BuildContext context,
+    AccessLevel access,
+    String route,
+  ) async {
+    final entitlement = context.read<EntitlementService>();
+    if (!entitlement.canPlay(access)) {
+      await Navigator.of(context).pushNamed(AppRoutes.paywall);
+      return;
+    }
+    await Navigator.of(context).pushNamed(route);
+  }
 }
 
 /// Shows the player's character (or a prompt to make one) with a create/edit
-/// action. This is the entry point into the Milestone 3 character builder.
+/// Create or edit the player's character.
 class _CharacterCard extends StatelessWidget {
   const _CharacterCard({required this.onCreate, required this.onEdit});
 
@@ -143,7 +172,12 @@ class _CharacterCard extends StatelessWidget {
       child: Row(
         children: [
           if (saved != null)
-            IdleCharacterPreview(character: saved, size: 92)
+            IdleCharacterPreview(
+              character: saved,
+              size: 92,
+              // Keep a stable look on Home — pose cycling felt like a glitch.
+              animatePoses: false,
+            )
           else
             Container(
               width: 92,
@@ -192,23 +226,51 @@ class _CharacterCard extends StatelessWidget {
 }
 
 class _TrialBanner extends StatelessWidget {
-  const _TrialBanner({required this.daysLeft});
+  const _TrialBanner({
+    required this.daysLeft,
+    this.countdown = false,
+    this.expired = false,
+  });
 
   final int daysLeft;
+  final bool countdown;
+  final bool expired;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.warmBeige,
+    final String text;
+    if (expired) {
+      text =
+          'Your free week has ended. Tap Subscribe when you are ready to keep playing.';
+    } else if (countdown) {
+      text =
+          '$daysLeft ${daysLeft == 1 ? 'day' : 'days'} left in your free trial — '
+          'enjoy them, and the studio will still be here.';
+    } else {
+      text =
+          '$daysLeft ${daysLeft == 1 ? 'day' : 'days'} left in your free trial';
+    }
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.gold, width: 2),
-      ),
-      child: Text(
-        '$daysLeft ${daysLeft == 1 ? 'day' : 'days'} left in your free trial',
-        style: AppText.body,
-        textAlign: TextAlign.center,
+        onTap: expired
+            ? () => Navigator.of(context).pushNamed(AppRoutes.paywall)
+            : null,
+        child: Container(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            color: AppColors.warmBeige,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.gold, width: 2),
+          ),
+          child: Text(
+            text,
+            style: AppText.body,
+            textAlign: TextAlign.center,
+          ),
+        ),
       ),
     );
   }

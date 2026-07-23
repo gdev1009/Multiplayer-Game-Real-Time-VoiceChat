@@ -34,14 +34,15 @@ const MAILGUN_BASE_URL =
   Deno.env.get("MAILGUN_BASE_URL") ?? "https://api.mailgun.net";
 const MAILGUN_SENDER =
   Deno.env.get("MAILGUN_SENDER") ?? "Match Word <no-reply@example.com>";
-const HOOK_SECRET = Deno.env.get("SEND_EMAIL_HOOK_SECRET") ?? "";
+const HOOK_SECRET = (Deno.env.get("SEND_EMAIL_HOOK_SECRET") ?? "")
+  .replace("v1,whsec_", "");
 
 // Human-friendly subject lines per auth action.
 function subjectFor(actionType: string): string {
   switch (actionType) {
     case "recovery":
     case "magiclink":
-      return "Your Match Word sign-in code";
+      return "Your Match Word code";
     case "signup":
     case "email_change":
       return "Confirm your Match Word email";

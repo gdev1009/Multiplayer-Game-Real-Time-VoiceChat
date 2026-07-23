@@ -174,6 +174,36 @@ def build_round_start() -> np.ndarray:
     return norm(pad(out, tail=0.08))
 
 
+def build_ding() -> np.ndarray:
+    """Classic game-show ding-ding-ding for a correct answer (~0.9s)."""
+    hits = []
+    for i, nm in enumerate(("E6", "E6", "E6")):
+        tone = bell(NOTE[nm], 0.28) * (0.95 - i * 0.05)
+        hits.append(pad(tone, head=i * 0.18, tail=0.02))
+    # Align to same length and sum.
+    n = max(h.size for h in hits)
+    out = np.zeros(n)
+    for h in hits:
+        out[: h.size] += h
+    return norm(pad(out, tail=0.08), 0.88)
+
+
+def build_buzzer() -> np.ndarray:
+    """Harsh game-show buzzer for a wrong answer (~0.85s)."""
+    dur = 0.75
+    t = _t(dur)
+    # Dual dissonant saws + grit.
+    tone = (
+        saw(110, dur) * 0.45
+        + saw(116, dur) * 0.35
+        + square(55, dur) * 0.25
+        + lowpass(noise(dur), 1800) * 0.2
+    )
+    pulse = 0.65 + 0.35 * np.sign(np.sin(2 * np.pi * 8 * t))
+    env = adsr(tone.size, a=0.01, d=0.05, s=0.95, r=0.12)
+    return norm(pad(tone * pulse * env, tail=0.08), 0.86)
+
+
 def build_correct() -> np.ndarray:
     """Happy ascending chime for a correct guess (~0.7s)."""
     out = np.concatenate([
@@ -185,7 +215,7 @@ def build_correct() -> np.ndarray:
 
 
 def build_steal() -> np.ndarray:
-    """Playful descending 'whoop' for a steal (~0.7s)."""
+    """Playful descending 'whoop' layered under the buzzer (~0.7s)."""
     g = glide(700, 260, 0.55, "sine")
     vib = 1 + 0.06 * np.sin(2 * np.pi * 9 * _t(0.55))
     tone = g * vib * adsr(g.size, a=0.01, d=0.1, s=0.7, r=0.3)
@@ -225,27 +255,73 @@ def build_winner() -> np.ndarray:
 
 
 def build_applause() -> np.ndarray:
-    """Crowd applause — shaped noise with a swell and flutter (~2.6s)."""
-    n = noise(2.5)
-    n = lowpass(n, 5500) - lowpass(n, 700)  # band-ish
-    flutter = 1 + 0.5 * np.abs(np.sin(2 * np.pi * 11 * _t(2.5)))
+    """Crowd applause — many staggered clap impulses (not flat noise)."""
+    rng = np.random.default_rng(42)
+    dur = 3.4
+    n = int(SR * dur)
+    out = np.zeros(n)
+
+    # Individual claps: short noise bursts with a mid “palm smack” bump.
+    def one_clap(amp: float) -> np.ndarray:
+        length = int(SR * rng.uniform(0.018, 0.045))
+        burst = rng.standard_normal(length)
+        # Soften highs, keep a body thump.
+        burst = lowpass(burst, 4200) - lowpass(burst, 180) * 0.35
+        env = np.exp(-np.linspace(0.0, 1.0, length) * rng.uniform(8.0, 16.0))
+        # Mid bump ~1–2 kHz so it reads as hands, not static.
+        t = np.arange(length) / SR
+        smack = np.sin(2 * np.pi * rng.uniform(900, 1600) * t) * env * 0.35
+        return (burst * env + smack) * amp
+
+    # Dense overlapping clap train (room full of people).
+    t = 0.0
+    while t < dur - 0.08:
+        amp = rng.uniform(0.25, 0.95)
+        clap = one_clap(amp)
+        i = int(t * SR)
+        end = min(n, i + clap.size)
+        out[i:end] += clap[: end - i]
+        # Irregular spacing — real applause isn't a metronome.
+        t += rng.uniform(0.012, 0.038)
+
+    # Room tone bed under the claps.
+    bed = lowpass(rng.standard_normal(n), 1800) - lowpass(
+        rng.standard_normal(n), 200
+    )
+    out = out * 0.92 + bed * 0.12
+
     swell = np.concatenate([
-        np.linspace(0.2, 1.0, int(SR * 0.4)),
-        np.full(int(SR * 1.7), 1.0),
-        np.linspace(1.0, 0.0, int(SR * 0.4)),
+        np.linspace(0.15, 1.0, int(SR * 0.35)),
+        np.full(max(1, n - int(SR * 0.95)), 1.0),
+        np.linspace(1.0, 0.0, int(SR * 0.6)),
     ])
-    swell = swell[: n.size]
-    return norm(pad(n * flutter * swell, tail=0.1), 0.75)
+    if swell.size < n:
+        swell = np.pad(swell, (0, n - swell.size), constant_values=0.0)
+    swell = swell[:n]
+    return norm(pad(out * swell, tail=0.12), 0.82)
 
 
 def build_cheer() -> np.ndarray:
-    """Brighter crowd cheer (applause + a rising 'yeah' band) (~2.6s)."""
-    app = build_applause() * 0.8
-    rise = lowpass(noise(0.8), 1800) - lowpass(noise(0.8), 500)
-    rise *= np.linspace(0.2, 1.0, rise.size)
-    yeah = np.zeros_like(app)
-    yeah[: rise.size] += rise * 0.5
-    return norm(app + yeah, 0.8)
+    """Crowd cheer — applause bed + brighter whoops."""
+    rng = np.random.default_rng(7)
+    app = build_applause() * 0.78
+    n = app.size
+    whoops = np.zeros(n)
+    for start in (0.15, 0.55, 1.1, 1.7, 2.3):
+        length = int(SR * rng.uniform(0.35, 0.55))
+        i = int(start * SR)
+        if i + length > n:
+            continue
+        t = np.arange(length) / SR
+        f0 = rng.uniform(380, 520)
+        f1 = rng.uniform(720, 980)
+        freq = np.linspace(f0, f1, length)
+        phase = 2 * np.pi * np.cumsum(freq) / SR
+        tone = np.sin(phase) * 0.45 + np.sin(phase * 2) * 0.12
+        env = np.sin(np.linspace(0.0, np.pi, length)) ** 1.2
+        whoops[i : i + length] += tone * env * rng.uniform(0.35, 0.55)
+    whoops = lowpass(whoops, 3200)
+    return norm(app + whoops, 0.85)
 
 
 def build_alert() -> np.ndarray:
@@ -276,6 +352,8 @@ CUES = {
     "theme": build_theme,
     "announcer_intro": build_announcer_intro,
     "round_start": build_round_start,
+    "ding": build_ding,
+    "buzzer": build_buzzer,
     "correct": build_correct,
     "steal": build_steal,
     "reveal": build_reveal,

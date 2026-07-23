@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-/// A gentle, looping "idle" motion for a character figure (Milestone 7).
+/// A gentle, looping "idle" motion for a character figure.
 ///
 /// Soft breathing scale + slow sway so a static figure feels alive. Named pose
 /// frames (tongue / worry / smug / shrug / hairfix / selfie) are applied by

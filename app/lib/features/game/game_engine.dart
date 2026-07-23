@@ -1,4 +1,4 @@
-/// Match Word — core gameplay rules engine (Milestone 5).
+/// Match Word — core gameplay rules engine.
 ///
 /// This is a **pure Dart** reducer: given a [MatchState] and a player action it
 /// returns the next [MatchState]. It holds *all* the game rules — turn order,
@@ -30,7 +30,7 @@ enum TurnStep { awaitingClue, awaitingGuess, resolved }
 enum PlayKind { clue, guess }
 
 /// How the most recent word ended (drives the host's line and the banner).
-enum WordOutcome { none, guessed, revealed }
+enum WordOutcome { none, guessed, revealed, wrong }
 
 /// Immutable tuning for a match. Defaults give a short, senior-friendly game.
 class MatchConfig {
@@ -38,9 +38,11 @@ class MatchConfig {
     this.wordsPerHalf = 4,
     this.maxExchanges = 5,
     this.wordValue = 5,
+    this.guessSeconds = 18,
   })  : assert(wordsPerHalf > 0),
         assert(maxExchanges > 0),
-        assert(wordValue > 0);
+        assert(wordValue > 0),
+        assert(guessSeconds > 0);
 
   /// Number of secret words played in each half.
   final int wordsPerHalf;
@@ -50,6 +52,9 @@ class MatchConfig {
 
   /// Points a freshly dealt word is worth; it drops by one per failed exchange.
   final int wordValue;
+
+  /// Wall-clock seconds the guesser has before the buzzer (Ronna: 15–20).
+  final int guessSeconds;
 
   /// Total words across both halves.
   int get totalWords => wordsPerHalf * 2;
@@ -237,13 +242,22 @@ class MatchEngine {
   static String guesserRole(String team, GamePhase phase) =>
       '$team${phase == GamePhase.secondHalf ? '1' : '2'}';
 
-  /// Normalises text for a case/whitespace-insensitive word comparison.
-  static String normalize(String value) =>
-      value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+  /// Normalises text for a case/whitespace/punctuation-insensitive comparison
+  /// (mirrors `mw_norm_word` in SQL so client + server grade the same way).
+  static String normalize(String value) {
+    final spaced = value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+    return spaced.replaceAll(RegExp(r'[^a-z0-9 ]'), '');
+  }
 
   /// Whether [guess] matches [word] after normalisation.
   static bool isCorrect(String guess, String word) =>
       normalize(guess) == normalize(word) && normalize(word).isNotEmpty;
+
+  /// True when the guesser repeats the pending clue (a foul).
+  static bool isClueFoul(String guess, String? pendingClue) =>
+      pendingClue != null &&
+      pendingClue.trim().isNotEmpty &&
+      isCorrect(guess, pendingClue);
 
   /// Starts a new match. [words] must hold at least [MatchConfig.totalWords]
   /// entries; [names] maps each role (A1/A2/B1/B2) to a display name.
@@ -295,7 +309,47 @@ class MatchEngine {
       step: TurnStep.awaitingGuess,
       pendingClue: text,
       feed: [...state.feed, entry],
+      lastOutcome: WordOutcome.none,
       hostLine: '${state.guesserName}, what is your guess?',
+    );
+  }
+
+  /// Wrong-guess steal path when the guess clock expires (no typed guess).
+  static MatchState timeoutGuess(MatchState state) {
+    if (!state.isTurnActive || state.step != TurnStep.awaitingGuess) {
+      return state;
+    }
+    final entry = PlayEntry(
+      kind: PlayKind.guess,
+      team: state.cluingTeam,
+      role: state.guesserRole,
+      playerName: state.guesserName,
+      text: 'TIME',
+      wordIndex: state.wordIndex,
+      correct: false,
+    );
+    final feed = [...state.feed, entry];
+    final used = state.exchangeCount + 1;
+    if (used >= state.config.maxExchanges) {
+      return state.copyWith(
+        exchangeCount: used,
+        step: TurnStep.resolved,
+        pendingClue: null,
+        feed: feed,
+        lastOutcome: WordOutcome.revealed,
+        hostLine: 'Time’s up! The word was “${state.secretWord}”. No points.',
+      );
+    }
+    final nextTeam = state.cluingTeam == 'A' ? 'B' : 'A';
+    return state.copyWith(
+      cluingTeam: nextTeam,
+      step: TurnStep.awaitingClue,
+      exchangeCount: used,
+      pendingClue: null,
+      feed: feed,
+      lastOutcome: WordOutcome.wrong,
+      hostLine:
+          'Time’s up! A steal! ${_clueLine(nextTeam, state.phase, state.names)}',
     );
   }
 
@@ -308,7 +362,9 @@ class MatchEngine {
     final text = guess.trim();
     if (text.isEmpty) return state;
 
-    final correct = isCorrect(text, state.secretWord);
+    // Repeating the clue is a foul — never scores, burns an exchange / steal.
+    final foul = isClueFoul(text, state.pendingClue);
+    final correct = !foul && isCorrect(text, state.secretWord);
     final entry = PlayEntry(
       kind: PlayKind.guess,
       team: state.cluingTeam,
@@ -337,7 +393,7 @@ class MatchEngine {
       );
     }
 
-    // Wrong guess — spend an exchange.
+    // Wrong guess or foul — spend an exchange.
     final used = state.exchangeCount + 1;
     if (used >= state.config.maxExchanges) {
       final line = 'Time’s up! The word was “${state.secretWord}”. No points.';
@@ -353,14 +409,18 @@ class MatchEngine {
 
     // Steal — control passes to the other team for a fresh clue.
     final nextTeam = state.cluingTeam == 'A' ? 'B' : 'A';
+    final stealLine = foul
+        ? 'Foul! You can’t guess the clue. Steal! '
+            '${_clueLine(nextTeam, state.phase, state.names)}'
+        : 'A steal! ${_clueLine(nextTeam, state.phase, state.names)}';
     return state.copyWith(
       cluingTeam: nextTeam,
       step: TurnStep.awaitingClue,
       exchangeCount: used,
       pendingClue: null,
       feed: feed,
-      lastOutcome: WordOutcome.none,
-      hostLine: 'A steal! ${_clueLine(nextTeam, state.phase, state.names)}',
+      lastOutcome: WordOutcome.wrong,
+      hostLine: stealLine,
     );
   }
 
@@ -374,9 +434,14 @@ class MatchEngine {
   // --- internal helpers ------------------------------------------------------
 
   /// Advances from a resolved word to the next word, halftime, or game-over.
-  /// Only valid on the [TurnStep.resolved] beat (a no-op otherwise).
+  /// Only valid on the [TurnStep.resolved] beat during an active half
+  /// (a no-op at halftime / game-over so a double-tap cannot skip the break).
   static MatchState nextWord(MatchState state) {
     if (state.step != TurnStep.resolved) return state;
+    if (state.phase != GamePhase.firstHalf &&
+        state.phase != GamePhase.secondHalf) {
+      return state;
+    }
     return _advanceWord(state);
   }
 

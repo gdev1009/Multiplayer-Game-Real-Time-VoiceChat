@@ -40,6 +40,14 @@ void main() {
       expect(s.effects, contains('audio/applause.mp3'));
     });
 
+    test('correct plays ding + cheer; steal plays buzzer', () {
+      final ok = HostAudio.soundsFor(SoundCue.correct);
+      expect(ok.effects, contains('audio/ding.mp3'));
+      expect(ok.effects, contains('audio/cheer.mp3'));
+      final bad = HostAudio.soundsFor(SoundCue.steal);
+      expect(bad.effects, contains('audio/buzzer.mp3'));
+    });
+
     test('disconnect is flagged as an alarm (plays even when muted)', () {
       final s = HostAudio.soundsFor(SoundCue.disconnect);
       expect(s.isAlarm, isTrue);

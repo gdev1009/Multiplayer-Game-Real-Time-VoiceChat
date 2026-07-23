@@ -7,16 +7,29 @@ enum CharacterPose {
   smug,
   shrug,
   hairfix,
-  selfie;
+  selfie,
+  /// Lipsync — mouth half-open (face only).
+  talkMid,
+  /// Lipsync — mouth open mid-speech (face only).
+  talkOpen;
 
   /// Folder-friendly asset stem (matches the PNG filename).
-  String get assetId => name;
+  String get assetId => switch (this) {
+        CharacterPose.talkMid => 'talk-mid',
+        CharacterPose.talkOpen => 'talk-open',
+        _ => name,
+      };
 
   /// Faces that only change the expression — safe to stack under hair/glasses.
   bool get isFaceOnly =>
       this == CharacterPose.tongue ||
       this == CharacterPose.worry ||
-      this == CharacterPose.smug;
+      this == CharacterPose.smug ||
+      this == CharacterPose.talkMid ||
+      this == CharacterPose.talkOpen;
+
+  bool get isTalk =>
+      this == CharacterPose.talkMid || this == CharacterPose.talkOpen;
 
   /// All poses in the recommended idle-cycle order (gentle → playful).
   static const List<CharacterPose> idleCycle = [
@@ -34,6 +47,13 @@ enum CharacterPose {
     CharacterPose.worry,
     CharacterPose.tongue,
   ];
+
+  /// Pick a talk pose from amplitude 0..1 (null = closed / neutral).
+  static CharacterPose? talkFromAmplitude(double open) {
+    if (open >= 0.48) return CharacterPose.talkOpen;
+    if (open >= 0.14) return CharacterPose.talkMid;
+    return null;
+  }
 }
 
 /// Resolves a pose PNG path for a given base body id (`body-female` /

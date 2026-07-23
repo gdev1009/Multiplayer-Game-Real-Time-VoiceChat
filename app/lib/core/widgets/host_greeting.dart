@@ -4,12 +4,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_text.dart';
 
-/// The show host greeting banner ("Guy Smiley").
-///
-/// Shows a friendly host avatar beside a warm, large-text greeting in a
-/// speech-bubble style card. The final host artwork and voice arrive in a
-/// later milestone; this is the senior-first visual placeholder that the rest
-/// of the app reuses wherever the host speaks.
+/// Guy Smiley greeting banner — avatar beside a warm speech-bubble message.
 class HostGreeting extends StatelessWidget {
   const HostGreeting({
     super.key,

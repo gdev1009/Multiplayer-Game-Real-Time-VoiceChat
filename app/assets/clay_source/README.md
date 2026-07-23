@@ -33,3 +33,4 @@ Add a short suffix for variants/states: `-idle`, `-cheer`, `-worry`, `-2x`.
 |------|---------------|----------|--------|
 | 2026-06-30 | Guy Smiley chat avatar (circular) | host | added as `host-avatar.png` (live in chats/host greeting) |
 | 2026-06-30 | Guy Smiley full-body (microphone) | host | added as `host-fullbody.png` (ready for studio/host use) |
+| 2026-07-14 | *(placeholders)* trophy-first-win, trophy-10-games, trophy-50-games, prize-sports-car, prize-vacation, prize-tv | trophies/prizes | temporary app PNGs until client clay art arrives |

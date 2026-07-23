@@ -23,7 +23,16 @@ abstract class SoundOutput {
   /// Fire a one-shot sound. When [voice] is true it plays on the dedicated
   /// voice channel (a new voice line interrupts the previous one); otherwise it
   /// plays on a small rotating pool so effects can overlap (e.g. cheer + ding).
-  Future<void> playOneShot(String asset, double volume, {bool voice});
+  /// [playbackRate] below 1.0 lowers pitch (Guy Smiley reads deeper).
+  /// [asset] is normally an AssetSource path; when [fromFile] is true it is an
+  /// absolute filesystem path (ElevenLabs cache).
+  Future<void> playOneShot(
+    String asset,
+    double volume, {
+    bool voice = false,
+    double playbackRate = 1.0,
+    bool fromFile = false,
+  });
 
   /// Stop everything immediately.
   Future<void> stopAll();
@@ -105,19 +114,34 @@ class AudioService implements SoundOutput {
   }
 
   @override
-  Future<void> playOneShot(String asset, double volume,
-      {bool voice = false,}) async {
+  Future<void> playOneShot(
+    String asset,
+    double volume, {
+    bool voice = false,
+    double playbackRate = 1.0,
+    bool fromFile = false,
+  }) async {
     await configure();
     try {
+      final source = fromFile ? DeviceFileSource(asset) : AssetSource(asset);
       if (voice) {
         await _voice.stop();
-        await _voice.play(AssetSource(asset), volume: volume);
+        await _voice.setPlaybackRate(playbackRate.clamp(0.5, 1.5));
+        await _voice.setVolume(volume.clamp(0.0, 1.0));
+        await _voice.play(source, volume: volume.clamp(0.0, 1.0));
+        // Hold the game beat until Guy finishes speaking so the next action
+        // never cuts him off mid-line. Long intros can exceed 30s.
+        try {
+          await _voice.onPlayerComplete.first.timeout(
+            const Duration(seconds: 90),
+          );
+        } catch (_) {}
         return;
       }
       final player = _sfxPool[_next];
       _next = (_next + 1) % _sfxPool.length;
       await player.stop();
-      await player.play(AssetSource(asset), volume: volume);
+      await player.play(source, volume: volume);
     } catch (err) {
       debugPrint('AudioService.playOneShot($asset) failed (ignored): $err');
     }

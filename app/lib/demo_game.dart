@@ -19,6 +19,36 @@ import 'features/game/game_engine.dart';
 import 'features/game/gameplay_controller.dart';
 import 'features/game/play_screen.dart';
 import 'features/game/word_bank.dart';
+import 'services/audio_controller.dart';
+import 'services/audio_service.dart';
+
+class _SilentOutput implements SoundOutput {
+  @override
+  Future<void> configure() async {}
+  @override
+  Future<void> playLoop(String asset, double volume) async {}
+  @override
+  Future<void> stopLoop() async {}
+  @override
+  Future<void> setLoopVolume(double volume) async {}
+  @override
+  Future<void> playOneShot(
+    String asset,
+    double volume, {
+    bool voice = false,
+    double playbackRate = 1.0,
+    bool fromFile = false,
+  }) async {
+    if (voice) {
+      // Keep lipsync ticking for a beat in silent demos.
+      await Future<void>.delayed(const Duration(milliseconds: 1600));
+    }
+  }
+  @override
+  Future<void> stopAll() async {}
+  @override
+  void dispose() {}
+}
 
 void main() {
   final controller = GameplayController()
@@ -37,13 +67,18 @@ void main() {
     );
 
   runApp(
-    ChangeNotifierProvider<GameplayController>.value(
-      value: controller,
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider<GameplayController>.value(value: controller),
+        ChangeNotifierProvider<AudioController>(
+          create: (_) => AudioController(output: _SilentOutput()),
+        ),
+      ],
       child: MaterialApp(
         title: 'Match Word — Play',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.light(),
-        home: const PlayScreen(),
+        home: const PlayScreen(studioPass: true),
       ),
     ),
   );

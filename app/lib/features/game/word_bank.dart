@@ -1,4 +1,4 @@
-/// Match Word — the built-in bank of secret words (Milestone 5).
+/// Match Word — the built-in bank of secret words.
 ///
 /// Senior-first word choices: common, concrete, everyday nouns that are easy to
 /// read and fun to clue. The server keeps the authoritative list (see

@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text.dart';
 
-/// The animated Guy Smiley host figure for the play stage (Milestone 6).
+/// The animated Guy Smiley host figure for the play stage.
 ///
 /// Idles with a gentle bob so the show feels alive, and gives a brief "excited"
 /// bounce + glow whenever the host says something new ([speaking]). Uses the
@@ -114,7 +114,7 @@ class _AnimatedHostState extends State<AnimatedHost>
   }
 }
 
-/// A full-screen disconnect alarm overlay (Milestone 6).
+/// A full-screen disconnect alarm overlay.
 ///
 /// When a player drops, the whole screen flashes red with an ALERT/AWOOGA feel
 /// (the sound is fired by the [AudioController]) and the host explains what

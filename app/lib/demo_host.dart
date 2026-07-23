@@ -18,6 +18,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'core/theme/app_theme.dart';
+import 'features/game/ai_player.dart';
 import 'features/game/game_engine.dart';
 import 'features/game/gameplay_controller.dart';
 import 'features/game/play_screen.dart';
@@ -38,7 +39,7 @@ class _SilentOutput implements SoundOutput {
   Future<void> setLoopVolume(double volume) async {}
   @override
   Future<void> playOneShot(String asset, double volume,
-      {bool voice = false,}) async {}
+      {bool voice = false, double playbackRate = 1.0, bool fromFile = false}) async {}
   @override
   Future<void> stopAll() async {}
   @override
@@ -48,16 +49,28 @@ class _SilentOutput implements SoundOutput {
 final ValueNotifier<String?> _disconnectSignal = ValueNotifier<String?>(null);
 
 void main() {
+  final names = const {
+    'A1': 'Rosa',
+    'A2': 'Walter',
+    'B1': 'Grace',
+    'B2': 'Mabel',
+  };
   final controller = GameplayController()
     ..startLocal(
-      names: const {
-        'A1': 'Rosa',
-        'A2': 'Walter',
-        'B1': 'Grace',
-        'B2': 'Mabel',
-      },
+      names: names,
       words: WordBank.deal(8, random: Random(20260629)),
       config: const MatchConfig(),
+      myRole: 'A1',
+      aiByRole: const {
+        'A1': false,
+        'A2': true,
+        'B1': true,
+        'B2': true,
+      },
+      charactersByRole: {
+        for (final e in names.entries)
+          e.key: AiPlayer.lookFor('${e.key}:${e.value}', e.value),
+      },
     );
 
   runApp(
@@ -73,7 +86,10 @@ void main() {
         debugShowCheckedModeBanner: false,
         theme: AppTheme.light(),
         home: Scaffold(
-          body: PlayScreen(disconnectSignal: _disconnectSignal),
+          body: PlayScreen(
+            disconnectSignal: _disconnectSignal,
+            studioPass: true,
+          ),
           floatingActionButton: FloatingActionButton.extended(
             onPressed: () => _disconnectSignal.value =
                 'Rosa lost connection. We\'ll pause while she comes back.',

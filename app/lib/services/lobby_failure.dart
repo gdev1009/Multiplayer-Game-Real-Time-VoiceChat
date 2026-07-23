@@ -46,6 +46,16 @@ class LobbyFailure implements Exception {
           'Please sign in again to play.',
           code: 'not_signed_in',
         );
+      case 'no_secret':
+        return const LobbyFailure(
+          'The word is still loading. Please try again in a moment.',
+          code: 'no_secret',
+        );
+      case 'not_awaiting_guess':
+        return const LobbyFailure(
+          'That word is already done — wait for the next one.',
+          code: 'not_awaiting_guess',
+        );
       default:
         return LobbyFailure(
           'Something went wrong. Please try again.',

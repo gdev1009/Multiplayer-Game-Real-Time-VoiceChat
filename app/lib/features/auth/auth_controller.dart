@@ -47,12 +47,6 @@ class AuthController extends ChangeNotifier {
     _set(AuthStatus.signedIn);
   }
 
-  Future<void> quickTestSignIn() async {
-    _profile = await _auth.quickTestSignIn();
-    _rememberedName = _profile?.firstName;
-    _set(AuthStatus.signedIn);
-  }
-
   Future<void> dailyLogin({
     required String firstName,
     required String pin,

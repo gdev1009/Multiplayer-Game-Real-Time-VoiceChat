@@ -5,11 +5,13 @@ import 'core/navigation/app_routes.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/auth_controller.dart';
 import 'features/auth/auth_gate.dart';
+import 'features/billing/paywall_screen.dart';
 import 'features/character/character_creation_screen.dart';
 import 'features/friends/friends_screen.dart';
 import 'features/lobby/join_by_code_screen.dart';
 import 'features/lobby/lobby_room_screen.dart';
 import 'features/lobby/upcoming_games_screen.dart';
+import 'features/prizes/prize_room_screen.dart';
 import 'features/studio/studio_screen.dart';
 
 /// Root widget. Boots the auth controller and shows the [AuthGate].
@@ -44,6 +46,8 @@ class _MatchWordAppState extends State<MatchWordApp> {
         AppRoutes.studio: (_) => const StudioScreen(),
         AppRoutes.character: (_) => const CharacterCreationScreen(),
         AppRoutes.friends: (_) => const FriendsScreen(),
+        AppRoutes.prizeRoom: (_) => const PrizeRoomScreen(),
+        AppRoutes.paywall: (_) => const PaywallScreen(),
       },
     );
   }

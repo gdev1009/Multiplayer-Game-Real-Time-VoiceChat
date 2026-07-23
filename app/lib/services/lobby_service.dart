@@ -6,7 +6,7 @@ import '../models/game_player.dart';
 import '../models/game_preview.dart';
 import 'lobby_failure.dart';
 
-/// Server-authoritative lobby operations for Milestone 4.
+/// Server-authoritative lobby operations.
 ///
 /// Every mutation calls a `SECURITY DEFINER` Postgres function (see
 /// `supabase/migrations/0004_lobby.sql`); the client never writes to the

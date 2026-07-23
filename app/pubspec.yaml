@@ -1,7 +1,7 @@
 name: match_word
 description: Match Word — a real-time multiplayer word game for seniors (Grandma Mac).
 publish_to: "none"
-version: 0.1.0+1
+version: 1.0.0+1
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
@@ -11,33 +11,18 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # Backend / realtime / auth
   supabase_flutter: ^2.5.6
-
-  # Local secure storage for session + device fingerprint
   flutter_secure_storage: ^9.2.2
-
-  # Stable device fingerprint for trial-abuse prevention
   device_info_plus: ^10.1.0
   uuid: ^4.4.0
-
-  # PIN hashing
   crypto: ^3.0.3
-
-  # Lightweight state management
   provider: ^6.1.2
-
-  # Native share sheet — share a game code outside the app (M4)
   share_plus: ^10.0.0
-
-  # Host + audio system: theme music, SFX cues, host voice clips (M6)
   audioplayers: ^6.1.0
-
-  # Lightweight persistence for sound settings (mute / volume) (M6)
   shared_preferences: ^2.3.2
-
-  # Environment configuration
   flutter_dotenv: ^5.1.0
+  http: ^1.2.2
+  path_provider: ^2.1.4
 
 dev_dependencies:
   flutter_test:
@@ -45,8 +30,6 @@ dev_dependencies:
   flutter_lints: ^4.0.0
   flutter_launcher_icons: ^0.14.1
 
-# App launcher icons (Android + web). Regenerate with:
-#   dart run flutter_launcher_icons
 flutter_launcher_icons:
   image_path: "assets/images/matchword-app-icon.png"
   android: "ic_launcher"
@@ -61,18 +44,35 @@ flutter_launcher_icons:
     image_path: "assets/images/matchword-app-icon.png"
     background_color: "#3B1A63"
     theme_color: "#5B2D8E"
-  flutter_launcher_icons: ^0.14.4
 
 flutter:
   uses-material-design: true
   assets:
     - .env
-    - assets/images/
-    - assets/images/host/
+    - assets/images/grandmac-logo.jpg
+    - assets/images/host/host-avatar.png
+    - assets/images/host/host-stage.png
+    - assets/images/host/host-idle.png
+    - assets/images/host/host-stage-plate.png
+    - assets/images/host/talk/
+    - assets/images/Studio_background.png
+    - assets/images/Seat_on.png
+    - assets/images/Seat_off.png
+    - assets/images/host/actions/
+    - assets/images/host/actions/frames/listening/
+    - assets/images/host/actions/frames/welcome-wave/
+    - assets/images/host/actions/frames/green-flag-wave/
+    - assets/images/host/actions/frames/red-flag-shake/
+    - assets/images/host/actions/frames/golden-card-reveal/
+    - assets/images/host/actions/frames/winner-announce/
+    - assets/images/host/bust-female.png
+    - assets/images/host/bust-male.png
     - assets/audio/
     - assets/audio/voice/
-    - assets/images/character/
-    - assets/images/character/base/
+    - assets/audio/voice/envelopes/
+    - assets/images/host/mouth/
+    - assets/images/character/base/body-female.png
+    - assets/images/character/base/body-male.png
     - assets/images/character/hair/
     - assets/images/character/outfit/
     - assets/images/character/glasses/
@@ -81,3 +81,5 @@ flutter:
     - assets/images/character/accessory/
     - assets/images/character/poses/female/
     - assets/images/character/poses/male/
+    - assets/images/trophies/
+    - assets/images/prizes/

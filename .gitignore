@@ -5,6 +5,7 @@
 *.jks
 # Local scratchpad containing live credentials — never commit
 docs/Project.md
+docs/Internal_note.md
 **/google-services.json
 **/GoogleService-Info.plist
 
@@ -32,3 +33,7 @@ coverage/
 # Local recovery / delivery artifacts
 .git_corrupt_backup_*/
 app/dist/
+
+# JS tooling (frame extraction scripts, etc.)
+node_modules/
+**/node_modules/

@@ -44,7 +44,7 @@ from pathlib import Path
 
 CANVAS = 1254
 GEN_SIZE = "1024x1024"
-DEFAULT_QUALITY = "medium"
+DEFAULT_QUALITY = "high"
 MODEL = "gpt-image-1"
 
 IMAGE_PRICE_USD = {
@@ -90,14 +90,29 @@ POSE_ACTIONS = {
         "Keep the same face style, clothes, colours and feet. No props, no "
         "phone, no camera in the image."
     ),
+    "talk-mid": (
+        "Change ONLY the mouth for lipsync: open the mouth moderately as if "
+        "speaking a vowel — soft oval opening, upper teeth faintly visible, "
+        "natural lips. Keep the exact same head placement, eyes, brows, body, "
+        "arms, clothes and feet. No exaggerated cartoon mouth, no shout."
+    ),
+    "talk-open": (
+        "Change ONLY the mouth for lipsync: open the mouth wider as if mid-"
+        "speech — clear oval cavity, upper teeth visible, soft natural lips. "
+        "Keep the exact same head placement, eyes, brows, body, arms, clothes "
+        "and feet. Friendly game-show speaking look, not screaming."
+    ),
 }
 
 LOCK_PREAMBLE = (
-    "Edit this EXACT character image. Keep the identical person: same clay "
-    "3D-render style, same skin tone, same big round bald head, same face "
-    "structure, same body proportions, same clothes and colours, same soft "
-    "studio lighting. Fully transparent background, no floor, no props, no "
-    "text, no extra accessories. Front view, centered on the same canvas. "
+    "Edit this EXACT character image for a premium senior mobile game. Keep "
+    "the identical person: warm clay / soft-plastic 3D style, same skin tone, "
+    "same big round bald head, same senior-friendly face (gentle age lines, "
+    "kind eyes — do NOT make them look like a young adult or child), same body "
+    "proportions, same clothes and colours, same soft studio lighting. Fully "
+    "transparent background (no black plate, no floor, no props, no text, no "
+    "extra accessories). Front view, centered on the same canvas. Premium "
+    "clean edges — no blocky artifacts under the feet. "
 )
 
 ROOT = Path(__file__).resolve().parent.parent

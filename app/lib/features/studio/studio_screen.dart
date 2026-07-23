@@ -10,7 +10,7 @@ import '../../core/widgets/big_button.dart';
 import '../../core/widgets/host_greeting.dart';
 import '../lobby/lobby_controller.dart';
 
-/// "Enter the Studio" destination (Milestone 4).
+/// "Enter the Studio" destination.
 ///
 /// The host-first path: start your own game and share the code with friends, or
 /// join a friend's game with their code. Public matchmaking lives on the

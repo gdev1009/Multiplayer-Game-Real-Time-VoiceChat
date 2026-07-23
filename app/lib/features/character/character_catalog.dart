@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 /// The assembly engine paints them in this order, so later entries appear on
 /// top (e.g. [glasses] over the face, [hat] over the [hair]).
 ///
-/// Milestone 3 uses the artist's real, full-colour PNG art. Every option is a
+/// Full-colour PNG art catalog. Every option is a
 /// pre-registered 1254×1254 overlay that lines up exactly on the chosen body,
 /// so the engine simply stacks the chosen layers — no tinting, no per-part
 /// positioning.

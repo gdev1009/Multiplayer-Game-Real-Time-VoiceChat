@@ -10,6 +10,8 @@ class Profile {
     required this.trialStartedAt,
     required this.trialUsed,
     required this.createdAt,
+    this.gamesPlayed = 0,
+    this.gamesWon = 0,
   });
 
   final String id;
@@ -18,6 +20,12 @@ class Profile {
   final DateTime? trialStartedAt;
   final bool trialUsed;
   final DateTime createdAt;
+
+  /// Matches finished (Prize Room stats).
+  final int gamesPlayed;
+
+  /// Matches finished on the winning team.
+  final int gamesWon;
 
   /// Days remaining in the 7-day free trial (0 if expired or none).
   int get trialDaysRemaining {
@@ -38,6 +46,8 @@ class Profile {
           : DateTime.parse(map['trial_started_at'] as String),
       trialUsed: (map['trial_used'] as bool?) ?? false,
       createdAt: DateTime.parse(map['created_at'] as String),
+      gamesPlayed: (map['games_played'] as num?)?.toInt() ?? 0,
+      gamesWon: (map['games_won'] as num?)?.toInt() ?? 0,
     );
   }
 

@@ -6,7 +6,7 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text.dart';
 import '../../services/audio_controller.dart';
 
-/// A round mute / sound button for the play screen app bar (Milestone 6).
+/// A round mute / sound button for the play screen app bar.
 ///
 /// Shows the current state at a glance (speaker vs. speaker-off) and opens the
 /// full [SoundSettingsSheet] on tap so a senior can quieten the game without
@@ -103,7 +103,15 @@ class SoundSettingsSheet extends StatelessWidget {
           const SizedBox(height: AppSpacing.md),
           _VolumeRow(
             icon: Icons.campaign_rounded,
-            label: 'Host & effects',
+            label: 'Host voice',
+            value: audio.voiceVolume,
+            enabled: !audio.muted,
+            onChanged: audio.setVoiceVolume,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          _VolumeRow(
+            icon: Icons.graphic_eq_rounded,
+            label: 'Effects',
             value: audio.sfxVolume,
             enabled: !audio.muted,
             onChanged: audio.setSfxVolume,

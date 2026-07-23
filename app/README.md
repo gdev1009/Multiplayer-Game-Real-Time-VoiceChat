@@ -74,9 +74,12 @@ flutter doctor
 
    - Dashboard → **Authentication → Providers → Email**: enable Email.
    - Dashboard → **Authentication → Sign In / Providers**: set **Confirm email** to OFF for this Milestone 1 flow.
-   - Dashboard → **Authentication → Email Templates → Magic Link**: make sure the template
-     includes the token, e.g. `Your code is: {{ .Token }}`. The app verifies this 6-digit
-     code in the Forgot-PIN flow.
+   - Dashboard → **Authentication → Email Templates → Magic Link**: replace the default
+     “Sign in” **link** template with the OTP body in
+     [`supabase/email-templates/magic-link.html`](supabase/email-templates/magic-link.html)
+     (must include `{{ .Token }}`, not `{{ .ConfirmationURL }}`). See
+     [`supabase/email-templates/README.md`](supabase/email-templates/README.md).
+     The app verifies this 6-digit code in the Forgot-PIN flow.
 
 5. **(Recommended for production) Use custom SMTP with Mailgun**
 

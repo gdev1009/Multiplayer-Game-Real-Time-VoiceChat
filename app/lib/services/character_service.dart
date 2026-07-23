@@ -40,7 +40,7 @@ class CharacterService {
       // lobby and the in-game roster are labelled from `profiles.first_name`
       // (the server copies it into each `game_players` row), so syncing it here
       // is what makes a player show up as e.g. "As" instead of the auto-created
-      // quick-test handle like "Tester 6499". Best-effort: a failure here never
+      // Best-effort: a failure here never
       // blocks saving the character itself.
       final name = character.displayName.trim();
       if (name.isNotEmpty) {

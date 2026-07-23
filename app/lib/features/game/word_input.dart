@@ -4,7 +4,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text.dart';
 
-/// Dual clue/guess input for gameplay (Milestone 5).
+/// Dual clue/guess input for gameplay.
 ///
 /// Per the spec, players may **speak or type** their word, and a text fallback
 /// is *always* available. This widget shows a big, senior-friendly text field
@@ -24,6 +24,7 @@ class WordInput extends StatefulWidget {
     required this.onSubmit,
     this.enabled = true,
     this.onSpeakRequested,
+    this.compact = false,
   });
 
   /// The action label, e.g. "Your clue" or "Your guess".
@@ -41,6 +42,9 @@ class WordInput extends StatefulWidget {
   /// Optional press-to-speak handler that returns recognised text (or null if
   /// cancelled / unavailable). When null, the mic prompts the player to type.
   final Future<String?> Function()? onSpeakRequested;
+
+  /// Tight padding for the live studio play screen (more room for the stage).
+  final bool compact;
 
   @override
   State<WordInput> createState() => _WordInputState();
@@ -93,6 +97,9 @@ class _WordInputState extends State<WordInput> {
   @override
   Widget build(BuildContext context) {
     final enabled = widget.enabled;
+    if (widget.compact) {
+      return _buildDock(enabled);
+    }
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
@@ -102,6 +109,7 @@ class _WordInputState extends State<WordInput> {
         boxShadow: AppColors.softShadow,
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(widget.label, style: AppText.title),
@@ -109,13 +117,14 @@ class _WordInputState extends State<WordInput> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Big press-to-speak mic.
-              _MicButton(
-                listening: _listening,
-                enabled: enabled,
-                onTap: enabled ? _speak : null,
-              ),
-              const SizedBox(width: AppSpacing.md),
+              if (widget.onSpeakRequested != null) ...[
+                _MicButton(
+                  listening: _listening,
+                  enabled: enabled,
+                  onTap: enabled ? _speak : null,
+                ),
+                const SizedBox(width: AppSpacing.md),
+              ],
               Expanded(
                 child: TextField(
                   controller: _controller,
@@ -157,13 +166,115 @@ class _WordInputState extends State<WordInput> {
               ),
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            'Speak or type — whatever is easiest for you.',
-            style: AppText.bodyMuted.copyWith(fontSize: 16),
-            textAlign: TextAlign.center,
-          ),
+          if (widget.onSpeakRequested != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Speak or type — whatever is easiest for you.',
+              style: AppText.bodyMuted.copyWith(fontSize: 16),
+              textAlign: TextAlign.center,
+            ),
+          ],
         ],
+      ),
+    );
+  }
+
+  /// Compact studio dock: one thin input-styled chip (not a label in a tall box).
+  Widget _buildDock(bool enabled) {
+    return Semantics(
+      label: widget.label,
+      child: SizedBox.expand(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: const Color(0xFF24154A),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: const Color(0xFFF1B159).withValues(alpha: 0.65),
+              width: 1.0,
+            ),
+          ),
+          child: Theme(
+            data: Theme.of(context).copyWith(
+              inputDecorationTheme: const InputDecorationTheme(
+                filled: false,
+                fillColor: Colors.transparent,
+                isDense: true,
+                contentPadding: EdgeInsets.symmetric(horizontal: 12),
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                disabledBorder: InputBorder.none,
+                errorBorder: InputBorder.none,
+                focusedErrorBorder: InputBorder.none,
+              ),
+            ),
+            child: Row(
+              children: [
+                if (widget.onSpeakRequested != null) ...[
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4),
+                    child: _MicButton(
+                      listening: _listening,
+                      enabled: enabled,
+                      onTap: enabled ? _speak : null,
+                    ),
+                  ),
+                ],
+                Expanded(
+                  child: TextField(
+                    controller: _controller,
+                    enabled: enabled,
+                    textAlignVertical: TextAlignVertical.center,
+                    textInputAction: TextInputAction.send,
+                    onSubmitted: (_) => _send(),
+                    style: AppText.body.copyWith(
+                      fontSize: 34,
+                      color: Colors.white,
+                      height: 1.05,
+                      fontWeight: FontWeight.w900,
+                    ),
+                    cursorColor: const Color(0xFFE8B84A),
+                    decoration: InputDecoration(
+                      hintText: widget.label,
+                      hintStyle: AppText.bodyMuted.copyWith(
+                        fontSize: 28,
+                        color: Colors.white70,
+                        height: 1.05,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(4),
+                  child: Semantics(
+                    button: true,
+                    label: 'Send',
+                    child: SizedBox(
+                      width: 44,
+                      height: 44,
+                      child: FilledButton(
+                        onPressed: enabled ? _send : null,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.deepPurple,
+                          foregroundColor: Colors.white,
+                          padding: EdgeInsets.zero,
+                          side: const BorderSide(
+                            color: Color(0xFFE8B84A),
+                            width: 1.0,
+                          ),
+                          shape: const CircleBorder(),
+                        ),
+                        child:
+                            const Icon(Icons.arrow_upward_rounded, size: 22),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

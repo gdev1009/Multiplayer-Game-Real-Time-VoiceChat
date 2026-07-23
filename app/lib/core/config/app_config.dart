@@ -1,16 +1,8 @@
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 /// Reads Supabase credentials from the bundled `.env` file.
-///
-/// Never hard-code keys in source. Copy `.env.example` to `.env` and fill in
-/// your project's URL and anon key (Supabase dashboard → Settings → API).
 class AppConfig {
   AppConfig._();
-
-  static bool get easyTestAuth {
-    final value = dotenv.env['EASY_TEST_AUTH']?.trim().toLowerCase();
-    return value == '1' || value == 'true' || value == 'yes';
-  }
 
   static String get supabaseUrl {
     final value = dotenv.env['SUPABASE_URL'];

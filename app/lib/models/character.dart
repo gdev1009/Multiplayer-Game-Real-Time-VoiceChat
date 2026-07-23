@@ -4,7 +4,7 @@
 /// `null` when the player picked "None" for that layer. The assembly engine
 /// resolves these ids to PNG asset paths and layers them in order.
 ///
-/// Milestone 3 uses the artist's real, full-colour art, so there are no colour
+/// Uses the artist's full-colour art, so there are no colour
 /// tints — the chosen art is exactly what is shown.
 class Character {
   const Character({

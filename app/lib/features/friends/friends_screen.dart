@@ -13,7 +13,7 @@ import '../character/idle_character_preview.dart';
 import '../lobby/lobby_controller.dart';
 import 'friend_controller.dart';
 
-/// The Friends screen (Milestone 7).
+/// The Friends screen.
 ///
 /// Shows incoming friend requests to accept, the player's friends (each of whom
 /// can be invited to a new game or removed), and a gentle explanation of how
@@ -231,6 +231,7 @@ class _FriendAvatar extends StatelessWidget {
       child: IdleCharacterPreview(
         character: friend.character,
         size: _size,
+        animatePoses: false,
       ),
     );
   }

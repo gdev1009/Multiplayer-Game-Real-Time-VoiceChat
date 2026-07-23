@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
-import '../../../core/config/app_config.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text.dart';
@@ -26,30 +25,6 @@ class _DailyLoginScreenState extends State<DailyLoginScreen> {
   String? _error;
   bool _busy = false;
 
-  Future<void> _quickTestSignIn() async {
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
-    try {
-      await context.read<AuthController>().quickTestSignIn();
-      if (!mounted) return;
-      Navigator.of(context).popUntil((route) => route.isFirst);
-    } on AuthFailure catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _busy = false;
-        _error = e.message;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _busy = false;
-        _error = 'Something went wrong. Please try again.';
-      });
-    }
-  }
-
   Future<void> _submit(String name) async {
     setState(() {
       _busy = true;
@@ -59,8 +34,6 @@ class _DailyLoginScreenState extends State<DailyLoginScreen> {
       await context
           .read<AuthController>()
           .dailyLogin(firstName: name, pin: _pin);
-      // Signed in. If this screen was pushed (e.g. from Welcome), remove it so
-      // the AuthGate's Home screen becomes visible. Safe no-op at root.
       if (!mounted) return;
       Navigator.of(context).popUntil((route) => route.isFirst);
     } on AuthFailure catch (e) {
@@ -145,15 +118,6 @@ class _DailyLoginScreenState extends State<DailyLoginScreen> {
               );
             },
           ),
-          if (AppConfig.easyTestAuth) ...[
-            const SizedBox(height: AppSpacing.md),
-            BigButton(
-              label: 'Quick Test Sign-In',
-              icon: Icons.flash_on_rounded,
-              variant: BigButtonVariant.secondary,
-              onPressed: _busy ? null : _quickTestSignIn,
-            ),
-          ],
           const SizedBox(height: AppSpacing.xl),
         ],
       ),

@@ -31,6 +31,46 @@
 
   <title>match_word</title>
   <link rel="manifest" href="manifest.json">
+  <style>
+    /* Hide Flutter web's native text-editing overlay (white pill). */
+    input, textarea {
+      background: transparent !important;
+      background-color: transparent !important;
+      color: transparent !important;
+      -webkit-text-fill-color: transparent !important;
+      caret-color: #E8B84A !important;
+      border: 0 !important;
+      outline: 0 !important;
+      box-shadow: none !important;
+      opacity: 0 !important;
+    }
+  </style>
+  <script>
+    // Flutter may host inputs inside shadow roots — page CSS won't reach them.
+    (function () {
+      function paintTransparent(root) {
+        try {
+          const style = document.createElement('style');
+          style.setAttribute('data-mw-input-fix', '1');
+          style.textContent =
+            'input,textarea{background:transparent!important;background-color:transparent!important;color:transparent!important;-webkit-text-fill-color:transparent!important;caret-color:#E8B84A!important;border:0!important;outline:0!important;box-shadow:none!important;opacity:0!important;}';
+          if (!root.querySelector('style[data-mw-input-fix]')) root.appendChild(style);
+          root.querySelectorAll('input,textarea').forEach((el) => {
+            el.style.setProperty('background', 'transparent', 'important');
+            el.style.setProperty('background-color', 'transparent', 'important');
+            el.style.setProperty('opacity', '0', 'important');
+            el.style.setProperty('color', 'transparent', 'important');
+          });
+          root.querySelectorAll('*').forEach((el) => {
+            if (el.shadowRoot) paintTransparent(el.shadowRoot);
+          });
+        } catch (_) {}
+      }
+      const tick = () => paintTransparent(document);
+      document.addEventListener('DOMContentLoaded', tick);
+      setInterval(tick, 400);
+    })();
+  </script>
 </head>
 <body>
   <!--

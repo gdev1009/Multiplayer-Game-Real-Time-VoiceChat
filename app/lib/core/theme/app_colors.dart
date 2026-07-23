@@ -11,6 +11,9 @@ class AppColors {
   static const Color deepPurple = Color(0xFF5B2D8E);
   static const Color deepPurpleDark = Color(0xFF3B1A63);
   static const Color deepPurpleLight = Color(0xFF7B4FB0);
+
+  /// Studio wash purple — continuous stage behind keyed Guy frames.
+  static const Color hostStage = Color(0xFF2A1448);
   static const Color lavender = Color(0xFFE9DDF7);
   static const Color lavenderSoft = Color(0xFFF4EDFB);
   static const Color warmBeige = Color(0xFFF7F1E6);

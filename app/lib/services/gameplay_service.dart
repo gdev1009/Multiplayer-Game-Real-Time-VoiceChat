@@ -61,6 +61,7 @@ class GameStateRow {
   static WordOutcome _outcome(String? v) => switch (v) {
         'guessed' => WordOutcome.guessed,
         'revealed' => WordOutcome.revealed,
+        'wrong' => WordOutcome.wrong,
         _ => WordOutcome.none,
       };
 
@@ -92,10 +93,14 @@ PlayEntry playEntryFromMap(Map<String, dynamic> m) => PlayEntry(
       playerName: (m['player_name'] as String?) ?? '',
       text: (m['text'] as String?) ?? '',
       wordIndex: (m['word_index'] as num?)?.toInt() ?? 0,
-      correct: m['correct'] as bool?,
+      correct: m['correct'] == true
+          ? true
+          : m['correct'] == false
+              ? false
+              : null,
     );
 
-/// Server-authoritative gameplay operations for Milestone 5.
+/// Server-authoritative gameplay operations.
 ///
 /// Every mutation calls a `SECURITY DEFINER` Postgres function (see
 /// `supabase/migrations/0007_gameplay.sql`); the client never writes to the
@@ -154,8 +159,9 @@ class GameplayService {
   Future<void> submitClue(String gameId, String text) =>
       _callOk('mw_submit_clue', {'p_game': gameId, 'p_text': text});
 
-  /// The on-the-clock guesser submits a guess.
-  Future<void> submitGuess(String gameId, String text) =>
+  /// The on-the-clock guesser submits a guess. Returns the RPC payload
+  /// (`correct`, `word`, `word_index`) so the client can re-sync the secret.
+  Future<Map<String, dynamic>> submitGuess(String gameId, String text) =>
       _callOk('mw_submit_guess', {'p_game': gameId, 'p_text': text});
 
   /// Advance off the resolved beat to the next word / halftime / game-over.
@@ -166,14 +172,56 @@ class GameplayService {
   Future<void> beginSecondHalf(String gameId) =>
       _callOk('mw_begin_second_half', {'p_game': gameId});
 
-  /// Loads the dealt words for a game (members only), ordered by index.
+  /// Clue-giver / host peek at the current secret (server authority).
+  Future<String?> peekSecret(String gameId) async {
+    try {
+      final res = await _callOk('mw_peek_secret', {'p_game': gameId});
+      return (res['word'] as String?)?.trim();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Loads the dealt words for a game (members only), indexed by word_index.
   Future<List<String>> loadWords(String gameId) async {
     final rows = await _client
         .from('game_words')
-        .select('word')
+        .select('word_index, word')
         .eq('game_id', gameId)
         .order('word_index');
-    return rows.map<String>((r) => (r['word'] as String?) ?? '').toList();
+    if (rows.isEmpty) return const [];
+    var maxIdx = 0;
+    for (final r in rows) {
+      final i = (r['word_index'] as num?)?.toInt() ?? 0;
+      if (i > maxIdx) maxIdx = i;
+    }
+    final out = List<String>.filled(maxIdx + 1, '');
+    for (final r in rows) {
+      final i = (r['word_index'] as num?)?.toInt() ?? 0;
+      out[i] = (r['word'] as String?) ?? '';
+    }
+    return out;
+  }
+
+  /// One secret at [wordIndex] — always server-truth for grading / HUD.
+  Future<String?> loadWordAt(String gameId, int wordIndex) async {
+    final row = await _client
+        .from('game_words')
+        .select('word')
+        .eq('game_id', gameId)
+        .eq('word_index', wordIndex)
+        .maybeSingle();
+    return (row?['word'] as String?)?.trim();
+  }
+
+  /// Full feed snapshot (oldest first) for post-guess reconciliation.
+  Future<List<PlayEntry>> loadPlays(String gameId) async {
+    final rows = await _client
+        .from('game_plays')
+        .select()
+        .eq('game_id', gameId)
+        .order('created_at');
+    return rows.map<PlayEntry>((r) => playEntryFromMap(r)).toList();
   }
 
   /// Fetches the current authoritative match state once (not a stream), so an

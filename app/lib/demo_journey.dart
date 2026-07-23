@@ -33,31 +33,126 @@ import 'features/lobby/join_by_code_screen.dart';
 import 'features/lobby/lobby_controller.dart';
 import 'features/lobby/lobby_room_screen.dart';
 import 'features/lobby/upcoming_games_screen.dart';
+import 'features/prizes/prize_controller.dart';
+import 'features/prizes/prize_room_screen.dart';
 import 'features/studio/studio_screen.dart';
 import 'models/character.dart';
 import 'models/game.dart';
 import 'models/game_player.dart';
 import 'models/game_preview.dart';
+import 'models/prize.dart';
+import 'models/profile.dart';
+import 'services/audio_controller.dart';
+import 'services/audio_service.dart';
 import 'services/auth_service.dart';
+import 'services/billing_service.dart';
 import 'services/character_service.dart';
 import 'services/device_service.dart';
+import 'services/entitlement_service.dart';
 import 'services/gameplay_service.dart';
 import 'services/lobby_service.dart';
+import 'services/prize_service.dart';
 import 'services/profile_service.dart';
 import 'services/trial_service.dart';
 
 void main() {
+  final charService = _InMemoryCharacterService()
+    ..seed(const Character(
+      displayName: 'Rosie',
+      base: 'body-female',
+      hair: 'hair-f1',
+      outfit: 'outfit-f1',
+      glasses: 'glasses-f-round',
+    ));
+  final prizeCtrl = PrizeController(PrizeService(_offlineClient()))
+    ..seedForDemo(
+      PrizeRoom(
+        gamesPlayed: 12,
+        gamesWon: 3,
+        items: const [
+          PrizeItem(
+            id: 'trophy-first-win',
+            kind: 'trophy',
+            title: 'First Win',
+            description: 'Won your very first Match Word game.',
+            assetPath: 'assets/images/trophies/trophy-first-win.png',
+            sortOrder: 10,
+            earned: true,
+          ),
+          PrizeItem(
+            id: 'trophy-10-games',
+            kind: 'trophy',
+            title: '10 Games',
+            description: 'Played 10 matches end to end.',
+            assetPath: 'assets/images/trophies/trophy-10-games.png',
+            sortOrder: 20,
+            earned: true,
+          ),
+          PrizeItem(
+            id: 'trophy-50-games',
+            kind: 'trophy',
+            title: '50 Games',
+            description: 'Played 50 matches — a true studio regular.',
+            assetPath: 'assets/images/trophies/trophy-50-games.png',
+            sortOrder: 30,
+            earned: false,
+          ),
+          PrizeItem(
+            id: 'prize-sports-car',
+            kind: 'prize',
+            title: 'Clay Sports Car',
+            description: 'A shiny novelty car for your shelf.',
+            assetPath: 'assets/images/prizes/prize-sports-car.png',
+            sortOrder: 110,
+            earned: true,
+          ),
+          PrizeItem(
+            id: 'prize-vacation',
+            kind: 'prize',
+            title: 'Beach Getaway',
+            description: 'A sunny little vacation souvenir.',
+            assetPath: 'assets/images/prizes/prize-vacation.png',
+            sortOrder: 120,
+            earned: true,
+          ),
+          PrizeItem(
+            id: 'prize-tv',
+            kind: 'prize',
+            title: 'Living-Room TV',
+            description: 'A cozy novelty TV for movie nights.',
+            assetPath: 'assets/images/prizes/prize-tv.png',
+            sortOrder: 130,
+            earned: false,
+          ),
+        ],
+      ),
+    );
+
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider<AuthController>(create: (_) => _DemoAuthController()),
         ChangeNotifierProvider<CharacterController>(
-          create: (_) => CharacterController(_InMemoryCharacterService()),
+          create: (_) {
+            final c = CharacterController(charService);
+            unawaited(c.load());
+            return c;
+          },
         ),
         ChangeNotifierProvider<LobbyController>(
           create: (_) => LobbyController(_InMemoryLobbyService()),
         ),
+        ChangeNotifierProvider<PrizeController>.value(value: prizeCtrl),
         Provider<GameplayService>.value(value: _DemoGameplayService()),
+        ChangeNotifierProvider<AudioController>(
+          create: (_) => AudioController(output: _SilentOutput()),
+        ),
+        Provider<EntitlementService>(
+          create: (_) => EntitlementService(
+            profileService: ProfileService(_offlineClient()),
+            billingService: BillingService(_offlineClient()),
+          ),
+        ),
       ],
       child: MaterialApp(
         title: 'Match Word — Full Journey',
@@ -70,10 +165,29 @@ void main() {
           AppRoutes.lobbyRoom: (_) => const LobbyRoomScreen(),
           AppRoutes.joinByCode: (_) => const JoinByCodeScreen(),
           AppRoutes.studio: (_) => const StudioScreen(),
+          AppRoutes.prizeRoom: (_) => const PrizeRoomScreen(),
         },
       ),
     ),
   );
+}
+
+class _SilentOutput implements SoundOutput {
+  @override
+  Future<void> configure() async {}
+  @override
+  Future<void> playLoop(String asset, double volume) async {}
+  @override
+  Future<void> stopLoop() async {}
+  @override
+  Future<void> setLoopVolume(double volume) async {}
+  @override
+  Future<void> playOneShot(String asset, double volume,
+      {bool voice = false, double playbackRate = 1.0, bool fromFile = false}) async {}
+  @override
+  Future<void> stopAll() async {}
+  @override
+  void dispose() {}
 }
 
 /// A throwaway offline Supabase client so the demo controllers can be
@@ -100,6 +214,19 @@ class _DemoAuthController extends AuthController {
   @override
   String? get rememberedName => 'Sunny';
 
+  @override
+  Profile? get profile => Profile(
+        id: 'demo-host',
+        firstName: 'Sunny',
+        deviceId: 'demo-device',
+        trialStartedAt:
+            DateTime.now().toUtc().subtract(const Duration(days: 2)),
+        trialUsed: true,
+        createdAt: DateTime.now().toUtc().subtract(const Duration(days: 10)),
+        gamesPlayed: 12,
+        gamesWon: 3,
+      );
+
   // Sign-out is a no-op in the demo so the recording never dead-ends.
   @override
   Future<void> signOut() async {}
@@ -108,6 +235,8 @@ class _DemoAuthController extends AuthController {
 /// A backend-free stand-in for [CharacterService].
 class _InMemoryCharacterService implements CharacterService {
   Character? _stored;
+
+  void seed(Character c) => _stored = c;
 
   @override
   Future<Character?> loadCharacter() async => _stored;
@@ -298,6 +427,9 @@ class _DemoGameplayService extends GameplayService {
   final List<String> _words = WordBank.deal(8, random: Random(20260629));
 
   @override
+  String? get currentUserId => 'demo-host';
+
+  @override
   Future<void> beginPlay(String gameId) async {}
 
   @override
@@ -308,7 +440,8 @@ class _DemoGameplayService extends GameplayService {
   Future<void> submitClue(String gameId, String text) async {}
 
   @override
-  Future<void> submitGuess(String gameId, String text) async {}
+  Future<Map<String, dynamic>> submitGuess(String gameId, String text) async =>
+      const {};
 
   @override
   Future<void> nextWord(String gameId) async {}

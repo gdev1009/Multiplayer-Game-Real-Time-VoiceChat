@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../../models/friend.dart';
 import '../../services/friend_service.dart';
 
-/// Drives the Friends feature (Milestone 7): the friends list, incoming
+/// Drives the Friends feature: the friends list, incoming
 /// requests, and pending game invitations, plus the actions that change them.
 class FriendController extends ChangeNotifier {
   FriendController(this._service);

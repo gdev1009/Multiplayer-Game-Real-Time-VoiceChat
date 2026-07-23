@@ -9,16 +9,19 @@ import '../../core/theme/app_text.dart';
 import '../../core/widgets/app_page.dart';
 import '../../core/widgets/big_button.dart';
 import '../../core/widgets/host_greeting.dart';
+import '../../models/character.dart';
 import '../../models/game.dart';
 import '../../models/game_player.dart';
 import '../../services/gameplay_service.dart';
 import '../auth/auth_controller.dart';
 import '../character/character_controller.dart';
+import '../character/idle_character_preview.dart';
+import '../game/ai_player.dart';
 import '../game/gameplay_controller.dart';
 import '../game/play_screen.dart';
 import 'lobby_controller.dart';
 
-/// The live game room (Milestone 4).
+/// The live game room.
 ///
 /// Shows the 4-digit code to share, both teams and their seats, and the host's
 /// controls to add players and start. Stays in sync via Realtime.
@@ -66,11 +69,50 @@ class LobbyRoomScreen extends StatelessWidget {
   }
 }
 
-class _LobbyBody extends StatelessWidget {
+class _LobbyBody extends StatefulWidget {
   const _LobbyBody({required this.game, required this.lobby});
 
   final Game game;
   final LobbyController lobby;
+
+  @override
+  State<_LobbyBody> createState() => _LobbyBodyState();
+}
+
+class _LobbyBodyState extends State<_LobbyBody> {
+  Map<String, Character> _characters = const {};
+  String? _loadedForGame;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCharacters();
+  }
+
+  @override
+  void didUpdateWidget(covariant _LobbyBody oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.game.id != widget.game.id ||
+        oldWidget.lobby.players.length != widget.lobby.players.length) {
+      _loadCharacters();
+    }
+  }
+
+  Future<void> _loadCharacters() async {
+    final gameId = widget.game.id;
+    if (_loadedForGame == gameId && _characters.isNotEmpty) return;
+    try {
+      final svc = context.read<GameplayService>();
+      final map = await svc.loadCharacters(gameId);
+      if (!mounted) return;
+      setState(() {
+        _characters = map;
+        _loadedForGame = gameId;
+      });
+    } catch (_) {
+      // Keep generic avatars if character load fails.
+    }
+  }
 
   void _showError(BuildContext context, String message) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -86,17 +128,17 @@ class _LobbyBody extends StatelessWidget {
       BuildContext context, Future<bool> Function() action,) async {
     final ok = await action();
     if (!context.mounted) return;
-    if (!ok && lobby.error != null) {
-      _showError(context, lobby.error!);
-      lobby.clearError();
+    if (!ok && widget.lobby.error != null) {
+      _showError(context, widget.lobby.error!);
+      widget.lobby.clearError();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Prefer the name the player gave their character over the account's first
-    // name (a quick-test handle like "Tester 6499"), so the greeting matches
-    // the name shown on their seat.
+    final lobby = widget.lobby;
+    final game = widget.game;
+    // Prefer the character display name over the account first name.
     final characterName =
         context.watch<CharacterController>().saved?.displayName.trim() ?? '';
     final name = characterName.isNotEmpty
@@ -131,6 +173,7 @@ class _LobbyBody extends StatelessWidget {
                   seats: const [0, 2],
                   players: lobby.players,
                   maxPlayers: game.maxPlayers,
+                  characters: _characters,
                 ),
                 const SizedBox(height: AppSpacing.md),
                 _TeamCard(
@@ -138,6 +181,7 @@ class _LobbyBody extends StatelessWidget {
                   seats: const [1, 3],
                   players: lobby.players,
                   maxPlayers: game.maxPlayers,
+                  characters: _characters,
                 ),
               ],
             ),
@@ -323,12 +367,14 @@ class _TeamCard extends StatelessWidget {
     required this.seats,
     required this.players,
     required this.maxPlayers,
+    required this.characters,
   });
 
   final String team;
   final List<int> seats;
   final List<GamePlayer> players;
   final int maxPlayers;
+  final Map<String, Character> characters;
 
   @override
   Widget build(BuildContext context) {
@@ -352,6 +398,7 @@ class _TeamCard extends StatelessWidget {
                 child: _SeatTile(
                   seat: seat,
                   player: _playerAt(seat),
+                  character: _characterFor(_playerAt(seat)),
                 ),
               ),
         ],
@@ -365,17 +412,46 @@ class _TeamCard extends StatelessWidget {
     }
     return null;
   }
+
+  Character? _characterFor(GamePlayer? player) {
+    if (player == null) return null;
+    final fromServer = characters[player.role];
+    if (fromServer != null && fromServer.base != null) return fromServer;
+    if (player.isAi) {
+      return AiPlayer.lookFor('${player.role}:${player.displayName}', player.displayName);
+    }
+    // Local player's own saved look as a fallback.
+    return null;
+  }
 }
 
 class _SeatTile extends StatelessWidget {
-  const _SeatTile({required this.seat, required this.player});
+  const _SeatTile({
+    required this.seat,
+    required this.player,
+    this.character,
+  });
 
   final int seat;
   final GamePlayer? player;
+  final Character? character;
 
   @override
   Widget build(BuildContext context) {
     final filled = player != null;
+    Character? seatLook = character;
+    // Fall back to the signed-in player's saved look for their own seat.
+    final saved = context.watch<CharacterController>().saved;
+    final myId = context.read<AuthController>().profile?.id;
+    if (filled &&
+        seatLook == null &&
+        saved != null &&
+        player!.profileId != null &&
+        myId != null &&
+        player!.profileId == myId) {
+      seatLook = saved;
+    }
+
     return Container(
       padding: const EdgeInsets.all(AppSpacing.sm),
       decoration: BoxDecoration(
@@ -384,15 +460,7 @@ class _SeatTile extends StatelessWidget {
       ),
       child: Row(
         children: [
-          CircleAvatar(
-            radius: 22,
-            backgroundColor: filled ? AppColors.deepPurple : AppColors.lavender,
-            child: Icon(
-              filled ? Icons.person_rounded : Icons.person_outline_rounded,
-              color: filled ? Colors.white : AppColors.deepPurple,
-              size: 26,
-            ),
-          ),
+          _SeatAvatar(filled: filled, character: seatLook),
           const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Text(
@@ -403,6 +471,43 @@ class _SeatTile extends StatelessWidget {
           if (filled && player!.isHost)
             const _Tag(label: 'Host', color: AppColors.gold),
         ],
+      ),
+    );
+  }
+}
+
+class _SeatAvatar extends StatelessWidget {
+  const _SeatAvatar({required this.filled, this.character});
+
+  final bool filled;
+  final Character? character;
+
+  static const double _size = 48;
+
+  @override
+  Widget build(BuildContext context) {
+    if (filled && character != null && character!.base != null) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        child: SizedBox(
+          width: _size,
+          height: _size,
+          child: IdleCharacterPreview(
+            character: character!,
+            size: _size * 1.35,
+            showBackdrop: false,
+            animatePoses: false,
+          ),
+        ),
+      );
+    }
+    return CircleAvatar(
+      radius: 22,
+      backgroundColor: filled ? AppColors.deepPurple : AppColors.lavender,
+      child: Icon(
+        filled ? Icons.person_rounded : Icons.person_outline_rounded,
+        color: filled ? Colors.white : AppColors.deepPurple,
+        size: 26,
       ),
     );
   }

@@ -2,11 +2,10 @@ import '../../models/character.dart';
 import '../character/character_catalog.dart';
 
 /// Computer-player behaviour for the seats the host fills with studio players
-/// (Milestones 5–7).
+///.
 ///
 /// The host device is the single authority that drives these seats (see
-/// [GameplayController]) and a studio player **never disconnects**. Milestone 7
-/// tunes them to a **moderate difficulty** so a table feels like real people
+/// [GameplayController]) and a studio player **never disconnects**. /// tunes them to a **moderate difficulty** so a table feels like real people
 /// rather than a perfect machine:
 ///  * a clue-giver offers a gentle, varied one-word hint (never the word), and
 ///  * a guesser is *usually* right but sometimes needs a second try or misses,
@@ -19,8 +18,9 @@ class AiPlayer {
   const AiPlayer._();
 
   /// Roughly how often a moderate-skill studio guesser lands the word on a
-  /// given attempt. Tuned so games are lively and winnable but not a sweep.
-  static const double _guessAccuracy = 0.7;
+  /// given attempt. Tuned so AI seats score often enough that a table feels
+  /// alive, while still missing enough for steals and reveals.
+  static const double _guessAccuracy = 0.9;
 
   /// A one-word clue for [secretWord]. Uses a hand-picked hint for the words in
   /// the studio bank; falls back to a friendly generic nudge otherwise. The
@@ -78,7 +78,8 @@ class AiPlayer {
     }
     int pick(int n, int salt) => ((h >> (salt % 24)) ^ (h * (salt + 1))) % n;
 
-    final female = pick(2, 1) == 0;
+    // Prefer a body that matches the given name when we recognise it.
+    final female = _isFemaleName(name) ?? (pick(2, 1) == 0);
     final base = female ? 'body-female' : 'body-male';
 
     String? idAt(CharacterLayer layer, int salt, {bool allowNone = false}) {
@@ -97,8 +98,47 @@ class AiPlayer {
       outfit: idAt(CharacterLayer.outfit, 5) ??
           CharacterCatalog.defaultOutfitFor(base),
       glasses: idAt(CharacterLayer.glasses, 7, allowNone: true),
-      hat: idAt(CharacterLayer.hat, 11, allowNone: true),
+      // Skip knit (floats on voluminous hair) and male brim (reads too dressy).
+      hat: _studioHat(base, pick),
     );
+  }
+
+  /// Known first-name gender hints for studio AI seats (null → use seed).
+  static bool? _isFemaleName(String name) {
+    final n = name.trim().toLowerCase();
+    if (n.isEmpty) return null;
+    const female = {
+      'rosie', 'pearl', 'mabel', 'grace', 'sunny', 'betty', 'doris', 'helen',
+      'margaret', 'nancy', 'susan', 'linda', 'barbara', 'patricia', 'jenny',
+      'mary', 'anna', 'emma', 'olivia', 'sophia', 'ava', 'mia', 'amelia',
+      'rosa',
+    };
+    const male = {
+      'greg', 'walter', 'frank', 'harold', 'arthur', 'edward', 'robert',
+      'james', 'john', 'william', 'michael', 'david', 'richard', 'thomas',
+      'charles', 'joe', 'bill', 'bob', 'tom', 'sam', 'max', 'leo',
+    };
+    // Ambiguous nicknames leave gender to the seed.
+    if (n == 'buddy' || n == 'pat' || n == 'alex' || n == 'chris') return null;
+    if (female.contains(n)) return true;
+    if (male.contains(n)) return false;
+    if (n.endsWith('ette') || n.endsWith('elle')) return true;
+    return null;
+  }
+
+  /// Safe hat picks for studio AI seats — cap / sun only.
+  static String? _studioHat(String base, int Function(int n, int salt) pick) {
+    final male = base == 'body-male';
+    final opts = CharacterCatalog.forLayer(CharacterLayer.hat, baseId: base)
+        .where((o) {
+      if (o.id.contains('knit')) return false;
+      if (male && o.id.contains('brim')) return false;
+      return true;
+    }).toList();
+    if (opts.isEmpty) return null;
+    // ~35% chance of no hat so heads stay clean.
+    if (pick(opts.length + 2, 11) >= opts.length) return null;
+    return opts[pick(opts.length, 13)].id;
   }
 
   static String _fallbackFor(String key) {

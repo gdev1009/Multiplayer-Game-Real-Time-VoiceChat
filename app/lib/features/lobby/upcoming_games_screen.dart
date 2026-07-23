@@ -11,7 +11,7 @@ import '../../core/widgets/host_greeting.dart';
 import '../../models/game.dart';
 import 'lobby_controller.dart';
 
-/// "Check Upcoming Games" — the Milestone 4 lobby hub.
+/// "Check Upcoming Games" lobby hub.
 ///
 /// From here a player can quick-match with strangers, start their own game,
 /// join with a 4-digit code, or pick from the list of open games.

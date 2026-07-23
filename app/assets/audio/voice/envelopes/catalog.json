@@ -1,0 +1,10 @@
+{
+  "disconnect": "audio/voice/envelopes/disconnect.json",
+  "good_try": "audio/voice/envelopes/good_try.json",
+  "halftime": "audio/voice/envelopes/halftime.json",
+  "nice_guess": "audio/voice/envelopes/nice_guess.json",
+  "rules_intro": "audio/voice/envelopes/rules_intro.json",
+  "winner": "audio/voice/envelopes/winner.json",
+  "word_revealed": "audio/voice/envelopes/word_revealed.json",
+  "your_turn": "audio/voice/envelopes/your_turn.json"
+}
