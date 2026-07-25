@@ -47,7 +47,7 @@ SCENES = [
     ("12b_play_bubbles", "Everyone speaks", "Clues and guesses appear beside each player"),
     ("13_play_winner", "We have a winner!", "Celebrate with clay characters"),
     ("14_prize_room", "Trophies & prizes", "Earn shelf items as you play"),
-    ("15_paywall", "7-day free trial", "Then $5.99/month — cancel anytime"),
+    ("15_paywall", "5-day free trial", "Then $5.99/month — cancel anytime"),
     ("16_friends", "Play with friends", "Requests, invites, and your crew"),
 ]
 

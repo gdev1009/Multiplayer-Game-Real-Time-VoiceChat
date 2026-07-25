@@ -389,9 +389,14 @@ PrizeRoom _demoPrizeRoom() => PrizeRoom(
 
 class _SilentOutput implements SoundOutput {
   @override
+  bool get isSilent => true;
+  @override
   Future<void> configure() async {}
   @override
   Future<void> playLoop(String asset, double volume) async {}
+  @override
+  Future<void> playMusicOnce(String asset, double volume,
+      {Duration maxWait = const Duration(seconds: 16)}) async {}
   @override
   Future<void> stopLoop() async {}
   @override
@@ -424,9 +429,9 @@ class _DemoAuthController extends AuthController {
         id: 'demo-host',
         firstName: 'Sunny',
         deviceId: 'demo-device',
-        trialStartedAt: DateTime.now().toUtc().subtract(const Duration(days: 2)),
+        trialStartedAt: DateTime.now().toUtc(),
         trialUsed: true,
-        createdAt: DateTime.now().toUtc().subtract(const Duration(days: 10)),
+        createdAt: DateTime.now().toUtc(),
         gamesPlayed: 12,
         gamesWon: 3,
       );

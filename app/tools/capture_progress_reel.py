@@ -37,8 +37,8 @@ SCENES = [
     (
         "09_subscription_paywall",
         "M8",
-        "Free trial + subscription",
-        "$5.99/month gate is scaffolded for TestFlight/store setup",
+        "5-day free trial + subscription",
+        "$5.99/month after trial — cancel anytime",
     ),
 ]
 

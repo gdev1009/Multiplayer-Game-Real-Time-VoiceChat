@@ -313,7 +313,7 @@ The app already shows the paywall UI and uses product ID `matchword_monthly_599`
 5. Submit the subscription for review with the app (or test in **Sandbox** first).
 6. On the iPhone: **Settings → App Store → Sandbox Account** → sign in with a **Sandbox Tester** (create under App Store Connect → **Users and Access → Sandbox → Testers**).
 
-> The in-app 7-day free trial is enforced in Supabase (`profiles` / `device_trials`). App Store introductory offers are a separate layer — align wording with Ronna before go-live.
+> The in-app 5-day free trial is enforced in Supabase (`profiles` / `device_trials`). App Store introductory offers are a separate layer — align wording with Ronna before go-live.
 
 ---
 

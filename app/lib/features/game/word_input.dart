@@ -210,20 +210,13 @@ class _WordInputState extends State<WordInput> {
             ),
             child: Row(
               children: [
-                if (widget.onSpeakRequested != null) ...[
-                  Padding(
-                    padding: const EdgeInsets.only(left: 4),
-                    child: _MicButton(
-                      listening: _listening,
-                      enabled: enabled,
-                      onTap: enabled ? _speak : null,
-                    ),
-                  ),
-                ],
+                // Balance the send button so "One-word clue" centers in the dock.
+                const SizedBox(width: 52),
                 Expanded(
                   child: TextField(
                     controller: _controller,
                     enabled: enabled,
+                    textAlign: TextAlign.center,
                     textAlignVertical: TextAlignVertical.center,
                     textInputAction: TextInputAction.send,
                     onSubmitted: (_) => _send(),
@@ -242,6 +235,7 @@ class _WordInputState extends State<WordInput> {
                         height: 1.05,
                         fontWeight: FontWeight.w800,
                       ),
+                      contentPadding: EdgeInsets.zero,
                     ),
                   ),
                 ),

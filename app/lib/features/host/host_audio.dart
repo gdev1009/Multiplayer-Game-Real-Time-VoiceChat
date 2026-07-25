@@ -81,17 +81,24 @@ class HostAudio {
   static const String _sfx = 'audio';
   static const String _vox = 'audio/voice';
 
-  /// The looping opening/underscore theme.
+  /// The looping opening/underscore theme (after Guy's welcome).
   static const String themeMusic = '$_sfx/theme.mp3';
+
+  /// Short game-show bed before Guy speaks (Ronna: ~10–15s).
+  static const String openingBed = '$_sfx/opening_bed.mp3';
+
+  /// How long to hold the opening bed before the welcome line.
+  static const Duration openingBedDuration = Duration(milliseconds: 13000);
 
   /// The concrete sounds for [cue].
   static CueSounds soundsFor(SoundCue cue) {
     switch (cue) {
       case SoundCue.gameStart:
+        // Opening bed is played specially *before* Guy's welcome; looping
+        // theme starts after he finishes (see AudioController.playCue).
         return const CueSounds(
-          effects: ['$_sfx/announcer_intro.mp3'],
+          effects: [openingBed],
           voice: '$_vox/rules_intro.mp3',
-          music: themeMusic,
         );
       case SoundCue.roundStart:
         return const CueSounds(
@@ -100,12 +107,14 @@ class HostAudio {
         );
       case SoundCue.correct:
         return const CueSounds(
-          effects: ['$_sfx/ding.mp3', '$_sfx/correct.mp3', '$_sfx/cheer.mp3'],
+          // Ronna: ding + crowd cheer (skip thin synthetic “correct” bed).
+          effects: ['$_sfx/ding.mp3', '$_sfx/cheer.mp3'],
           voice: '$_vox/nice_guess.mp3',
         );
       case SoundCue.steal:
         return const CueSounds(
-          effects: ['$_sfx/buzzer.mp3', '$_sfx/steal.mp3'],
+          // Ronna: Sports Buzzer only — voice carries the miss line.
+          effects: ['$_sfx/buzzer.mp3'],
           voice: '$_vox/good_try.mp3',
         );
       case SoundCue.reveal:

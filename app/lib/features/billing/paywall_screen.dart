@@ -8,6 +8,7 @@ import '../../core/widgets/app_page.dart';
 import '../../core/widgets/big_button.dart';
 import '../../core/widgets/host_greeting.dart';
 import '../../services/billing_service.dart';
+import 'trial_policy.dart';
 
 /// Free-trial ended / subscribe prompt.
 class PaywallScreen extends StatefulWidget {
@@ -43,17 +44,21 @@ class _PaywallScreenState extends State<PaywallScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const SizedBox(height: AppSpacing.md),
-          Text('Keep playing Match Word',
-              style: AppText.display, textAlign: TextAlign.center),
+          const Text(
+            'Keep playing Match Word',
+            style: AppText.display,
+            textAlign: TextAlign.center,
+          ),
           const SizedBox(height: AppSpacing.lg),
           const HostGreeting(
             message:
-                'Your free week has been a joy. For \$5.99 a month you can keep '
-                'the studio lights on — no rush, just whenever you are ready.',
+                'Your free trial has been a joy. For ${TrialPolicy.monthlyPriceLabel} '
+                'a month you can keep the studio lights on — no rush, just '
+                'whenever you are ready.',
           ),
           const SizedBox(height: AppSpacing.lg),
-          Text(
-            '\$5.99 per month · Cancel anytime in your store account',
+          const Text(
+            '${TrialPolicy.monthlyPriceLabel} per month · Cancel anytime in your store account',
             style: AppText.bodyMuted,
             textAlign: TextAlign.center,
           ),
@@ -67,7 +72,9 @@ class _PaywallScreenState extends State<PaywallScreen> {
             const SizedBox(height: AppSpacing.md),
           ],
           BigButton(
-            label: _busy ? 'Please wait…' : 'Subscribe — \$5.99 / month',
+            label: _busy
+                ? 'Please wait…'
+                : 'Subscribe — ${TrialPolicy.monthlyPriceLabel} / month',
             icon: Icons.favorite_rounded,
             onPressed: _busy ? null : () => _run(billing.purchaseMonthly),
           ),

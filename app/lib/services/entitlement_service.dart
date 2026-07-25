@@ -1,3 +1,4 @@
+import '../features/billing/trial_policy.dart';
 import '../models/profile.dart';
 import '../models/subscription.dart';
 import 'billing_service.dart';
@@ -5,10 +6,10 @@ import 'profile_service.dart';
 
 /// Combined trial + paid access decision.
 enum AccessLevel {
-  /// Inside the 7-day free trial (days 1–2: soft banner only).
+  /// Inside the free trial (early days: soft banner only).
   trialEarly,
 
-  /// Trial days 3–7: show countdown urgency.
+  /// Later trial days: show countdown urgency (see [TrialPolicy]).
   trialCountdown,
 
   /// Paid / grace period from the store entitlement mirror.
@@ -49,7 +50,10 @@ class EntitlementService {
 
     final days = profile?.trialDaysRemaining ?? 0;
     if (days <= 0) return AccessLevel.expired;
-    if (days <= 4) return AccessLevel.trialCountdown; // Day-3 through Day-7
+    // Day-3 through Day-5 of the 5-day trial (Ronna).
+    if (days <= TrialPolicy.countdownAtOrBelowDays) {
+      return AccessLevel.trialCountdown;
+    }
     return AccessLevel.trialEarly;
   }
 

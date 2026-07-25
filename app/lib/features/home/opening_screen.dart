@@ -241,7 +241,7 @@ class _TrialBanner extends StatelessWidget {
     final String text;
     if (expired) {
       text =
-          'Your free week has ended. Tap Subscribe when you are ready to keep playing.';
+          'Your free trial has ended. Tap Subscribe when you are ready to keep playing.';
     } else if (countdown) {
       text =
           '$daysLeft ${daysLeft == 1 ? 'day' : 'days'} left in your free trial — '

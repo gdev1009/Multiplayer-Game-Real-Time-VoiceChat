@@ -27,29 +27,36 @@ const _kHostAspect = 880 / 1348; // host-stage width / height
 class _RefLayout {
   const _RefLayout._();
 
-  // Play rectangle — matches match-word-studio-updated.png proportions.
-  static const rectTop = 0.318; // just under WORD letters
-  static const dockZone = 0.118;
-  static const rowGap = 0.012; // gap between upper & lower seat rows
+  // Play rectangle — under MATCH WORD, above the dock.
+  static const rectTop = 0.285;
+  static const dockZone = 0.108;
+  static const rowGap = 0.010;
 
   // Horizontal: seats flank the host without swallowing the aisle.
-  static const seatOverhang = 0.045;
+  static const seatOverhang = 0.040;
   static const maxSeatWidth = 0.50;
 
-  // Host — dominant centre figure; slight right nudge so A1 clears his shoulder.
-  static const hostWidth = 0.50;
-  static const hostShiftX = 0.018;
+  // Host — centre stage; keep hands clear of seat B nameplates (video21).
+  static const hostWidth = 0.42;
+  static const hostShiftX = -0.048;
 
-  // Seat PNG interior — avatar fills the blue chair back above the nameplate.
-  static const avatarBottom = 0.36;
-  // Active (Seat_on) gold fill — keep text inside the yellow (fitWidth overflowed).
-  static const nameplateTopOn = 0.628;
-  static const nameplateHeightOn = 0.058;
+  // Seat nameplates (measured from Seat_on / Seat_off art).
+  static const nameplateTopOn = 0.620;
+  static const nameplateHeightOn = 0.072;
   static const nameplateInsetXOn = 0.255;
-  // Inactive (Seat_off) dark title fill.
-  static const nameplateTopOff = 0.580;
-  static const nameplateHeightOff = 0.095;
-  static const nameplateInsetXOff = 0.150;
+  static const nameplateTopOff = 0.590;
+  static const nameplateHeightOff = 0.082;
+  static const nameplateInsetXOff = 0.195;
+
+  // Blue chair-back opening — bust must stay inside these fractions
+  // (Ronna red-line range: top of pad → seat lip above the nameplate).
+  static const padTopOn = 0.100;
+  static const padTopOff = 0.090;
+  static const lipTopOn = 0.560;
+  static const lipTopOff = 0.550;
+  // Keep clear of the purple frame / arms (measured pad ~0.18–0.76).
+  static const padInsetXOn = 0.205;
+  static const padInsetXOff = 0.210;
 
   // Intrinsic seat art sizes (on/off canvases differ — keep overlays in art space).
   static const seatOnW = 447.0;
@@ -59,6 +66,20 @@ class _RefLayout {
 }
 
 double _clamp(double v, double min, double max) => v.clamp(min, max).toDouble();
+
+/// Clips a child to the bottom band of its bounds (from [topFrac] → 1.0).
+class _BottomBandClipper extends CustomClipper<Rect> {
+  const _BottomBandClipper({required this.topFrac});
+  final double topFrac;
+
+  @override
+  Rect getClip(Size size) =>
+      Rect.fromLTRB(0, size.height * topFrac, size.width, size.height);
+
+  @override
+  bool shouldReclip(covariant _BottomBandClipper old) =>
+      old.topFrac != topFrac;
+}
 
 /// Seat + host metrics packed into the play rectangle.
 class _StageMetrics {
@@ -280,13 +301,43 @@ class StudioStage extends StatelessWidget {
             fit: StackFit.expand,
             clipBehavior: Clip.none,
             children: [
-              // 1. Full background — curtains, arch, MATCH WORD, floor.
-              const Positioned.fill(
-                child: Image(
-                  image: AssetImage(_kBg),
-                  fit: BoxFit.cover,
-                  alignment: Alignment.topCenter,
-                  filterQuality: FilterQuality.high,
+              // 1. Background + baked score frames — gentle crop so MATCH WORD
+              // stays fully legible while seats still get more stage room.
+              Positioned.fill(
+                child: ClipRect(
+                  child: Transform.scale(
+                    scale: 1.06,
+                    alignment: const Alignment(0, 0.22),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        const Image(
+                          image: AssetImage(_kBg),
+                          fit: BoxFit.cover,
+                          alignment: Alignment.topCenter,
+                          filterQuality: FilterQuality.high,
+                        ),
+                        if (showScoreboards) ...[
+                          Positioned.fromRect(
+                            rect: scoreA,
+                            child: _Scoreboard(
+                              value: state.scoreA,
+                              boardWidth: scoreA.width,
+                              boardHeight: scoreA.height,
+                            ),
+                          ),
+                          Positioned.fromRect(
+                            rect: scoreB,
+                            child: _Scoreboard(
+                              value: state.scoreB,
+                              boardWidth: scoreB.width,
+                              boardHeight: scoreB.height,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
                 ),
               ),
 
@@ -340,26 +391,6 @@ class StudioStage extends StatelessWidget {
                 seatW: lowerW,
                 seatH: lowerH,
               ),
-
-              // 7. Team scores in the baked top rectangles.
-              if (showScoreboards) ...[
-                Positioned.fromRect(
-                  rect: scoreA,
-                  child: _Scoreboard(
-                    value: state.scoreA,
-                    boardWidth: scoreA.width,
-                    boardHeight: scoreA.height,
-                  ),
-                ),
-                Positioned.fromRect(
-                  rect: scoreB,
-                  child: _Scoreboard(
-                    value: state.scoreB,
-                    boardWidth: scoreB.width,
-                    boardHeight: scoreB.height,
-                  ),
-                ),
-              ],
             ],
           );
         },
@@ -551,9 +582,11 @@ class _SeatPod extends StatelessWidget {
 
     final artW = active ? _RefLayout.seatOnW : _RefLayout.seatOffW;
     final artH = active ? _RefLayout.seatOnH : _RefLayout.seatOffH;
-    final inset = foreground ? 0.10 : 0.12;
-    // Chair-back opening: head/shoulders fill the blue pad above the plate.
-    final avatarTopFrac = foreground ? 0.06 : 0.08;
+    // Bust lives only in the blue pad (red-line range), never the frame/lip.
+    final padTop = active ? _RefLayout.padTopOn : _RefLayout.padTopOff;
+    final lipTop = active ? _RefLayout.lipTopOn : _RefLayout.lipTopOff;
+    final padInsetX =
+        active ? _RefLayout.padInsetXOn : _RefLayout.padInsetXOff;
     final plateTop = active
         ? _RefLayout.nameplateTopOn
         : _RefLayout.nameplateTopOff;
@@ -581,42 +614,61 @@ class _SeatPod extends StatelessWidget {
               builder: (context, constraints) {
                 final aw = constraints.maxWidth;
                 final ah = constraints.maxHeight;
-                final avatarTop = ah * avatarTopFrac;
-                final avatarBottom = ah * _RefLayout.avatarBottom;
+                final avatarTop = ah * padTop;
+                final avatarH = ah * (lipTop - padTop);
+                final plateTopPx = ah * plateTop;
+                final plateHPx = ah * plateH;
+                final seatAsset = active ? _kSeatOn : _kSeatOff;
                 return Stack(
-                  clipBehavior: Clip.none,
+                  clipBehavior: Clip.hardEdge,
                   fit: StackFit.expand,
                   children: [
+                    // 1. Full seat (chair back + floor).
                     Image.asset(
-                      active ? _kSeatOn : _kSeatOff,
+                      seatAsset,
                       fit: BoxFit.fill,
                       filterQuality: FilterQuality.high,
                     ),
+                    // 2. Bust clipped hard to the blue pad (between red lines).
                     Positioned(
-                      left: aw * inset,
-                      right: aw * inset,
+                      left: aw * padInsetX,
+                      right: aw * padInsetX,
                       top: avatarTop,
-                      bottom: avatarBottom,
+                      height: avatarH,
                       child: ClipRect(
                         child: _PlayerBust(
                           name: name,
                           seed: role,
                           character: character,
-                          width: aw * (1 - inset * 2),
-                          height: ah - avatarTop - avatarBottom,
+                          width: aw * (1 - padInsetX * 2),
+                          height: avatarH,
                           foreground: foreground,
                         ),
                       ),
                     ),
+                    // 3. Seat lip + nameplate over anything past the bottom line.
+                    Positioned.fill(
+                      child: ClipRect(
+                        clipper: _BottomBandClipper(topFrac: lipTop),
+                        child: Image.asset(
+                          seatAsset,
+                          fit: BoxFit.fill,
+                          filterQuality: FilterQuality.high,
+                        ),
+                      ),
+                    ),
+                    // 4. Name inside the painted gold/dark plate only.
                     Positioned(
                       left: aw * plateInsetX,
                       right: aw * plateInsetX,
-                      top: ah * plateTop,
-                      height: ah * plateH,
-                      child: _NameplateText(
-                        team: team,
-                        name: name,
-                        active: active,
+                      top: plateTopPx,
+                      height: plateHPx,
+                      child: ClipRect(
+                        child: _NameplateText(
+                          team: team,
+                          name: name,
+                          active: active,
+                        ),
                       ),
                     ),
                   ],
@@ -630,18 +682,26 @@ class _SeatPod extends StatelessWidget {
 
     if (line == null) return pod;
 
-    // Just under the nameplate (not below the whole pod — that floated onto
-    // the host / other seats / the dock).
+    // Bubbles sit just under the nameplate, biased inward toward the host so
+    // they never clip off the left/right screen edge (video20).
+    final isTeamB = role.startsWith('B');
+    final bubbleTop = foreground ? height * 0.66 : height * 0.68;
     return Stack(
       clipBehavior: Clip.none,
       children: [
         pod,
         Positioned(
-          left: width * 0.08,
-          right: width * 0.08,
-          top: height * 0.70,
-          child: Center(
-            child: _PlayerBubble(entry: line),
+          top: bubbleTop,
+          left: isTeamB ? width * 0.02 : width * 0.08,
+          right: isTeamB ? width * 0.08 : width * 0.02,
+          child: Align(
+            alignment: isTeamB ? Alignment.centerRight : Alignment.centerLeft,
+            child: Transform.scale(
+              scale: foreground ? 0.92 : 0.86,
+              alignment:
+                  isTeamB ? Alignment.centerRight : Alignment.centerLeft,
+              child: _PlayerBubble(entry: line),
+            ),
           ),
         ),
       ],
@@ -663,30 +723,31 @@ class _NameplateText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // White on gold and dark plates.
+    // White on gold and dark plates — never spill past the chrome.
     const color = Color(0xFFFFFFFF);
-    // Fill the seat label without spilling past the gold/dark chrome.
     return Padding(
       padding: EdgeInsets.symmetric(
-        horizontal: active ? 4 : 5,
-        vertical: active ? 2 : 2,
+        horizontal: active ? 6 : 7,
+        vertical: active ? 2 : 3,
       ),
       child: SizedBox.expand(
         child: FittedBox(
-          fit: BoxFit.contain,
+          fit: BoxFit.scaleDown,
           alignment: Alignment.center,
           child: Text(
             '$team  $name',
             key: ValueKey<bool>(active),
             maxLines: 1,
+            softWrap: false,
+            overflow: TextOverflow.clip,
             textAlign: TextAlign.center,
             style: TextStyle(
               fontFamily: 'Roboto',
               color: color,
               fontWeight: FontWeight.w900,
-              fontSize: active ? 48 : 44,
+              fontSize: active ? 42 : 38,
               height: 1.0,
-              letterSpacing: 0.3,
+              letterSpacing: 0.2,
               shadows: const [],
               decoration: TextDecoration.none,
             ),
@@ -735,7 +796,7 @@ class _PlayerBubble extends StatelessWidget {
             : raw;
 
     return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 220, minWidth: 96),
+      constraints: const BoxConstraints(maxWidth: 168, minWidth: 72),
       child: CustomPaint(
         painter: _SpeechBubblePainter(
           fill: bg.withValues(alpha: 0.98),
@@ -745,7 +806,7 @@ class _PlayerBubble extends StatelessWidget {
           tailHeight: _tailH,
         ),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 10 + _tailH, 14, 10),
+          padding: const EdgeInsets.fromLTRB(12, 8 + _tailH, 12, 8),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
@@ -754,19 +815,20 @@ class _PlayerBubble extends StatelessWidget {
                 Icon(
                   correct ? Icons.check_circle_rounded : Icons.cancel_rounded,
                   color: fg,
-                  size: 26,
+                  size: 22,
                 ),
-                const SizedBox(width: 6),
+                const SizedBox(width: 5),
               ],
               Flexible(
                 child: Text(
                   label,
                   maxLines: 1,
+                  softWrap: false,
                   overflow: TextOverflow.ellipsis,
                   style: AppText.body.copyWith(
                     color: fg,
                     fontWeight: FontWeight.w900,
-                    fontSize: 28,
+                    fontSize: 26,
                     height: 1.0,
                   ),
                 ),
@@ -903,43 +965,27 @@ class _PlayerBustState extends State<_PlayerBust>
     final boxW = widget.width;
     final boxH = widget.height;
     if (character != null && character.base != null) {
-      // Sitting look from standing art: clip to the chair back and zoom into
-      // head + shoulders only (never show legs / full standing body).
-      final bustScale = widget.foreground ? 2.85 : 2.70;
+      // Head near the top red line, torso tucked into the seat lip (bottom
+      // red line). Hard ClipRect on the parent Positioned keeps hats/arms
+      // inside the blue pad — never past the purple frame.
+      final bustScale = widget.foreground ? 2.90 : 2.80;
       final render = math.max(boxW, boxH) * 1.12;
       return SizedBox(
         width: boxW,
         height: boxH,
         child: ClipRect(
-          child: ShaderMask(
-            blendMode: BlendMode.dstIn,
-            shaderCallback: (bounds) {
-              return const LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.white,
-                  Colors.white,
-                  Color(0x00FFFFFF),
-                ],
-                // Soft fade at the chest so it reads as a seated bust.
-                stops: [0.0, 0.62, 0.92],
-              ).createShader(bounds);
-            },
-            child: Transform.translate(
-              // Nudge down so shoulders sit on the nameplate line.
-              offset: Offset(0, boxH * 0.10),
-              child: Transform.scale(
-                scale: bustScale,
-                // Pivot near the head so legs stay clipped away.
-                alignment: const Alignment(0, -0.88),
-                child: IdleCharacterPreview(
-                  character: character,
-                  size: render,
-                  showBackdrop: false,
-                  animatePoses: false,
-                  idleIntensity: 0.18,
-                ),
+          child: Transform.translate(
+            // Sit the bust down so the chest meets the lip (no floating gap).
+            offset: Offset(0, boxH * 0.10),
+            child: Transform.scale(
+              scale: bustScale,
+              alignment: const Alignment(0, -0.90),
+              child: IdleCharacterPreview(
+                character: character,
+                size: render,
+                showBackdrop: false,
+                animatePoses: false,
+                idleIntensity: 0.08,
               ),
             ),
           ),
@@ -947,13 +993,13 @@ class _PlayerBustState extends State<_PlayerBust>
       );
     }
     return Align(
-      alignment: const Alignment(0, 0.35),
+      alignment: const Alignment(0, -0.15),
       child: Image.asset(
         widget.seed.hashCode.isEven
             ? 'assets/images/host/bust-female.png'
             : 'assets/images/host/bust-male.png',
-        width: boxW * 0.85,
-        height: boxH * 0.85,
+        width: boxW * 0.95,
+        height: boxH * 0.95,
         fit: BoxFit.contain,
         alignment: Alignment.topCenter,
         filterQuality: FilterQuality.high,
@@ -1084,78 +1130,26 @@ class _HostCentreState extends State<_HostCentre>
         final pop = Curves.easeOutCubic.transform(_gesture.value);
         final scale = 1 + pop.clamp(0.0, 1.0) * 0.02;
 
-        // Action clips are 480×480 with transparent padding — scale up a bit.
-        final frameScale = useListening
-            ? 1.0
-            : (widget.maxHeight / (widget.maxWidth * 0.95)).clamp(1.12, 1.50);
-
-        Widget figure;
-        if (useWelcome) {
-          figure = Transform.scale(
-            scale: frameScale,
-            alignment: Alignment.topCenter,
-            child: Image.asset(
-              HostActions.webpFor(HostAction.welcome),
-              key: const ValueKey('welcome-wave'),
-              fit: BoxFit.contain,
-              alignment: Alignment.topCenter,
-              filterQuality: FilterQuality.high,
-              gaplessPlayback: true,
-              errorBuilder: (_, __, ___) => Image.asset(
-                HostActions.gifFor(HostAction.welcome),
-                fit: BoxFit.contain,
-                alignment: Alignment.topCenter,
-                filterQuality: FilterQuality.high,
-                errorBuilder: (_, __, ___) => Image.asset(
-                  'assets/images/host/host-idle.png',
-                  fit: BoxFit.contain,
-                  alignment: Alignment.topCenter,
-                  filterQuality: FilterQuality.high,
-                ),
-              ),
-            ),
-          );
-        } else if (useListening) {
-          // Idle listening pose — no lipsync.
-          figure = Image.asset(
-            'assets/images/host/host-idle.png',
+        // Authored action WebPs have keyed holes in the trousers that punch
+        // purple stage through the suit (video20). Use clean idle until re-keyed.
+        final figure = Image.asset(
+          'assets/images/host/host-idle.png',
+          key: ValueKey(useWelcome
+              ? 'welcome-idle'
+              : useListening
+                  ? 'listening-idle'
+                  : 'action-idle-$_shown'),
+          fit: BoxFit.contain,
+          alignment: Alignment.topCenter,
+          filterQuality: FilterQuality.high,
+          gaplessPlayback: true,
+          errorBuilder: (_, __, ___) => Image.asset(
+            'assets/images/host/host-stage.png',
             fit: BoxFit.contain,
             alignment: Alignment.topCenter,
             filterQuality: FilterQuality.high,
-            errorBuilder: (_, __, ___) => Image.asset(
-              'assets/images/host/host-stage.png',
-              fit: BoxFit.contain,
-              alignment: Alignment.topCenter,
-              filterQuality: FilterQuality.high,
-            ),
-          );
-        } else {
-          // Outcome actions: authored WebP/GIF clip as-is.
-          figure = Transform.scale(
-            scale: frameScale,
-            alignment: Alignment.topCenter,
-            child: Image.asset(
-              HostActions.webpFor(_shown),
-              key: ValueKey(_shown),
-              fit: BoxFit.contain,
-              alignment: Alignment.topCenter,
-              filterQuality: FilterQuality.high,
-              gaplessPlayback: true,
-              errorBuilder: (_, __, ___) => Image.asset(
-                HostActions.gifFor(_shown),
-                fit: BoxFit.contain,
-                alignment: Alignment.topCenter,
-                filterQuality: FilterQuality.high,
-                errorBuilder: (_, __, ___) => Image.asset(
-                  HostActions.framesFor(_shown)[1],
-                  fit: BoxFit.contain,
-                  alignment: Alignment.topCenter,
-                  filterQuality: FilterQuality.high,
-                ),
-              ),
-            ),
-          );
-        }
+          ),
+        );
 
         return Transform.translate(
           offset: Offset(0, -bob),

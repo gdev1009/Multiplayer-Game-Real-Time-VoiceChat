@@ -52,7 +52,10 @@ class ElevenLabsTtsService {
   }
 
   String _cacheKey(String text) {
-    final bytes = utf8.encode('$voiceId|$_modelId|$text');
+    // Include voice settings so deeper/booming tweaks bust stale caches.
+    final bytes = utf8.encode(
+      '$voiceId|$_modelId|stab0.35|sim0.85|style0.55|$text',
+    );
     return sha256.convert(bytes).toString();
   }
 
@@ -86,9 +89,10 @@ class ElevenLabsTtsService {
               'text': trimmed,
               'model_id': _modelId,
               'voice_settings': {
-                'stability': 0.45,
-                'similarity_boost': 0.8,
-                'style': 0.35,
+                // Booming classic game-show host (Ronna's Game Show Host voice).
+                'stability': 0.35,
+                'similarity_boost': 0.85,
+                'style': 0.55,
                 'use_speaker_boost': true,
               },
             }),

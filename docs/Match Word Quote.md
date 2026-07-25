@@ -40,10 +40,10 @@ launch. Only a small set of polish items remains for a later phase (see Section 
 | **Realtime gameplay** | Supabase Realtime channels (WebSocket-based) | Reliable multi-screen sync for clues, guesses, turns, and lobby state. |
 | **Voice input** | Native iOS `SFSpeechRecognizer` / Android `SpeechRecognizer` | No per-use cost, on-device, fast. **Text fallback always available** per spec §12. |
 | **Guy Smiley voice (TTS)** | **Pre-recorded clips for fixed lines + ElevenLabs** for generated lines | Pre-recorded keeps quality high and cost predictable; ElevenLabs used for dynamic announcements. Final approach confirmed with you before §6 work. |
-| **Subscriptions** | Apple **StoreKit 2** (iOS) + **Google Play Billing** (Android) | Native billing as required; 7-day trial with no card up front. |
+| **Subscriptions** | Apple **StoreKit 2** (iOS) + **Google Play Billing** (Android) | Native billing as required; 5-day trial with no card up front. |
 | **Auth model** | First name + 4-digit PIN, email used only for PIN recovery | Exactly as specified — familiar and simple for seniors. |
 
-> Note on "no credit card required" trial: the 7-day trial, in-app countdown, and access gating are fully
+> Note on "no credit card required" trial: the 5-day trial, in-app countdown, and access gating are fully
 > under our control. The store checkout flow itself is controlled by Apple/Google. Configured correctly,
 > the trial starts with no card required; I will confirm the exact store configuration during Milestone 9.
 
@@ -61,7 +61,7 @@ launch. Only a small set of polish items remains for a later phase (see Section 
 | **6** | **Guy Smiley Host + Audio System** | Host character with voice + idle animations, rules intro every game, round announcements, theme music + announcer intro, applause/cheer SFX, full disconnect alarm (red flash + ALERT + AWOOGA horn), mute/volume control, silent-mode respect. *(MVP uses pre-recorded clips; ElevenLabs dynamic lines → later phase.)* | 8–9 | **$750** |
 | **7** | **AI Characters & Friend Connection** | AI clue-giving/guessing logic (moderate difficulty) + a fun starter idle-animation set; **in-game friend requests + friends list** (meet in a game → reconnect → invite to future games), no personal info exchanged. *(Full animation library → later phase.)* | 7–9 | **$450** |
 | **8** | **Prize Room & Trophy System** | Personal trophy/prize room, milestone earning logic, shelves + room expansion, clay-style item display. | 5–6 | **$550** |
-| **9** | **Subscription Billing & Free Trial** | $5.99/mo products on both stores, 7-day no-card trial, Day-3 countdown timer, warm Day-7 prompt, access gating after trial. | 7–9 | **$800** |
+| **9** | **Subscription Billing & Free Trial** | $5.99/mo products on both stores, 5-day no-card trial, Day-3 countdown timer, warm Day-5 prompt, access gating after trial. | 7–9 | **$800** |
 | **10** | **Testing, Bug Fixes & Store Submission** | QA pass, senior-usability checks, performance testing on small screens, bug fixes, Apple App Store + Google Play submission support. | 6–8 | **$450** |
 | | **TOTAL** | | **~67–82 days** | **$6,550** |
 

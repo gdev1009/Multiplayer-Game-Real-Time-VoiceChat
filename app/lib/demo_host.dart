@@ -30,9 +30,14 @@ import 'services/audio_service.dart';
 /// device and no plugin calls — the cue *logic* still fires and is observable.
 class _SilentOutput implements SoundOutput {
   @override
+  bool get isSilent => true;
+  @override
   Future<void> configure() async {}
   @override
   Future<void> playLoop(String asset, double volume) async {}
+  @override
+  Future<void> playMusicOnce(String asset, double volume,
+      {Duration maxWait = const Duration(seconds: 16)}) async {}
   @override
   Future<void> stopLoop() async {}
   @override

@@ -232,7 +232,7 @@ See also: [TestFlight Setup.md](TestFlight%20Setup.md)
 **Short description (Play, 80 chars):** Team up, give one-word clues, and guess before time runs out!  
 
 **Description (long):**  
-Match Word is a lively social word game where four players team up, give clever one-word clues, and race to guess secret words. Build your clay character, invite friends, earn trophies on your prize shelf, and enjoy the full game-show experience with host Guy Smiley. Start with a 7-day free trial, then continue for $5.99/month.
+Match Word is a lively social word game where four players team up, give clever one-word clues, and race to guess secret words. Build your clay character, invite friends, earn trophies on your prize shelf, and enjoy the full game-show experience with host Guy Smiley. Start with a 5-day free trial, then continue for $5.99/month.
 
 ---
 

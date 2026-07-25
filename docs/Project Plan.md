@@ -382,7 +382,7 @@ expands; viewable from profile.
 
 **Scope**
 - $5.99/mo products on Apple App Store + Google Play.
-- 7-day free trial (no card up front), Day-3 countdown timer, warm Day-7 prompt.
+- 5-day free trial (no card up front), Day-3 countdown timer, warm Day-5 subscribe prompt.
 - Access gating after trial; entitlement mirrored server-side.
 - **iOS TestFlight** delivery for client testing (upload from Mac — see `docs/TestFlight Setup.md`).
 

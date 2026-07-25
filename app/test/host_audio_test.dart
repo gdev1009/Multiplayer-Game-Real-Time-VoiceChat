@@ -28,10 +28,11 @@ void main() {
       expect(HostAudio.themeMusic, 'audio/theme.mp3');
     });
 
-    test('game start opens the theme + announcer intro', () {
+    test('game start opens with the cue-and-prize bed before Guy speaks', () {
       final s = HostAudio.soundsFor(SoundCue.gameStart);
-      expect(s.music, HostAudio.themeMusic);
-      expect(s.effects, contains('audio/announcer_intro.mp3'));
+      expect(s.music, isNull); // looping theme starts after the welcome
+      expect(s.effects, contains(HostAudio.openingBed));
+      expect(HostAudio.openingBedDuration.inSeconds, inInclusiveRange(10, 15));
     });
 
     test('winner stops the music and plays applause', () {

@@ -26,6 +26,7 @@ The focused M6 video and screenshots cover what the broad progress reel cannot s
 The package includes:
 
 - Home screen free-trial countdown: “5 days left in your free trial.”
+- Paywall after trial: $5.99/month · cancel anytime (5-day free trial).
 - Subscription screen: $5.99/month, Subscribe, Restore Purchases, and Not now.
 - Backend/service scaffolding for entitlement checks and subscription sync.
 

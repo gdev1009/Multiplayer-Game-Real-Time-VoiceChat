@@ -221,6 +221,8 @@ class AudioController extends ChangeNotifier {
     if (isIntro) {
       _hostIntroPlaying = true;
       notifyListeners();
+      // Ronna: short music bed before Guy starts speaking (~10–15s).
+      await _playOpeningBed();
     }
 
     if (sounds.stopMusic) {
@@ -231,8 +233,11 @@ class AudioController extends ChangeNotifier {
       await _out.playLoop(sounds.music!, _effectiveMusic);
     }
 
-    for (final effect in sounds.effects) {
-      await _out.playOneShot(effect, sfxVol);
+    // Intro effects are the opening bed (already played above).
+    if (!isIntro) {
+      for (final effect in sounds.effects) {
+        await _out.playOneShot(effect, sfxVol);
+      }
     }
 
     final line = HostVoiceScripts.lineFor(cue);
@@ -240,6 +245,7 @@ class AudioController extends ChangeNotifier {
     if (line == null && fallback == null) {
       if (isIntro) {
         _hostIntroPlaying = false;
+        await _startThemeAfterIntro();
         notifyListeners();
       }
       return;
@@ -262,26 +268,53 @@ class AudioController extends ChangeNotifier {
         await _beginLipsync(filePath, envelope: env);
         await _out.playOneShot(
           filePath,
-          (_effectiveVoice * 1.15).clamp(0.0, 1.0),
+          (_effectiveVoice * _hostVoiceBoost).clamp(0.0, 1.0),
           voice: true,
           fromFile: true,
+          playbackRate: _hostPlaybackRate,
         );
       } else if (fallback != null) {
         await _beginLipsync(fallback);
         await _out.playOneShot(
           fallback,
-          (_effectiveVoice * 1.15).clamp(0.0, 1.0),
+          (_effectiveVoice * _hostVoiceBoost).clamp(0.0, 1.0),
           voice: true,
+          playbackRate: _hostPlaybackRate,
         );
       }
     } finally {
       _endLipsync();
       if (isIntro) {
         _hostIntroPlaying = false;
+        await _startThemeAfterIntro();
         notifyListeners();
       }
       if (ducked != null) await _out.setLoopVolume(_effectiveMusic);
     }
+  }
+
+  /// Cue-and-prize bed (~10–15s), then Guy's welcome. Waits for real playback
+  /// completion so the handoff never cuts early or late.
+  Future<void> _playOpeningBed() async {
+    if (_muted || _effectiveMusic <= 0) return;
+    if (_out.isSilent) {
+      await _out.playMusicOnce(HostAudio.openingBed, 0);
+      return;
+    }
+    await _out.playMusicOnce(
+      HostAudio.openingBed,
+      _effectiveMusic,
+      maxWait: HostAudio.openingBedDuration + const Duration(seconds: 2),
+    );
+  }
+
+  /// Deeper + louder Guy (Ronna) — slight rate drop + voice boost.
+  static const double _hostPlaybackRate = 0.93;
+  static const double _hostVoiceBoost = 1.28;
+
+  Future<void> _startThemeAfterIntro() async {
+    _themePlaying = true;
+    await _out.playLoop(HostAudio.themeMusic, _effectiveMusic);
   }
 
   Future<void> playDisconnectAlarm() => playCue(SoundCue.disconnect);

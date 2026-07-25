@@ -177,14 +177,13 @@ class GameplayController extends ChangeNotifier {
     }
     _humanCoPlayers = coPlayers;
 
-    // Seed each podium with a look right away: computer seats get a generated
-    // character; humans get a placeholder until their saved character loads.
-    final looks = <String, Character>{};
-    for (final p in players) {
-      if (p.isAi || p.profileId == null) {
-        looks[p.role] = AiPlayer.lookFor('${p.role}:${p.displayName}', p.displayName);
-      }
-    }
+    // Seed every podium with a name-matched look right away (Greg→male,
+    // Rosie→female, …). Human seats are overwritten once mw_game_characters
+    // returns — avoids empty/ghost seats and random bust-PNG gender flips.
+    final looks = <String, Character>{
+      for (final p in players)
+        p.role: AiPlayer.lookFor('${p.role}:${p.displayName}', p.displayName),
+    };
     _charactersByRole = looks;
 
     await _guard(() async {
@@ -204,9 +203,16 @@ class GameplayController extends ChangeNotifier {
       }
       _words = words;
       // Pull every seated human's saved character so their real look shows on
-      // the stage (computer seats keep their generated look).
+      // the stage (computer seats keep their generated look). Skip empty
+      // bases so name-matched placeholders are not wiped to ghost seats.
       final humans = await service.loadCharacters(gameId);
-      _charactersByRole = {..._charactersByRole, ...humans};
+      if (humans.isNotEmpty) {
+        final merged = Map<String, Character>.of(_charactersByRole);
+        for (final e in humans.entries) {
+          if (e.value.base != null) merged[e.key] = e.value;
+        }
+        _charactersByRole = merged;
+      }
       // Seed a local state so the UI renders instantly; the realtime stream
       // refines it. Only seed from MatchEngine.start when a full deal is
       // present (it requires a full set of words); otherwise wait for the

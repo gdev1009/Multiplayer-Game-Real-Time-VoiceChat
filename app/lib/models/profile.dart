@@ -1,3 +1,5 @@
+import '../features/billing/trial_policy.dart';
+
 /// A player's profile as stored in the Supabase `profiles` table.
 ///
 /// The email lives in Supabase Auth and is never shown in the app; it exists
@@ -27,11 +29,11 @@ class Profile {
   /// Matches finished on the winning team.
   final int gamesWon;
 
-  /// Days remaining in the 7-day free trial (0 if expired or none).
+  /// Days remaining in the free trial (0 if expired or none).
   int get trialDaysRemaining {
     final start = trialStartedAt;
     if (start == null) return 0;
-    final end = start.add(const Duration(days: 7));
+    final end = start.add(const Duration(days: TrialPolicy.lengthDays));
     final remaining = end.difference(DateTime.now()).inDays;
     return remaining < 0 ? 0 : remaining;
   }

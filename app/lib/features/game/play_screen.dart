@@ -7,7 +7,9 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text.dart';
 import '../../core/widgets/app_page.dart';
 import '../../core/widgets/big_button.dart';
+import '../../models/character.dart';
 import '../../services/audio_controller.dart';
+import '../character/character_controller.dart';
 import '../host/host_stage.dart';
 import '../host/sound_settings.dart';
 import '../host/studio_stage.dart';
@@ -16,6 +18,36 @@ import '../prizes/prize_controller.dart';
 import 'game_engine.dart';
 import 'gameplay_controller.dart';
 import 'word_input.dart';
+
+/// Stage looks keyed by role. If my seat is still missing a look, fill it from
+/// the signed-in player's saved character (same fallback the lobby uses).
+Map<String, Character> _stageCharacters(
+  BuildContext context,
+  GameplayController controller,
+) {
+  final looks = Map<String, Character>.of(controller.charactersByRole);
+  final myRole = controller.myRole;
+  Character? saved;
+  try {
+    saved = context.watch<CharacterController>().saved;
+  } on ProviderNotFoundException {
+    saved = null;
+  }
+  if (myRole == null || saved == null || saved.base == null) return looks;
+  final existing = looks[myRole];
+  if (existing == null || existing.base == null) {
+    looks[myRole] = saved;
+  } else {
+    // Same person → prefer the live saved look (lobby / creator stay in sync).
+    final seatName =
+        (controller.state?.names[myRole] ?? existing.displayName).trim().toLowerCase();
+    final savedName = saved.displayName.trim().toLowerCase();
+    if (seatName.isNotEmpty && seatName == savedName) {
+      looks[myRole] = saved;
+    }
+  }
+  return looks;
+}
 
 /// The live gameplay screen.
 ///
@@ -208,15 +240,13 @@ class _MatchBody extends StatelessWidget {
         amClueGiver &&
         state.secretWord.trim().isNotEmpty;
 
-    // Bottom dock: YOUR WORD (½) + input (½). No clue strip above the field.
+    // Bottom dock: clue/guess input only. Mystery word is on the stage.
     final panelH = (size.height * 0.088).clamp(68.0, 86.0);
     final panelBottom =
         MediaQuery.paddingOf(context).bottom + 6 + viewInsets.bottom * 0.1;
     final dockReserve = panelH + 14 + viewInsets.bottom * 0.12;
 
     const margin = 10.0;
-    const gap = 8.0;
-    final halfW = (size.width - margin * 2 - gap) / 2;
 
     return Stack(
       fit: StackFit.expand,
@@ -227,11 +257,23 @@ class _MatchBody extends StatelessWidget {
           child: StudioStage(
             state: state,
             viewerRole: viewerRole,
-            charactersByRole: controller.charactersByRole,
+            // Prefer the local saved look for my seat so lobby + stage match
+            // even if mw_game_characters is slow or stale.
+            charactersByRole: _stageCharacters(context, controller),
             bottomInset: dockReserve,
             showScoreboards: true,
           ),
         ),
+        // Mystery word sits on the marquee — above the upper seat heads
+        // (video21: LEMON banner was covering Greg / Rosie).
+        if (showSecretWord)
+          Positioned(
+            left: size.width * 0.20,
+            right: size.width * 0.20,
+            top: size.height * 0.205,
+            height: (size.height * 0.052).clamp(42.0, 56.0),
+            child: _StageMysteryWord(word: state.secretWord),
+          ),
         if (state.isOver)
           Positioned(
             left: 12,
@@ -272,82 +314,70 @@ class _MatchBody extends StatelessWidget {
               child: const _WaitingPanel(
                 name: '',
                 giving: true,
-                message: 'Listen to Guy Smiley — the show is starting…',
+                message: 'Listen to Guy…',
               ),
             )
-          else if (!controller.isMyTurn)
-            // Waiting copy needs the full dock — half-width looked truncated.
+          else
             Positioned(
               left: margin,
               right: margin,
               bottom: panelBottom,
               height: panelH,
               child: _InputArea(state: state, controller: controller),
-            )
-          else ...[
-            if (showSecretWord)
-              Positioned(
-                left: margin,
-                width: halfW,
-                bottom: panelBottom,
-                height: panelH,
-                child: _ProminentWordBanner(word: state.secretWord),
-              ),
-            // Half-width input — right of YOUR WORD when shown, else left half.
-            Positioned(
-              left: showSecretWord ? margin + halfW + gap : margin,
-              width: halfW,
-              bottom: panelBottom,
-              height: panelH,
-              child: _InputArea(state: state, controller: controller),
             ),
-          ],
         ],
       ],
     );
   }
 }
 
-/// Bottom-left half-width mystery word for the clue-giver.
-class _ProminentWordBanner extends StatelessWidget {
-  const _ProminentWordBanner({required this.word});
+/// Large gold plaque under the MATCH WORD marquee — clue-giver only.
+class _StageMysteryWord extends StatelessWidget {
+  const _StageMysteryWord({required this.word});
   final String word;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox.expand(
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: const Color(0xF2160C30),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: const Color(0xFFFFD36A),
-            width: 2.2,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFFFFD36A).withValues(alpha: 0.3),
-              blurRadius: 12,
-              spreadRadius: 0.5,
-            ),
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color(0xF2281648),
+            Color(0xF2160C30),
           ],
         ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: Center(
-            child: FittedBox(
-              fit: BoxFit.contain,
-              child: Text(
-                word.toUpperCase(),
-                maxLines: 1,
-                textAlign: TextAlign.center,
-                style: AppText.body.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 48,
-                  letterSpacing: 1.0,
-                  height: 1.0,
-                ),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFFFD36A), width: 2.6),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFFFD36A).withValues(alpha: 0.35),
+            blurRadius: 16,
+            spreadRadius: 1,
+          ),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.45),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        child: Center(
+          child: FittedBox(
+            fit: BoxFit.contain,
+            child: Text(
+              word.toUpperCase(),
+              maxLines: 1,
+              textAlign: TextAlign.center,
+              style: AppText.body.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+                fontSize: 56,
+                letterSpacing: 1.4,
+                height: 1.0,
               ),
             ),
           ),
@@ -422,8 +452,8 @@ class _WaitingPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final text = message ??
         (giving
-            ? 'Waiting for ${name.isEmpty ? 'the next player' : name} to give a clue…'
-            : 'Waiting for ${name.isEmpty ? 'the next player' : name} to guess…');
+            ? 'Waiting for ${name.isEmpty ? 'clue' : name}…'
+            : 'Waiting for ${name.isEmpty ? 'guess' : name}…');
     return _DockPanel(
       child: Align(
         alignment: Alignment.centerLeft,
@@ -431,19 +461,19 @@ class _WaitingPanel extends StatelessWidget {
           children: [
             Icon(
               giving ? Icons.edit_rounded : Icons.psychology_alt_rounded,
-              size: 30,
+              size: 28,
               color: const Color(0xFFE8B84A),
             ),
             const SizedBox(width: AppSpacing.sm),
             Expanded(
               child: Text(
                 text,
-                maxLines: 2,
+                maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: AppText.body.copyWith(
                   color: Colors.white,
-                  height: 1.1,
-                  fontSize: 18,
+                  height: 1.05,
+                  fontSize: 22,
                   fontWeight: FontWeight.w900,
                 ),
               ),

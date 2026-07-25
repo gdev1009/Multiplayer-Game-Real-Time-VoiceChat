@@ -10,59 +10,57 @@ import 'host_audio.dart';
 abstract final class HostVoiceScripts {
   static final math.Random _rng = math.Random();
 
-  /// Full show open — PDF "GUY SMILEY - INTRODUCTION".
+  /// Full show open — Ronna's introduction (team Clue Giver / Guesser rules).
   static const String introduction =
       "Ladies and gentlemen… welcome to the studio that makes words come alive… "
       "this… is MATCH WORD! I'm your host, Guy Smiley, and let me tell you, we "
-      "are in for a fantastic time today! Here's how we play: we've got two teams, "
-      "and each team has a Clue Giver and a Guesser. The mystery word starts with "
-      "one team — their Clue Giver gives a clue, and their Guesser tries to guess "
-      "the word! Get it right, and the points are yours! But if the Guesser can't "
-      "get it… don't worry, it's not over! The word moves over to the other team, "
-      "their Clue Giver adds a brand new clue, and their Guesser gets their own "
-      "shot at it! Back and forth it goes, for up to eight rounds! And if nobody's "
-      "cracked it by then, we move on to a brand new word! Are you ready to play? "
-      "Let's find out who takes home the win… right here, right now, on MATCH WORD!";
+      "are in for a fantastic time today! Here's how we play: one lucky player "
+      "on each team becomes the Clue Giver, and it's their job to describe our "
+      "mystery word with just one word — without saying the word itself, of "
+      "course! The other player on the team is the guesser. Guess it right, and "
+      "the points are yours! Get it wrong, and the team has a chance to steal "
+      "with their own clue! Are you ready to play? Let's find out who takes "
+      "home the win… right here, right now, on MATCH WORD!";
 
-  /// PDF "CORRECT ANSWER RESPONSES".
+  /// PDF / chat "CORRECT ANSWER RESPONSES".
   static const List<String> correct = [
     'Yes! You got it! Fantastic!',
-    "That's exactly right! Well done!",
+    "Ding ding ding! That's exactly right!",
     'Look at that! Right on the money!',
     "Oh, beautifully done! That's correct!",
     'Bingo! You nailed it!',
     "That's it! Give that player a round of applause!",
     'Yes indeed! Correct as can be!',
-    'Wonderful! You got it!',
+    "Wonderful! You've got the magic touch!",
     "That's the word! Well done, well done!",
     "Absolutely right! You're on fire today!",
     "Perfect! Couldn't have said it better myself!",
     'There it is! Right answer, right there!',
     'You got it, you got it! Fantastic guessing!',
-    'Correct! What a player!',
+    'Ding! Correct! What a player!',
     'Yes sir, yes ma\'am, that is correct!',
   ];
 
-  /// PDF "WRONG ANSWER RESPONSES" (steal / pass to other team).
+  /// PDF / chat "WRONG ANSWER RESPONSES".
   static const List<String> wrong = [
-    "Sorry, that's not it! Let's go over to the other team!",
-    "Oh, that's too bad! The other team gets a shot now!",
-    'Better luck next time! Passing it over to the other side!',
-    "Ohh, so close — but let's see what the other team can do!",
-    'Not quite! Over to the other Clue Giver now!',
-    "Aww, that's a tough one! Other team, you're up!",
-    "Sorry, not the word! Let's give the other side a chance!",
-    "Oh no, that's not it! The other team's turn now!",
-    'Better luck next round! Over to the other Clue Giver!',
-    "Ohh, nice try, but no! Let's see if the other team can crack it!",
-    "That's too bad! Passing it along to the other side!",
-    "Sorry, that's a miss! The other team gets their shot!",
-    "Ohh, so near! But it's the other team's turn now!",
-    "Not this time! Let's hand it over to the other team!",
-    "Oh, sorry, that's too bad! Over to the other Clue Giver now!",
+    'Ohhh, so close, but not quite!',
+    'Buzz! Not this time, folks.',
+    'Ohh, too bad! It moves on to the next player now.',
+    'Not quite there, but keep that energy up!',
+    'Ohh, a good try, but that\'s not it.',
+    "Buzz! We'll give someone else a shot at it.",
+    'So close, yet so far! On we go.',
+    "Ohh, not the word we're looking for today.",
+    "That's a miss, but don't you worry!",
+    "Buzz! Next player, it's your turn now.",
+    'Ohh, tough one! But that\'s not it.',
+    'Not quite, but nice try out there!',
+    'That one got away! On to the next guess.',
+    'Buzz buzz! Time to pass it along.',
+    'Ohh, so near! But the word remains a mystery.',
   ];
 
-  /// End-of-match wrap-ups (Ronna: thanks for playing / great game).
+  /// End-of-match wrap-ups.
   static const List<String> wrapUp = [
     'What a game! Thanks for playing Match Word today — you were wonderful!',
     'Great game, folks! Thanks for joining us — come back soon for more Match Word!',
@@ -70,13 +68,33 @@ abstract final class HostVoiceScripts {
     'Fantastic show! Thanks for playing Match Word — until next time!',
   ];
 
-  static const String roundStart = "You're on the clock! Give us your best!";
-  static const String reveal =
-      "Time's up on that word! Let's reveal it and move on.";
-  static const String halftime =
-      "Halftime! Teams, switch roles — clue givers become guessers!";
-  static const String disconnect =
-      "Hold on — we lost a player. Hang tight while we sort this out.";
+  static const List<String> roundStarts = [
+    "You're on the clock! Give us your best!",
+    "All right — it's your turn! Make it count!",
+    'Here we go! One word — make it a good one!',
+    "Lights are on you — let's hear it!",
+    'Your moment, folks! What have you got?',
+  ];
+
+  static const List<String> reveals = [
+    "Time's up on that word! Let's reveal it and move on.",
+    "Nobody got it — let's show the word and keep the show rolling!",
+    "That one stumped the room! Revealing the word… and on we go!",
+    "Clock's done! Here's the word — next one coming up!",
+  ];
+
+  static const List<String> halftimes = [
+    'Halftime! Teams, switch roles — clue givers become guessers!',
+    "That's halftime! Swap seats in spirit — clue givers, you're guessing now!",
+    'Mid-show break! Roles flip — new clue givers, new energy!',
+    "Halftime! Flip those roles and let's light up the second half!",
+  ];
+
+  static const List<String> disconnects = [
+    'Hold on — we lost a player. Hang tight while we sort this out.',
+    "Whoa — someone's dropped off! Stay put, folks, we'll get you back in.",
+    "Technical difficulty! One of our players stepped away — hang on!",
+  ];
 
   /// Bundled Piper fallback asset for [cue] (relative to assets/).
   static String? fallbackAssetFor(SoundCue cue) {
@@ -93,17 +111,19 @@ abstract final class HostVoiceScripts {
     };
   }
 
-  /// Pick the spoken line for [cue]. Correct/wrong/wrap-up rotate.
+  static String _pick(List<String> lines) => lines[_rng.nextInt(lines.length)];
+
+  /// Pick the spoken line for [cue]. Banks rotate so Guy never sounds stuck.
   static String? lineFor(SoundCue cue) {
     return switch (cue) {
       SoundCue.gameStart => introduction,
-      SoundCue.roundStart => roundStart,
-      SoundCue.correct => correct[_rng.nextInt(correct.length)],
-      SoundCue.steal => wrong[_rng.nextInt(wrong.length)],
-      SoundCue.reveal => reveal,
-      SoundCue.halftime => halftime,
-      SoundCue.winner => wrapUp[_rng.nextInt(wrapUp.length)],
-      SoundCue.disconnect => disconnect,
+      SoundCue.roundStart => _pick(roundStarts),
+      SoundCue.correct => _pick(correct),
+      SoundCue.steal => _pick(wrong),
+      SoundCue.reveal => _pick(reveals),
+      SoundCue.halftime => _pick(halftimes),
+      SoundCue.winner => _pick(wrapUp),
+      SoundCue.disconnect => _pick(disconnects),
     };
   }
 }

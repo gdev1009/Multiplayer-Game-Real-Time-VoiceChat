@@ -11,8 +11,19 @@ abstract class SoundOutput {
   /// Configure the global audio session (silent-mode behaviour, focus, etc.).
   Future<void> configure();
 
+  /// When true, [AudioController] skips real-time waits (opening bed, etc.).
+  bool get isSilent => false;
+
   /// Start (or restart) the looping background track at [asset], [volume] 0..1.
   Future<void> playLoop(String asset, double volume);
+
+  /// Play a one-shot music bed (non-looping) and wait until it finishes
+  /// (or [maxWait] elapses). Used for the opening cue before Guy speaks.
+  Future<void> playMusicOnce(
+    String asset,
+    double volume, {
+    Duration maxWait = const Duration(seconds: 16),
+  });
 
   /// Stop the looping background track.
   Future<void> stopLoop();
@@ -60,6 +71,9 @@ class AudioService implements SoundOutput {
   bool _configured = false;
 
   @override
+  bool get isSilent => false;
+
+  @override
   Future<void> configure() async {
     if (_configured) return;
     _configured = true;
@@ -96,6 +110,34 @@ class AudioService implements SoundOutput {
       await _music.play(AssetSource(asset), volume: volume);
     } catch (err) {
       debugPrint('AudioService.playLoop($asset) failed (ignored): $err');
+    }
+  }
+
+  @override
+  Future<void> playMusicOnce(
+    String asset,
+    double volume, {
+    Duration maxWait = const Duration(seconds: 16),
+  }) async {
+    await configure();
+    try {
+      await _music.stop();
+      await _music.setReleaseMode(ReleaseMode.release);
+      await _music.setVolume(volume.clamp(0.0, 1.0));
+      await _music.play(AssetSource(asset), volume: volume.clamp(0.0, 1.0));
+      try {
+        await _music.onPlayerComplete.first.timeout(maxWait);
+      } catch (_) {
+        try {
+          await _music.stop();
+        } catch (_) {}
+      }
+    } catch (err) {
+      debugPrint('AudioService.playMusicOnce($asset) failed (ignored): $err');
+    } finally {
+      try {
+        await _music.setReleaseMode(ReleaseMode.loop);
+      } catch (_) {}
     }
   }
 
