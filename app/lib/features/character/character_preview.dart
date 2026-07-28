@@ -124,6 +124,14 @@ class CharacterPreview extends StatelessWidget {
           child: image,
         );
       }
+      // Male outfit art sits a hair low vs the neck column — nudge it up so
+      // collars meet the jaw the way female outfits already do.
+      if (layer == CharacterLayer.outfit && character.base == 'body-male') {
+        image = Transform.translate(
+          offset: Offset(0, -size * 0.022),
+          child: image,
+        );
+      }
       layers.add(image);
     }
 
@@ -301,10 +309,12 @@ class _NeckBridgePainter extends CustomPainter {
     final w = size.width;
     final h = size.height;
     // Chin ~ y 360/1254 ≈ 0.287; shoulders ~ 0.375 — fill that band.
+    // Male open collars need a taller bridge; female holes are already clean.
+    final centerY = female ? h * 0.325 : h * 0.312;
     final rect = Rect.fromCenter(
-      center: Offset(w * 0.5, h * 0.325),
-      width: w * 0.18,
-      height: h * 0.085,
+      center: Offset(w * 0.5, centerY),
+      width: w * (female ? 0.18 : 0.22),
+      height: h * (female ? 0.085 : 0.13),
     );
     final paint = Paint()
       ..color = skin
@@ -315,6 +325,20 @@ class _NeckBridgePainter extends CustomPainter {
       rect.deflate(w * 0.02),
       Paint()..color = skin.withValues(alpha: 0.95),
     );
+    if (!female) {
+      // Soft second oval lower in the collar V (open shirts / track jackets).
+      final lower = Rect.fromCenter(
+        center: Offset(w * 0.5, h * 0.355),
+        width: w * 0.14,
+        height: h * 0.07,
+      );
+      canvas.drawOval(
+        lower,
+        Paint()
+          ..color = skin.withValues(alpha: 0.9)
+          ..maskFilter = MaskFilter.blur(BlurStyle.normal, w * 0.01),
+      );
+    }
   }
 
   @override
