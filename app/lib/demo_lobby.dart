@@ -17,6 +17,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/navigation/app_routes.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/auth_controller.dart';
+import 'features/game/ai_player.dart';
 import 'features/lobby/join_by_code_screen.dart';
 import 'features/lobby/lobby_controller.dart';
 import 'features/lobby/lobby_room_screen.dart';
@@ -89,7 +90,6 @@ class _InMemoryLobbyService extends LobbyService {
   _InMemoryLobbyService() : super(_offlineClient());
 
   static const String _hostId = 'demo-host';
-  static const List<String> _fillNames = ['Rosa', 'Walter', 'Mabel'];
 
   final StreamController<List<GamePlayer>> _playersCtrl =
       StreamController<List<GamePlayer>>.broadcast();
@@ -198,11 +198,17 @@ class _InMemoryLobbyService extends LobbyService {
   @override
   Future<void> fillSeats(String gameId) async {
     final next = List<GamePlayer>.of(_players);
-    for (var seat = 0; seat < 4; seat++) {
-      final taken = next.any((p) => p.seat == seat);
-      if (!taken) {
-        next.add(_seat(seat: seat, name: _fillNames[(seat - 1) % 3], isAi: true));
-      }
+    final openSeats = <int>[
+      for (var seat = 0; seat < 4; seat++)
+        if (!next.any((p) => p.seat == seat)) seat,
+    ];
+    final names = AiPlayer.fillNamesForGame(
+      gameId,
+      count: openSeats.length,
+      taken: next.map((p) => p.displayName),
+    );
+    for (var i = 0; i < openSeats.length; i++) {
+      next.add(_seat(seat: openSeats[i], name: names[i], isAi: true));
     }
     next.sort((a, b) => a.seat.compareTo(b.seat));
     _players = next;

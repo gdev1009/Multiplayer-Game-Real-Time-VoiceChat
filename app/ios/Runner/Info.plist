@@ -61,5 +61,9 @@
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Match Word uses the microphone so you can speak your clue or guess instead of typing.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Match Word turns your spoken clue or guess into text so you can send it to the game.</string>
 </dict>
 </plist>

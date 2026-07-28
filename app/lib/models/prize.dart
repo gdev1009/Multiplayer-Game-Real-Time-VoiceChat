@@ -1,3 +1,23 @@
+/// How a finished match counts toward Prize Room stats.
+enum MatchOutcome { win, tie, loss }
+
+extension MatchOutcomeRpc on MatchOutcome {
+  String get rpcValue => switch (this) {
+        MatchOutcome.win => 'win',
+        MatchOutcome.tie => 'tie',
+        MatchOutcome.loss => 'loss',
+      };
+}
+
+/// Phase-1 clay win trophy art (one visual cup per [PrizeRoom.gamesWon]).
+abstract final class PrizeAssets {
+  static const winCup = 'assets/images/trophies/trophy-first-win.png';
+  static const winCupId = 'trophy-win-cup';
+
+  /// Novelty prize shelf — deferred past Phase 1 (Ronna Jul 2026).
+  static const showNoveltyPrizes = false;
+}
+
 /// A trophy or novelty prize from the Prize Room catalog.
 class PrizeItem {
   const PrizeItem({
@@ -57,13 +77,48 @@ class PrizeRoom {
   int get gamesLost =>
       (gamesPlayed - gamesWon - gamesTied).clamp(0, gamesPlayed);
 
+  /// Clay cups earned — one per win (Phase 1 retention loop).
+  int get winTrophyCount => gamesWon;
+
   List<PrizeItem> get trophies =>
       items.where((i) => i.isTrophy).toList(growable: false);
+
+  /// Milestone plaques (first win, 10/50 games) — not the per-win cups.
+  List<PrizeItem> get milestoneTrophies => trophies
+      .where((i) => i.id != PrizeAssets.winCupId)
+      .toList(growable: false);
 
   List<PrizeItem> get prizes =>
       items.where((i) => !i.isTrophy).toList(growable: false);
 
-  int get earnedCount => items.where((i) => i.earned).length;
+  /// One shelf slot per win (capped for layout). Uses shared clay cup art.
+  List<PrizeItem> winCups({int maxVisible = 12}) {
+    final n = winTrophyCount.clamp(0, maxVisible);
+    if (n == 0) return const [];
+    String asset = PrizeAssets.winCup;
+    for (final i in trophies) {
+      if (i.id == PrizeAssets.winCupId && i.assetPath.isNotEmpty) {
+        asset = i.assetPath;
+        break;
+      }
+    }
+    return List<PrizeItem>.generate(
+      n,
+      (i) => PrizeItem(
+        id: 'win-cup-slot-$i',
+        kind: 'trophy',
+        title: n == 1 ? 'Win Trophy' : 'Win ${i + 1}',
+        description: 'Clay trophy for a Match Word win.',
+        assetPath: asset,
+        sortOrder: i,
+        earned: true,
+      ),
+      growable: false,
+    );
+  }
+
+  int get earnedCount =>
+      winTrophyCount + milestoneTrophies.where((i) => i.earned).length;
 
   /// Shelf "expansion" level: empty → starter → growing → packed.
   int get roomLevel {
@@ -72,6 +127,18 @@ class PrizeRoom {
     if (n >= 3) return 2;
     if (n >= 1) return 1;
     return 0;
+  }
+
+  /// Short line for the Opening / sign-in welcome.
+  String get signInTrophyLine {
+    final n = winTrophyCount;
+    if (n <= 0) {
+      return 'Win a game to earn a clay trophy — come back and collect more!';
+    }
+    if (n == 1) {
+      return 'You have 1 clay trophy. Ready for another win?';
+    }
+    return 'You have $n clay trophies. Ready for another win?';
   }
 
   factory PrizeRoom.empty() =>
@@ -86,6 +153,20 @@ class PrizeRoom {
       items: raw
           .map((r) => PrizeItem.fromMap(Map<String, dynamic>.from(r as Map)))
           .toList(growable: false),
+    );
+  }
+
+  PrizeRoom copyWith({
+    int? gamesPlayed,
+    int? gamesWon,
+    int? gamesTied,
+    List<PrizeItem>? items,
+  }) {
+    return PrizeRoom(
+      gamesPlayed: gamesPlayed ?? this.gamesPlayed,
+      gamesWon: gamesWon ?? this.gamesWon,
+      gamesTied: gamesTied ?? this.gamesTied,
+      items: items ?? this.items,
     );
   }
 }

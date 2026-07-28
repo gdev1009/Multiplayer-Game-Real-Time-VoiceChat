@@ -92,8 +92,8 @@ class _LobbyBodyState extends State<_LobbyBody> {
   @override
   void didUpdateWidget(covariant _LobbyBody oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.game.id != widget.game.id ||
-        oldWidget.lobby.players.length != widget.lobby.players.length) {
+    if (oldWidget.game.id != widget.game.id) {
+      _loadedForGame = null;
       _loadCharacters();
     }
   }
@@ -110,7 +110,8 @@ class _LobbyBodyState extends State<_LobbyBody> {
         _loadedForGame = gameId;
       });
     } catch (_) {
-      // Keep generic avatars if character load fails.
+      // Keep generated roster looks if character load fails.
+      if (mounted) setState(() {});
     }
   }
 
@@ -138,6 +139,12 @@ class _LobbyBodyState extends State<_LobbyBody> {
   Widget build(BuildContext context) {
     final lobby = widget.lobby;
     final game = widget.game;
+    // Recompute every rebuild so Add Players / Realtime fills never leave
+    // generic silhouette avatars (shared list mutation skipped didUpdateWidget).
+    final rosterLooks = AiPlayer.looksForSeats(
+      game.id,
+      lobby.players.map((p) => (role: p.role, name: p.displayName)),
+    );
     // Prefer the character display name over the account first name.
     final characterName =
         context.watch<CharacterController>().saved?.displayName.trim() ?? '';
@@ -174,6 +181,7 @@ class _LobbyBodyState extends State<_LobbyBody> {
                   players: lobby.players,
                   maxPlayers: game.maxPlayers,
                   characters: _characters,
+                  rosterLooks: rosterLooks,
                 ),
                 const SizedBox(height: AppSpacing.md),
                 _TeamCard(
@@ -182,6 +190,7 @@ class _LobbyBodyState extends State<_LobbyBody> {
                   players: lobby.players,
                   maxPlayers: game.maxPlayers,
                   characters: _characters,
+                  rosterLooks: rosterLooks,
                 ),
               ],
             ),
@@ -194,6 +203,7 @@ class _LobbyBodyState extends State<_LobbyBody> {
               label: 'Add Players',
               icon: Icons.group_add_rounded,
               variant: BigButtonVariant.secondary,
+              isLoading: lobby.busy,
               onPressed: lobby.busy
                   ? null
                   : () => _run(context, () => lobby.fillSeats()),
@@ -368,6 +378,7 @@ class _TeamCard extends StatelessWidget {
     required this.players,
     required this.maxPlayers,
     required this.characters,
+    required this.rosterLooks,
   });
 
   final String team;
@@ -375,6 +386,8 @@ class _TeamCard extends StatelessWidget {
   final List<GamePlayer> players;
   final int maxPlayers;
   final Map<String, Character> characters;
+  /// Unique AI looks for this match (hair/hat/glasses/outfit never twin).
+  final Map<String, Character> rosterLooks;
 
   @override
   Widget build(BuildContext context) {
@@ -417,11 +430,7 @@ class _TeamCard extends StatelessWidget {
     if (player == null) return null;
     final fromServer = characters[player.role];
     if (fromServer != null && fromServer.base != null) return fromServer;
-    if (player.isAi) {
-      return AiPlayer.lookFor('${player.role}:${player.displayName}', player.displayName);
-    }
-    // Local player's own saved look as a fallback.
-    return null;
+    return rosterLooks[player.role];
   }
 }
 

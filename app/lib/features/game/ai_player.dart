@@ -68,38 +68,167 @@ class AiPlayer {
     'Puppy', 'Kitten', 'Flower', 'River', 'Cabin', 'Letter', 'Sock', 'Cushion',
   ];
 
+  /// Friendly first-name pool for studio seats (client demos + offline fill).
+  static const fillNamePool = [
+    'Sunny', 'Rosie', 'Buddy', 'Pearl', 'Gus', 'Mabel', 'Otis', 'Ada',
+    'Walter', 'Rosa', 'Frank', 'Helen', 'Betty', 'Joe', 'Doris', 'Sam',
+    'Nancy', 'Bill', 'Grace', 'Tom', 'Linda', 'Arthur', 'Margaret', 'Max',
+  ];
+
+  /// Deterministic unique names for empty seats in one game (mirrors SQL fill).
+  static List<String> fillNamesForGame(
+    String gameId, {
+    required int count,
+    Iterable<String> taken = const [],
+  }) {
+    final used = {
+      for (final n in taken) n.trim().toLowerCase(),
+    }..removeWhere((n) => n.isEmpty);
+    final ranked = [...fillNamePool]..sort(
+        (a, b) => _stableHash('$gameId:$a').compareTo(_stableHash('$gameId:$b')),
+      );
+    final out = <String>[];
+    for (final name in ranked) {
+      if (out.length >= count) break;
+      final key = name.toLowerCase();
+      if (used.contains(key)) continue;
+      used.add(key);
+      out.add(name);
+    }
+    var i = 1;
+    while (out.length < count) {
+      final fallback = 'Player$i';
+      i++;
+      if (used.contains(fallback.toLowerCase())) continue;
+      used.add(fallback.toLowerCase());
+      out.add(fallback);
+    }
+    return out;
+  }
+
+  static int _stableHash(String s) {
+    var h = 2166136261;
+    for (final c in s.codeUnits) {
+      h = (h ^ c) * 16777619 & 0x7fffffff;
+    }
+    return h;
+  }
+
   /// A deterministic, friendly character for a computer-filled seat, so studio
   /// players appear as real characters on the stage instead of a blank body.
   /// The same [seed] always yields the same look, so a player is consistent.
   static Character lookFor(String seed, String name) {
+    return _lookFor(
+      seed,
+      name,
+      usedHair: const {},
+      usedGlasses: const {},
+      usedHat: const {},
+      usedOutfit: const {},
+    );
+  }
+
+  /// Distinct looks for every AI seat in one match (video23: Rosie & Pearl
+  /// shared the same hat + glasses). Hair, glasses, hat, and outfit stay unique
+  /// across the roster while remaining stable for [salt].
+  static Map<String, Character> looksForSeats(
+    String salt,
+    Iterable<({String role, String name})> seats,
+  ) {
+    final usedHair = <String>{};
+    final usedGlasses = <String>{};
+    final usedHat = <String>{};
+    final usedOutfit = <String>{};
+    final out = <String, Character>{};
+    var i = 0;
+    for (final seat in seats) {
+      final c = _lookFor(
+        '$salt:${seat.role}:${seat.name}:$i',
+        seat.name,
+        usedHair: usedHair,
+        usedGlasses: usedGlasses,
+        usedHat: usedHat,
+        usedOutfit: usedOutfit,
+      );
+      if (c.hair != null) usedHair.add(c.hair!);
+      usedGlasses.add(c.glasses ?? '__none__');
+      usedHat.add(c.hat ?? '__none__');
+      if (c.outfit != null) usedOutfit.add(c.outfit!);
+      out[seat.role] = c;
+      i++;
+    }
+    return out;
+  }
+
+  static Character _lookFor(
+    String seed,
+    String name, {
+    required Set<String> usedHair,
+    required Set<String> usedGlasses,
+    required Set<String> usedHat,
+    required Set<String> usedOutfit,
+  }) {
     var h = 2166136261;
     for (final c in seed.codeUnits) {
       h = (h ^ c) * 16777619 & 0x7fffffff;
     }
-    int pick(int n, int salt) => ((h >> (salt % 24)) ^ (h * (salt + 1))) % n;
+    int pick(int n, int salt) =>
+        n <= 0 ? 0 : ((h >> (salt % 24)) ^ (h * (salt + 1))) % n;
 
-    // Prefer a body that matches the given name when we recognise it.
     final female = _isFemaleName(name) ?? (pick(2, 1) == 0);
     final base = female ? 'body-female' : 'body-male';
 
-    String? idAt(CharacterLayer layer, int salt, {bool allowNone = false}) {
-      final opts = CharacterCatalog.forLayer(layer, baseId: base);
+    String? pickAvoid(
+      CharacterLayer layer,
+      int salt, {
+      required Set<String> used,
+      bool allowNone = false,
+      bool noneCounts = true,
+      bool Function(String id)? keep,
+    }) {
+      var opts = CharacterCatalog.forLayer(layer, baseId: base)
+          .where((o) => keep == null || keep(o.id))
+          .toList();
       if (opts.isEmpty) return null;
-      final span = opts.length + (allowNone ? 1 : 0);
+      // Prefer unused ids; fall back to full list if exhausted.
+      final fresh = opts.where((o) => !used.contains(o.id)).toList();
+      if (fresh.isNotEmpty) opts = fresh;
+      final noneOk = allowNone &&
+          (!noneCounts || !used.contains('__none__'));
+      final span = opts.length + (noneOk ? 1 : 0);
       final i = pick(span, salt);
-      if (allowNone && i == opts.length) return null;
-      return opts[i].id;
+      if (noneOk && i == opts.length) return null;
+      return opts[i % opts.length].id;
     }
+
+    final hair = pickAvoid(CharacterLayer.hair, 3, used: usedHair);
+    final outfit = pickAvoid(CharacterLayer.outfit, 5, used: usedOutfit) ??
+        CharacterCatalog.defaultOutfitFor(base);
+    final glasses = pickAvoid(
+      CharacterLayer.glasses,
+      7,
+      used: usedGlasses,
+      allowNone: true,
+    );
+    final hat = pickAvoid(
+      CharacterLayer.hat,
+      13,
+      used: usedHat,
+      allowNone: true,
+      keep: (id) {
+        if (id.contains('knit')) return false;
+        if (base == 'body-male' && id.contains('brim')) return false;
+        return true;
+      },
+    );
 
     return Character(
       displayName: name,
       base: base,
-      hair: idAt(CharacterLayer.hair, 3),
-      outfit: idAt(CharacterLayer.outfit, 5) ??
-          CharacterCatalog.defaultOutfitFor(base),
-      glasses: idAt(CharacterLayer.glasses, 7, allowNone: true),
-      // Skip knit (floats on voluminous hair) and male brim (reads too dressy).
-      hat: _studioHat(base, pick),
+      hair: hair,
+      outfit: outfit,
+      glasses: glasses,
+      hat: hat,
     );
   }
 
@@ -124,21 +253,6 @@ class AiPlayer {
     if (male.contains(n)) return false;
     if (n.endsWith('ette') || n.endsWith('elle')) return true;
     return null;
-  }
-
-  /// Safe hat picks for studio AI seats — cap / sun only.
-  static String? _studioHat(String base, int Function(int n, int salt) pick) {
-    final male = base == 'body-male';
-    final opts = CharacterCatalog.forLayer(CharacterLayer.hat, baseId: base)
-        .where((o) {
-      if (o.id.contains('knit')) return false;
-      if (male && o.id.contains('brim')) return false;
-      return true;
-    }).toList();
-    if (opts.isEmpty) return null;
-    // ~35% chance of no hat so heads stay clean.
-    if (pick(opts.length + 2, 11) >= opts.length) return null;
-    return opts[pick(opts.length, 13)].id;
   }
 
   static String _fallbackFor(String key) {

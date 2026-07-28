@@ -10,6 +10,10 @@ import '../../services/audio_controller.dart';
 import '../character/idle_character_preview.dart';
 import '../game/game_engine.dart';
 import 'host_actions.dart';
+import 'assets/host_assets.dart';
+import 'host_animation_state.dart';
+import 'host_controller.dart';
+import 'host_widget.dart';
 
 // ─── Stage art (reference: Studio Pass concept) ─────────────────────────────
 
@@ -36,9 +40,9 @@ class _RefLayout {
   static const seatOverhang = 0.040;
   static const maxSeatWidth = 0.50;
 
-  // Host — centre stage; keep hands clear of seat B nameplates (video21).
-  static const hostWidth = 0.42;
-  static const hostShiftX = -0.048;
+  // Host — room for gesture hand; centered on stage.
+  static const hostWidth = 0.50;
+  static const hostShiftX = 0.02;
 
   // Seat nameplates (measured from Seat_on / Seat_off art).
   static const nameplateTopOn = 0.620;
@@ -133,7 +137,7 @@ class _StageMetrics {
     // Host stands on the stage floor between the pods (ref screenshot).
     var hostH = rectH * 0.78;
     var hostW = hostH * _kHostAspect;
-    final maxHostW = _clamp(w * _RefLayout.hostWidth, 200.0, 360.0);
+    final maxHostW = _clamp(w * _RefLayout.hostWidth, 200.0, 380.0);
     if (hostW > maxHostW) {
       hostW = maxHostW;
       hostH = hostW / _kHostAspect;
@@ -359,18 +363,16 @@ class StudioStage extends StatelessWidget {
                 seatH: upperH,
               ),
 
-              // 4. Host (dynamic — not part of the three stage PNGs).
+              // 4. Host — plain puppet, no focus chrome that can paint a plate.
               Positioned(
                 left: hostLeft,
                 top: hostTop,
                 width: hostW,
                 height: hostH,
-                child: ExcludeFocus(
-                  child: _HostCentre(
-                    state: state,
-                    maxWidth: hostW,
-                    maxHeight: hostH,
-                  ),
+                child: _HostCentre(
+                  state: state,
+                  maxWidth: hostW,
+                  maxHeight: hostH,
                 ),
               ),
 
@@ -1026,19 +1028,19 @@ class _HostCentre extends StatefulWidget {
 }
 
 class _HostCentreState extends State<_HostCentre>
-    with TickerProviderStateMixin {
-  late final AnimationController _idle = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 2800),
-  )..repeat(reverse: true);
-
+    with SingleTickerProviderStateMixin {
   late final AnimationController _gesture = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 620),
   );
 
+  final HostAnimationController _hostAnim = HostAnimationController();
+
   HostAction _shown = HostAction.listening;
   DateTime _stickyUntil = DateTime.fromMillisecondsSinceEpoch(0);
+  DateTime _actionStartedAt = DateTime.now();
+  DateTime? _welcomeStartedAt;
+  bool _wasWelcomeBeat = false;
 
   HostAction get _desired => HostActions.forState(widget.state);
 
@@ -1052,37 +1054,45 @@ class _HostCentreState extends State<_HostCentre>
         HostAction.listening => Duration.zero,
       };
 
+  void _applyAction(HostAction next, DateTime now, {bool restart = false}) {
+    if (next == _shown && !restart) return;
+    _shown = next;
+    _actionStartedAt = now;
+    final hold = _holdFor(next);
+    _stickyUntil = hold == Duration.zero ? now : now.add(hold);
+    if (hold > Duration.zero) {
+      Future<void>.delayed(hold, () {
+        if (!mounted) return;
+        if (DateTime.now().isBefore(_stickyUntil)) return;
+        final catchUp = _desired;
+        if (catchUp != _shown) {
+          setState(() {
+            _applyAction(catchUp, DateTime.now());
+          });
+        }
+      });
+    }
+  }
+
   void _syncAction({bool force = false}) {
     final next = _desired;
     final now = DateTime.now();
     if (!force && now.isBefore(_stickyUntil) && next == HostAction.listening) {
       return;
     }
-    if (next != _shown) {
-      _shown = next;
-      final hold = _holdFor(next);
-      _stickyUntil = hold == Duration.zero ? now : now.add(hold);
-      if (hold > Duration.zero) {
-        Future<void>.delayed(hold, () {
-          if (!mounted) return;
-          if (DateTime.now().isBefore(_stickyUntil)) return;
-          final catchUp = _desired;
-          if (catchUp != _shown) {
-            setState(() {
-              _shown = catchUp;
-              _stickyUntil = DateTime.now();
-            });
-          }
-        });
-      }
-    }
+    _applyAction(next, now, restart: force);
   }
 
   @override
   void initState() {
     super.initState();
-    _shown = _desired;
     _syncAction(force: true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      for (final path in HostAssets.allPrecache) {
+        precacheImage(AssetImage(path), context);
+      }
+    });
   }
 
   @override
@@ -1097,8 +1107,8 @@ class _HostCentreState extends State<_HostCentre>
 
   @override
   void dispose() {
-    _idle.dispose();
     _gesture.dispose();
+    _hostAnim.dispose();
     super.dispose();
   }
 
@@ -1113,55 +1123,60 @@ class _HostCentreState extends State<_HostCentre>
           context.select<AudioController, bool>((a) => a.voicePlaying);
       introPlaying =
           context.select<AudioController, bool>((a) => a.hostIntroPlaying);
-    } catch (_) {
-      // Demo / screenshot hosts may omit AudioController.
-    }
+    } catch (_) {}
 
-    // Welcome wave for the whole intro — no mouth overlay (it left a blotch).
-    final useWelcome = _shown == HostAction.welcome ||
-        ((introPlaying || voicePlaying) && openingBeat);
-    final useListening = !useWelcome && _shown == HostAction.listening;
+    final animState = HostStateResolver.resolve(
+      state: widget.state,
+      voicePlaying: voicePlaying,
+      introPlaying: introPlaying,
+      stickyAction: _shown,
+      inOpeningBeat: openingBeat,
+    );
+
+    final inWelcomeBeat = openingBeat &&
+        (introPlaying ||
+            animState == HostAnimationState.entering ||
+            animState == HostAnimationState.welcome ||
+            animState == HostAnimationState.speaking);
+
+    if (inWelcomeBeat && !_wasWelcomeBeat) {
+      _welcomeStartedAt = DateTime.now();
+    } else if (!inWelcomeBeat) {
+      _welcomeStartedAt = null;
+    }
+    _wasWelcomeBeat = inWelcomeBeat;
+
+    final welcomeElapsed = _welcomeStartedAt == null
+        ? 0.0
+        : DateTime.now().difference(_welcomeStartedAt!).inMilliseconds /
+            1000.0;
+
+    final actionElapsed =
+        DateTime.now().difference(_actionStartedAt).inMilliseconds / 1000.0;
+
+    double mouthOpen = 0;
+    try {
+      mouthOpen = context.select<AudioController, double>((a) => a.mouthOpen);
+    } catch (_) {}
 
     return AnimatedBuilder(
-      animation: Listenable.merge([_idle, _gesture]),
+      animation: _gesture,
       builder: (context, child) {
-        final bob = math.sin(_idle.value * math.pi) * 0.4;
-        final breathe = 1 + math.sin(_idle.value * math.pi) * 0.005;
-        final pop = Curves.easeOutCubic.transform(_gesture.value);
-        final scale = 1 + pop.clamp(0.0, 1.0) * 0.02;
+        // Keep host size locked while speaking — no push-in / pop scale.
+        const scale = 1.0;
 
-        // Authored action WebPs have keyed holes in the trousers that punch
-        // purple stage through the suit (video20). Use clean idle until re-keyed.
-        final figure = Image.asset(
-          'assets/images/host/host-idle.png',
-          key: ValueKey(useWelcome
-              ? 'welcome-idle'
-              : useListening
-                  ? 'listening-idle'
-                  : 'action-idle-$_shown'),
-          fit: BoxFit.contain,
-          alignment: Alignment.topCenter,
-          filterQuality: FilterQuality.high,
-          gaplessPlayback: true,
-          errorBuilder: (_, __, ___) => Image.asset(
-            'assets/images/host/host-stage.png',
-            fit: BoxFit.contain,
-            alignment: Alignment.topCenter,
-            filterQuality: FilterQuality.high,
-          ),
-        );
-
-        return Transform.translate(
-          offset: Offset(0, -bob),
-          child: Transform.scale(
-            scale: scale * breathe,
-            alignment: Alignment.topCenter,
-            child: SizedBox(
-              width: widget.maxWidth,
-              height: widget.maxHeight,
-              child: figure,
-            ),
-          ),
+        return HostWidget(
+          width: widget.maxWidth,
+          height: widget.maxHeight,
+          controller: _hostAnim,
+          mouthAmplitude: mouthOpen,
+          animationState: animState,
+          stickyAction: _shown,
+          voicePlaying: voicePlaying,
+          welcomeElapsedSec: welcomeElapsed,
+          actionElapsedSec: actionElapsed,
+          inOpeningBeat: inWelcomeBeat,
+          scale: scale,
         );
       },
     );

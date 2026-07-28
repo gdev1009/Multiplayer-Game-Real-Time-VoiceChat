@@ -1,10 +1,10 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../features/game/game_engine.dart';
+import '../features/host/mouth_animation.dart';
 import '../features/host/host_audio.dart';
 import '../features/host/host_voice_scripts.dart';
 import '../features/host/voice_envelope.dart';
@@ -132,7 +132,9 @@ class AudioController extends ChangeNotifier {
     _voiceEnvelope = envelope ?? await VoiceEnvelopes.forAsset(asset);
     if (gen != _voiceGeneration) return;
     _lipsyncTimer?.cancel();
-    _lipsyncTimer = Timer.periodic(const Duration(milliseconds: 33), (_) {
+    _lipsyncTimer = Timer.periodic(
+      const Duration(milliseconds: MouthTiming.tickMs),
+      (_) {
       final started = _voiceStartedAt;
       final env = _voiceEnvelope;
       if (started == null || env == null) return;
@@ -149,19 +151,23 @@ class AudioController extends ChangeNotifier {
           return;
         }
         final t = elapsed.inMilliseconds / 1000.0;
-        raw = (0.22 + (math.sin(t * 13.5).abs() * 0.55)).clamp(0.0, 1.0);
+        final cycle = (t * 3.2) % 1.0;
+        if (cycle < 0.14 || cycle >= 0.72) {
+          raw = 0.0;
+        } else if (cycle < 0.32 || cycle >= 0.58) {
+          raw = 0.24;
+        } else {
+          raw = 0.40;
+        }
       } else {
         raw = VoiceEnvelopes.sample(env, elapsed);
       }
-      final target = raw < 0.08
-          ? 0.0
-          : raw < 0.32
-              ? 0.12 + (raw - 0.08) * 1.1
-              : (0.38 + (raw - 0.32) * 1.15).clamp(0.0, 1.0);
-      // Smooth so welcome PNG / overlay doesn't flicker every frame.
-      _mouthSmoothed += (target - _mouthSmoothed) * 0.42;
-      final next = _mouthSmoothed < 0.05 ? 0.0 : _mouthSmoothed;
-      if ((next - _mouthOpen).abs() > 0.01) {
+      final target = raw.clamp(0.0, 1.0);
+      _mouthSmoothed +=
+          (target - _mouthSmoothed) * MouthTiming.maxSmoothing;
+      final next =
+          _mouthSmoothed < 0.05 ? 0.0 : _mouthSmoothed.clamp(0.0, 1.0);
+      if ((next - _mouthOpen).abs() > 0.015) {
         _mouthOpen = next;
         notifyListeners();
       }
@@ -183,10 +189,12 @@ class AudioController extends ChangeNotifier {
   }
 
   /// Rough duration for synthetic lipsync when we don't have an envelope file.
+  /// Accounts for Guy's slower playback rate so the mouth keeps moving.
   static int _estimateMs(String text) {
     final words = text.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty);
-    // ~165 wpm game-show pace + padding.
-    return (words.length * 360 + 800).clamp(1800, 90000);
+    // ~165 wpm game-show pace + padding, stretched by deeper playback rate.
+    final base = (words.length * 360 + 800).clamp(1800, 90000);
+    return (base / _hostPlaybackRate).round().clamp(1800, 90000);
   }
 
   Future<void> startTheme() async {
@@ -217,11 +225,18 @@ class AudioController extends ChangeNotifier {
     final sounds = HostAudio.soundsFor(cue);
     final sfxVol = sounds.isAlarm ? (_muted ? 0.9 : _sfxVolume) : _effectiveSfx;
     final isIntro = cue == SoundCue.gameStart;
+    final line = HostVoiceScripts.lineFor(cue);
+    final fallback = HostVoiceScripts.fallbackAssetFor(cue) ?? sounds.voice;
 
+    // Prefetch welcome TTS while the opening bed plays so there is no silent
+    // gap after the music ends (video25).
+    Future<String?>? ttsFuture;
     if (isIntro) {
       _hostIntroPlaying = true;
       notifyListeners();
-      // Ronna: short music bed before Guy starts speaking (~10–15s).
+      if (line != null) {
+        ttsFuture = _tts.synthesizeToFile(line);
+      }
       await _playOpeningBed();
     }
 
@@ -234,14 +249,24 @@ class AudioController extends ChangeNotifier {
     }
 
     // Intro effects are the opening bed (already played above).
+    // Ding plays instantly; crowd cheer overlaps Guy and is held by the
+    // resolved-beat timer (~15s) so it isn't cut short (Ronna).
     if (!isIntro) {
       for (final effect in sounds.effects) {
-        await _out.playOneShot(effect, sfxVol);
+        final isCheer = effect.contains('cheer');
+        unawaited(
+          _out.playOneShot(
+            effect,
+            sfxVol,
+            awaitCompletion: isCheer,
+          ),
+        );
+        if (!isCheer) {
+          await Future<void>.delayed(const Duration(milliseconds: 40));
+        }
       }
     }
 
-    final line = HostVoiceScripts.lineFor(cue);
-    final fallback = HostVoiceScripts.fallbackAssetFor(cue) ?? sounds.voice;
     if (line == null && fallback == null) {
       if (isIntro) {
         _hostIntroPlaying = false;
@@ -257,7 +282,9 @@ class AudioController extends ChangeNotifier {
     try {
       String? filePath;
       if (line != null) {
-        filePath = await _tts.synthesizeToFile(line);
+        filePath = ttsFuture != null
+            ? await ttsFuture
+            : await _tts.synthesizeToFile(line);
       }
 
       if (filePath != null) {

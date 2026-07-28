@@ -45,9 +45,14 @@ class PrizeController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Soft-records a finished match. Safe to call from local demos (no-ops
-  /// when unsigned / offline).
-  Future<void> recordMatchResult({required bool won}) {
-    return _service.recordMatchResult(won: won);
+  /// Soft-records a finished match, then refreshes shelves so Opening / Prize
+  /// Room show the new clay win trophy right away.
+  Future<void> recordMatchResult({required MatchOutcome outcome}) async {
+    await _service.recordMatchResult(outcome: outcome);
+    try {
+      await load();
+    } catch (_) {
+      // Soft — gameplay already finished.
+    }
   }
 }

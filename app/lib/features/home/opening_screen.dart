@@ -12,6 +12,8 @@ import '../../services/entitlement_service.dart';
 import '../auth/auth_controller.dart';
 import '../character/character_controller.dart';
 import '../character/idle_character_preview.dart';
+import '../prizes/prize_controller.dart';
+import '../prizes/win_trophy_welcome.dart';
 
 /// The Opening screen.
 ///
@@ -29,10 +31,11 @@ class _OpeningScreenState extends State<OpeningScreen> {
   @override
   void initState() {
     super.initState();
-    // Reload the saved character whenever the Opening screen appears.
+    // Reload character + prize shelves whenever Opening appears (sign-in home).
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       context.read<CharacterController>().load();
+      context.read<PrizeController>().load();
     });
   }
 
@@ -75,6 +78,16 @@ class _OpeningScreenState extends State<OpeningScreen> {
           HostGreeting(
             message: 'Hello $name! So glad you are here. '
                 'What would you like to do today?',
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Builder(
+            builder: (context) {
+              final prizes = context.watch<PrizeController>();
+              return WinTrophyWelcome(
+                room: prizes.room,
+                loading: prizes.loading,
+              );
+            },
           ),
           if (access == AccessLevel.expired) ...[
             const SizedBox(height: AppSpacing.lg),

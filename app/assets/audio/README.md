@@ -6,6 +6,6 @@ Client-provided clips integrated Jul 2026:
 |---|---|---|
 | Tic Tac Dough cue & prize montage (trimmed ~13s) | `opening_bed.mp3` | Music before Guy’s welcome |
 | Sports Buzzer (SoundEffectsFactory) | `buzzer.mp3` | Wrong / steal |
-| Audience Cheering and Clapping | `cheer.mp3` (~5s), `applause.mp3` (~10s) | Correct + winner |
+| Audience Cheering and Clapping | `cheer.mp3` (~12s), `applause.mp3` (~10s) | Correct + winner |
 
 Still developer cues: `ding.mp3` (correct hit), `theme.mp3` (underscore after welcome).

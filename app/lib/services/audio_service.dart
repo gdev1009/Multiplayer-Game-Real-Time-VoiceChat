@@ -37,12 +37,14 @@ abstract class SoundOutput {
   /// [playbackRate] below 1.0 lowers pitch (Guy Smiley reads deeper).
   /// [asset] is normally an AssetSource path; when [fromFile] is true it is an
   /// absolute filesystem path (ElevenLabs cache).
+  /// When [awaitCompletion] is true, wait until the one-shot finishes (cheer).
   Future<void> playOneShot(
     String asset,
     double volume, {
     bool voice = false,
     double playbackRate = 1.0,
     bool fromFile = false,
+    bool awaitCompletion = false,
   });
 
   /// Stop everything immediately.
@@ -162,6 +164,7 @@ class AudioService implements SoundOutput {
     bool voice = false,
     double playbackRate = 1.0,
     bool fromFile = false,
+    bool awaitCompletion = false,
   }) async {
     await configure();
     try {
@@ -184,6 +187,13 @@ class AudioService implements SoundOutput {
       _next = (_next + 1) % _sfxPool.length;
       await player.stop();
       await player.play(source, volume: volume);
+      if (awaitCompletion) {
+        try {
+          await player.onPlayerComplete.first.timeout(
+            const Duration(seconds: 20),
+          );
+        } catch (_) {}
+      }
     } catch (err) {
       debugPrint('AudioService.playOneShot($asset) failed (ignored): $err');
     }

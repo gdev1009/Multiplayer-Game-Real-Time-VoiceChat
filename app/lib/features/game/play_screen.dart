@@ -9,12 +9,14 @@ import '../../core/widgets/app_page.dart';
 import '../../core/widgets/big_button.dart';
 import '../../models/character.dart';
 import '../../services/audio_controller.dart';
+import '../../services/speech_input_service.dart';
 import '../character/character_controller.dart';
 import '../host/host_stage.dart';
 import '../host/sound_settings.dart';
 import '../host/studio_stage.dart';
 import '../lobby/lobby_controller.dart';
 import '../prizes/prize_controller.dart';
+import '../../models/prize.dart';
 import 'game_engine.dart';
 import 'gameplay_controller.dart';
 import 'word_input.dart';
@@ -96,7 +98,10 @@ class _PlayScreenState extends State<PlayScreen> {
     final controller = context.read<GameplayController>();
     controller.inputBlocked = () {
       try {
-        return context.read<AudioController>().hostIntroPlaying;
+        final audio = context.read<AudioController>();
+        // Hold the show while Guy is speaking (intro or any host line) so
+        // lines aren't cut off mid-word (halftime, etc.).
+        return audio.hostIntroPlaying || audio.voicePlaying;
       } catch (_) {
         return false;
       }
@@ -153,16 +158,21 @@ class _PlayScreenState extends State<PlayScreen> {
     final myRole = controller.myRole;
     final myTeam = myRole == null || myRole.isEmpty ? null : myRole[0];
     final winner = state.winningTeam;
-    final won = winner != null && myTeam == winner;
-    // Local solo demos have no roster — treat as a win for first-win testing
-    // only when the screen itself is local and Team A won (host seat).
-    final effectiveWon = controller.isLocal
-        ? (winner == 'A' || winner == null && state.scoreA >= state.scoreB)
-        : won;
+    final MatchOutcome outcome;
+    if (winner == null) {
+      outcome = MatchOutcome.tie;
+    } else if (controller.isLocal) {
+      // Local demos: host sits on Team A.
+      outcome = winner == 'A' ? MatchOutcome.win : MatchOutcome.loss;
+    } else if (myTeam != null && myTeam == winner) {
+      outcome = MatchOutcome.win;
+    } else {
+      outcome = MatchOutcome.loss;
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       try {
-        context.read<PrizeController>().recordMatchResult(won: effectiveWon);
+        context.read<PrizeController>().recordMatchResult(outcome: outcome);
       } catch (_) {
         // PrizeController not in tree (demos) — ignore.
       }
@@ -241,7 +251,7 @@ class _MatchBody extends StatelessWidget {
         state.secretWord.trim().isNotEmpty;
 
     // Bottom dock: clue/guess input only. Mystery word is on the stage.
-    final panelH = (size.height * 0.088).clamp(68.0, 86.0);
+    final panelH = (size.height * 0.095).clamp(74.0, 92.0);
     final panelBottom =
         MediaQuery.paddingOf(context).bottom + 6 + viewInsets.bottom * 0.1;
     final dockReserve = panelH + 14 + viewInsets.bottom * 0.12;
@@ -430,12 +440,44 @@ class _InputArea extends StatelessWidget {
       );
     }
     final giving = state.step == TurnStep.awaitingClue;
+    SpeechInputService? speech;
+    AudioController? audio;
+    try {
+      speech = context.read<SpeechInputService>();
+    } on ProviderNotFoundException {
+      speech = null;
+    }
+    try {
+      audio = context.read<AudioController>();
+    } on ProviderNotFoundException {
+      audio = null;
+    }
     return WordInput(
       key: ValueKey('${state.wordIndex}-${state.step}-${state.cluingTeam}'),
       label: giving ? 'One-word clue' : 'Guess',
       hint: giving ? 'A word that hints at it…' : 'What is the word?',
       onSubmit: giving ? controller.submitClue : controller.submitGuess,
       compact: true,
+      onSpeakRequested: speech == null
+          ? null
+          : () async {
+              // Duck studio bed so the mic hears the player clearly.
+              final a = audio;
+              final prevMusic = a?.musicVolume ?? 0.55;
+              final prevVoice = a?.voiceVolume ?? 0.9;
+              if (a != null && !a.muted) {
+                await a.setMusicVolume((prevMusic * 0.08).clamp(0.0, 1.0));
+                await a.setVoiceVolume(0);
+              }
+              try {
+                return await speech!.listenForWord();
+              } finally {
+                if (a != null && !a.muted) {
+                  await a.setMusicVolume(prevMusic);
+                  await a.setVoiceVolume(prevVoice);
+                }
+              }
+            },
     );
   }
 }
@@ -674,8 +716,10 @@ class _GameOverPanel extends StatelessWidget {
             style: AppText.title,
           ),
           const SizedBox(height: AppSpacing.md),
-          const Text(
-            'Thanks for playing Match Word!',
+          Text(
+            winner == null
+                ? 'Thanks for playing Match Word!'
+                : 'A clay trophy is waiting on your shelf — see you next game!',
             style: AppText.body,
             textAlign: TextAlign.center,
           ),

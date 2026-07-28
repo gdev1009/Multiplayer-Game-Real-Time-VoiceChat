@@ -177,13 +177,12 @@ class GameplayController extends ChangeNotifier {
     }
     _humanCoPlayers = coPlayers;
 
-    // Seed every podium with a name-matched look right away (Greg→male,
-    // Rosie→female, …). Human seats are overwritten once mw_game_characters
-    // returns — avoids empty/ghost seats and random bust-PNG gender flips.
-    final looks = <String, Character>{
-      for (final p in players)
-        p.role: AiPlayer.lookFor('${p.role}:${p.displayName}', p.displayName),
-    };
+    // Distinct looks per seat (gameId salt) — avoid twin hats/glasses in one
+    // match (video23: Rosie & Pearl shared the same teal hat + cat-eyes).
+    final looks = AiPlayer.looksForSeats(
+      gameId,
+      players.map((p) => (role: p.role, name: p.displayName)),
+    );
     _charactersByRole = looks;
 
     await _guard(() async {
@@ -409,22 +408,23 @@ class GameplayController extends ChangeNotifier {
       return;
     }
 
-    // Leave halftime for the second half after a pause to read the switch.
+    // Leave halftime for the second half after Guy finishes speaking + a beat.
     if (s.phase == GamePhase.halftime) {
       _scheduleHostBeat(
         'half|${s.wordIndex}',
-        const Duration(milliseconds: 6500),
+        const Duration(milliseconds: 16000),
         beginSecondHalf,
       );
       return;
     }
 
-    // Advance the resolved beat after Guy finishes the outcome GIF + voice.
+    // Advance the resolved beat after Guy finishes the outcome GIF + voice + cheer.
     if (s.step == TurnStep.resolved &&
         (s.phase == GamePhase.firstHalf || s.phase == GamePhase.secondHalf)) {
+      // Cheer bed is ~12s — hold past it so applause isn't cut (Ronna).
       final hold = s.lastOutcome == WordOutcome.guessed
-          ? const Duration(milliseconds: 7500)
-          : const Duration(milliseconds: 8000);
+          ? const Duration(milliseconds: 15000)
+          : const Duration(milliseconds: 12000);
       _scheduleHostBeat(
         'next|${s.wordIndex}|${s.lastOutcome}',
         hold,
@@ -475,10 +475,10 @@ class GameplayController extends ChangeNotifier {
       return;
     }
 
-    // Give Guy time to finish the previous line before the next AI beat.
+    // Senior pacing (Ronna / video24): calm gaps so humans can read the board.
     final aiDelay = s.lastOutcome == WordOutcome.wrong
-        ? const Duration(milliseconds: 5200)
-        : const Duration(milliseconds: 3200);
+        ? const Duration(milliseconds: 12000)
+        : const Duration(milliseconds: 10000);
     _scheduleHostBeat(
       'ai|${s.wordIndex}|${s.step}|${s.cluingTeam}|${s.exchangeCount}',
       aiDelay,

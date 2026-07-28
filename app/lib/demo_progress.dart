@@ -329,6 +329,15 @@ PrizeRoom _demoPrizeRoom() => PrizeRoom(
       gamesPlayed: 12,
       gamesWon: 3,
       items: [
+        const PrizeItem(
+          id: 'trophy-win-cup',
+          kind: 'trophy',
+          title: 'Win Trophy',
+          description: 'A clay trophy for every Match Word win.',
+          assetPath: 'assets/images/trophies/trophy-first-win.png',
+          sortOrder: 5,
+          earned: true,
+        ),
         PrizeItem(
           id: 'trophy-first-win',
           kind: 'trophy',
@@ -357,33 +366,6 @@ PrizeRoom _demoPrizeRoom() => PrizeRoom(
           sortOrder: 30,
           earned: false,
         ),
-        const PrizeItem(
-          id: 'prize-sports-car',
-          kind: 'prize',
-          title: 'Clay Sports Car',
-          description: 'A shiny novelty car for your shelf.',
-          assetPath: 'assets/images/prizes/prize-sports-car.png',
-          sortOrder: 110,
-          earned: true,
-        ),
-        const PrizeItem(
-          id: 'prize-vacation',
-          kind: 'prize',
-          title: 'Beach Getaway',
-          description: 'A sunny little vacation souvenir.',
-          assetPath: 'assets/images/prizes/prize-vacation.png',
-          sortOrder: 120,
-          earned: true,
-        ),
-        const PrizeItem(
-          id: 'prize-tv',
-          kind: 'prize',
-          title: 'Living-Room TV',
-          description: 'A cozy novelty TV for movie nights.',
-          assetPath: 'assets/images/prizes/prize-tv.png',
-          sortOrder: 130,
-          earned: false,
-        ),
       ],
     );
 
@@ -403,7 +385,7 @@ class _SilentOutput implements SoundOutput {
   Future<void> setLoopVolume(double volume) async {}
   @override
   Future<void> playOneShot(String asset, double volume,
-      {bool voice = false, double playbackRate = 1.0, bool fromFile = false}) async {}
+      {bool voice = false, double playbackRate = 1.0, bool fromFile = false, bool awaitCompletion = false}) async {}
   @override
   Future<void> stopAll() async {}
   @override

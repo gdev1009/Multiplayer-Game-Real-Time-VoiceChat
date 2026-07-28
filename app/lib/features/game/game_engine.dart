@@ -38,7 +38,7 @@ class MatchConfig {
     this.wordsPerHalf = 4,
     this.maxExchanges = 5,
     this.wordValue = 5,
-    this.guessSeconds = 18,
+    this.guessSeconds = 40,
   })  : assert(wordsPerHalf > 0),
         assert(maxExchanges > 0),
         assert(wordValue > 0),
@@ -53,7 +53,7 @@ class MatchConfig {
   /// Points a freshly dealt word is worth; it drops by one per failed exchange.
   final int wordValue;
 
-  /// Wall-clock seconds the guesser has before the buzzer (Ronna: 15–20).
+  /// Wall-clock seconds the guesser has before the buzzer (seniors need time).
   final int guessSeconds;
 
   /// Total words across both halves.

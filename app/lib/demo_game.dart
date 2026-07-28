@@ -43,6 +43,7 @@ class _SilentOutput implements SoundOutput {
     bool voice = false,
     double playbackRate = 1.0,
     bool fromFile = false,
+    bool awaitCompletion = false,
   }) async {
     if (voice) {
       // Keep lipsync ticking for a beat in silent demos.

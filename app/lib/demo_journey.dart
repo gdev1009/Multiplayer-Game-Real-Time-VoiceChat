@@ -26,6 +26,7 @@ import 'core/theme/app_theme.dart';
 import 'features/auth/auth_controller.dart';
 import 'features/character/character_controller.dart';
 import 'features/character/character_creation_screen.dart';
+import 'features/game/ai_player.dart';
 import 'features/game/game_engine.dart';
 import 'features/game/word_bank.dart';
 import 'features/home/opening_screen.dart';
@@ -71,6 +72,15 @@ void main() {
         gamesWon: 3,
         items: const [
           PrizeItem(
+            id: 'trophy-win-cup',
+            kind: 'trophy',
+            title: 'Win Trophy',
+            description: 'A clay trophy for every Match Word win.',
+            assetPath: 'assets/images/trophies/trophy-first-win.png',
+            sortOrder: 5,
+            earned: true,
+          ),
+          PrizeItem(
             id: 'trophy-first-win',
             kind: 'trophy',
             title: 'First Win',
@@ -95,33 +105,6 @@ void main() {
             description: 'Played 50 matches — a true studio regular.',
             assetPath: 'assets/images/trophies/trophy-50-games.png',
             sortOrder: 30,
-            earned: false,
-          ),
-          PrizeItem(
-            id: 'prize-sports-car',
-            kind: 'prize',
-            title: 'Clay Sports Car',
-            description: 'A shiny novelty car for your shelf.',
-            assetPath: 'assets/images/prizes/prize-sports-car.png',
-            sortOrder: 110,
-            earned: true,
-          ),
-          PrizeItem(
-            id: 'prize-vacation',
-            kind: 'prize',
-            title: 'Beach Getaway',
-            description: 'A sunny little vacation souvenir.',
-            assetPath: 'assets/images/prizes/prize-vacation.png',
-            sortOrder: 120,
-            earned: true,
-          ),
-          PrizeItem(
-            id: 'prize-tv',
-            kind: 'prize',
-            title: 'Living-Room TV',
-            description: 'A cozy novelty TV for movie nights.',
-            assetPath: 'assets/images/prizes/prize-tv.png',
-            sortOrder: 130,
             earned: false,
           ),
         ],
@@ -188,7 +171,7 @@ class _SilentOutput implements SoundOutput {
   Future<void> setLoopVolume(double volume) async {}
   @override
   Future<void> playOneShot(String asset, double volume,
-      {bool voice = false, double playbackRate = 1.0, bool fromFile = false}) async {}
+      {bool voice = false, double playbackRate = 1.0, bool fromFile = false, bool awaitCompletion = false}) async {}
   @override
   Future<void> stopAll() async {}
   @override
@@ -261,7 +244,6 @@ class _InMemoryLobbyService extends LobbyService {
   _InMemoryLobbyService() : super(_offlineClient());
 
   static const String _hostId = 'demo-host';
-  static const List<String> _fillNames = ['Rosa', 'Walter', 'Mabel'];
 
   final StreamController<List<GamePlayer>> _playersCtrl =
       StreamController<List<GamePlayer>>.broadcast();
@@ -364,11 +346,17 @@ class _InMemoryLobbyService extends LobbyService {
   @override
   Future<void> fillSeats(String gameId) async {
     final next = List<GamePlayer>.of(_players);
-    for (var seat = 0; seat < 4; seat++) {
-      final taken = next.any((p) => p.seat == seat);
-      if (!taken) {
-        next.add(_seat(seat: seat, name: _fillNames[(seat - 1) % 3], isAi: true));
-      }
+    final openSeats = <int>[
+      for (var seat = 0; seat < 4; seat++)
+        if (!next.any((p) => p.seat == seat)) seat,
+    ];
+    final names = AiPlayer.fillNamesForGame(
+      gameId,
+      count: openSeats.length,
+      taken: next.map((p) => p.displayName),
+    );
+    for (var i = 0; i < openSeats.length; i++) {
+      next.add(_seat(seat: openSeats[i], name: names[i], isAi: true));
     }
     next.sort((a, b) => a.seat.compareTo(b.seat));
     _players = next;

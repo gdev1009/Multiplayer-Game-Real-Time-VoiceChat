@@ -9,7 +9,7 @@ import '../../core/widgets/big_button.dart';
 import '../../models/prize.dart';
 import 'prize_controller.dart';
 
-/// Personal Prize Room — calm shelves of clay trophies and novelty prizes.
+/// Personal Prize Room — clay win trophies (Phase 1) + milestone plaques.
 class PrizeRoomScreen extends StatefulWidget {
   const PrizeRoomScreen({super.key});
 
@@ -23,10 +23,7 @@ class _PrizeRoomScreenState extends State<PrizeRoomScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      final prizes = context.read<PrizeController>();
-      if (prizes.room.items.isEmpty) {
-        prizes.load();
-      }
+      context.read<PrizeController>().load();
     });
   }
 
@@ -34,6 +31,8 @@ class _PrizeRoomScreenState extends State<PrizeRoomScreen> {
   Widget build(BuildContext context) {
     final controller = context.watch<PrizeController>();
     final room = controller.room;
+    final winCups = room.winCups();
+    final extraWins = room.winTrophyCount - winCups.length;
 
     return AppPage(
       child: Column(
@@ -59,9 +58,9 @@ class _PrizeRoomScreenState extends State<PrizeRoomScreen> {
           const SizedBox(height: AppSpacing.sm),
           const _TournamentTeaser(),
           const SizedBox(height: AppSpacing.lg),
-          if (controller.loading)
+          if (controller.loading && room.items.isEmpty)
             const Expanded(child: Center(child: CircularProgressIndicator()))
-          else if (controller.error != null)
+          else if (controller.error != null && room.items.isEmpty)
             Expanded(
               child: Center(
                 child: Text(
@@ -77,16 +76,28 @@ class _PrizeRoomScreenState extends State<PrizeRoomScreen> {
                 padding: const EdgeInsets.only(bottom: 8),
                 children: [
                   _ShelfSection(
-                    title: 'Trophies',
-                    items: room.trophies,
-                    emptyHint: 'Win a game to earn your first trophy.',
+                    title: room.winTrophyCount <= 1
+                        ? 'Win trophies'
+                        : 'Win trophies (${room.winTrophyCount})',
+                    items: winCups,
+                    emptyHint: 'Win a game to earn your first clay trophy.',
+                    overflowLabel: extraWins > 0 ? '+$extraWins more' : null,
                   ),
                   const SizedBox(height: AppSpacing.lg),
                   _ShelfSection(
-                    title: 'Prizes',
-                    items: room.prizes,
-                    emptyHint: 'Keep playing — novelty prizes appear as you go.',
+                    title: 'Milestone trophies',
+                    items: room.milestoneTrophies,
+                    emptyHint: 'Keep playing — special trophies unlock along the way.',
                   ),
+                  if (PrizeAssets.showNoveltyPrizes) ...[
+                    const SizedBox(height: AppSpacing.lg),
+                    _ShelfSection(
+                      title: 'Prizes',
+                      items: room.prizes,
+                      emptyHint:
+                          'Keep playing — novelty prizes appear as you go.',
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -106,9 +117,12 @@ class _PrizeRoomScreenState extends State<PrizeRoomScreen> {
   }
 
   String _roomBlurb(PrizeRoom room) {
+    if (room.winTrophyCount > 0) {
+      return room.signInTrophyLine;
+    }
     switch (room.roomLevel) {
       case 0:
-        return 'Your shelves are waiting.';
+        return 'Your shelves are waiting for clay trophies.';
       case 1:
         return 'A lovely start — the shelves are waking up.';
       case 2:
@@ -219,11 +233,13 @@ class _ShelfSection extends StatelessWidget {
     required this.title,
     required this.items,
     required this.emptyHint,
+    this.overflowLabel,
   });
 
   final String title;
   final List<PrizeItem> items;
   final String emptyHint;
+  final String? overflowLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -262,16 +278,30 @@ class _ShelfSection extends StatelessWidget {
                     final slotW =
                         ((box.maxWidth - gap * (count - 1)) / count)
                             .clamp(96.0, 160.0);
-                    return Wrap(
-                      spacing: gap,
-                      runSpacing: 16,
-                      alignment: WrapAlignment.center,
+                    return Column(
                       children: [
-                        for (final i in items)
-                          SizedBox(
-                            width: slotW,
-                            child: _ShelfSlot(item: i),
+                        Wrap(
+                          spacing: gap,
+                          runSpacing: 16,
+                          alignment: WrapAlignment.center,
+                          children: [
+                            for (final i in items)
+                              SizedBox(
+                                width: slotW,
+                                child: _ShelfSlot(item: i),
+                              ),
+                          ],
+                        ),
+                        if (overflowLabel != null) ...[
+                          const SizedBox(height: 10),
+                          Text(
+                            overflowLabel!,
+                            style: AppText.bodyMuted.copyWith(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
+                        ],
                       ],
                     );
                   },

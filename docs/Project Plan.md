@@ -360,21 +360,22 @@ life with the starter idle poses.
 
 ## Milestone 8 — Prize Room & Trophy System · $550 · 5–6 days · **COMPLETE (code; placeholder art)**
 
-**Scope**
-- Personal prize room with trophy/prize shelves in clay style.
-- Earning logic (first win, 10/50 games, etc.); room expands as items are earned.
+**Scope (Phase 1 — updated Jul 2026 per Ronna)**
+- Personal Prize Room with **clay win trophies** (one per game won) + milestone plaques.
+- Win trophies shown on **sign-in / Opening** to encourage return play.
+- **Novelty prize “store” shelf deferred** past Phase 1 (catalog retained for later).
 
-**Dependency:** trophy/prize art.
-**Definition of done:** trophies/prizes award on the right milestones and persist; room renders and
-expands; viewable from profile.
+**Dependency:** trophy art (placeholders today; swap when client clay art arrives).
+**Definition of done:** each win adds a clay trophy; shelves persist; Opening shows the collection.
 
 **Delivered**
 - Migration `0015_prizes.sql` — catalog, `player_awards`, profile `games_played` / `games_won`,
   `mw_my_prize_room` / `mw_record_match_result`.
-- App: `PrizeService`, `PrizeController`, `PrizeRoomScreen` (Opening → Prize Room), award hook on
-  game-over in `PlayScreen`.
-- **Placeholder** trophy/prize PNGs under `assets/images/trophies/` and `assets/images/prizes/`
-  (IDs match `clay_source/README.md` naming). Swap when client clay art arrives.
+- Migration `0022_phase1_win_trophies.sql` — `trophy-win-cup`, trophies-only room RPC, no novelty
+  awards in Phase 1.
+- App: `PrizeService`, `PrizeController`, `PrizeRoomScreen`, `WinTrophyWelcome` on Opening,
+  award + refresh on game-over in `PlayScreen`.
+- **Placeholder** trophy PNGs under `assets/images/trophies/` (IDs match `clay_source/README.md`).
 
 ---
 
@@ -415,6 +416,7 @@ checklist signed off.
 - ElevenLabs dynamic Guy Smiley announcements
 - IP-based trial-abuse layer
 - Physical mailed trophies
+- Novelty prize / “store” shelf (sports car, vacation, TV, etc.)
 - Tournament brackets · localization
 
 ---

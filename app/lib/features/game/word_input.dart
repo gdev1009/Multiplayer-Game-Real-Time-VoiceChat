@@ -10,12 +10,9 @@ import '../../core/theme/app_text.dart';
 /// is *always* available. This widget shows a big, senior-friendly text field
 /// with a Send button, plus a large press-to-speak microphone button.
 ///
-/// Speech-to-text itself arrives with the voice-provider work; to keep this
-/// milestone self-contained the mic is wired through an optional
-/// [onSpeakRequested] callback. When it is null the mic gently guides the
-/// player to type instead, so the flow never dead-ends. The recognised text is
-/// shown in the field before sending, so what goes to all players is exactly
-/// what the player confirms.
+/// When [onSpeakRequested] is provided (device speech recognition), Speak
+/// fills the field with the heard word so the player can confirm before Send.
+/// When it is null, Speak gently guides them to type instead.
 class WordInput extends StatefulWidget {
   const WordInput({
     super.key,
@@ -70,11 +67,10 @@ class _WordInputState extends State<WordInput> {
   Future<void> _speak() async {
     final handler = widget.onSpeakRequested;
     if (handler == null) {
-      // No speech engine wired yet — guide the player to the text field.
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'You can type your word here any time.',
+            'Speak isn’t available here — type your word, then tap Send.',
             style: AppText.body,
           ),
           behavior: SnackBarBehavior.floating,
@@ -84,10 +80,47 @@ class _WordInputState extends State<WordInput> {
       return;
     }
     setState(() => _listening = true);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Listening… say your one word clearly.',
+            style: AppText.body,
+          ),
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
     try {
       final heard = await handler();
+      if (!mounted) return;
       if (heard != null && heard.trim().isNotEmpty) {
         _controller.text = heard.trim();
+        _controller.selection = TextSelection.fromPosition(
+          TextPosition(offset: _controller.text.length),
+        );
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Got “${heard.trim()}” — tap Send when it looks right.',
+              style: AppText.body,
+            ),
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Couldn’t catch that — tap Speak again, or type your word.',
+              style: AppText.body,
+            ),
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 2),
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _listening = false);
@@ -179,10 +212,10 @@ class _WordInputState extends State<WordInput> {
     );
   }
 
-  /// Compact studio dock: one thin input-styled chip (not a label in a tall box).
+  /// Compact studio dock: Speak + type field + Send (spec: choose either).
   Widget _buildDock(bool enabled) {
     return Semantics(
-      label: widget.label,
+      label: '${widget.label}. Speak or type.',
       child: SizedBox.expand(
         child: DecoratedBox(
           decoration: BoxDecoration(
@@ -199,7 +232,7 @@ class _WordInputState extends State<WordInput> {
                 filled: false,
                 fillColor: Colors.transparent,
                 isDense: true,
-                contentPadding: EdgeInsets.symmetric(horizontal: 12),
+                contentPadding: EdgeInsets.symmetric(horizontal: 8),
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
                 focusedBorder: InputBorder.none,
@@ -209,38 +242,56 @@ class _WordInputState extends State<WordInput> {
               ),
             ),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Balance the send button so "One-word clue" centers in the dock.
-                const SizedBox(width: 52),
-                Expanded(
-                  child: TextField(
-                    controller: _controller,
+                // Speak — large chip so seniors see Speak vs Type clearly.
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(6, 4, 4, 4),
+                  child: _DockSpeakButton(
                     enabled: enabled,
-                    textAlign: TextAlign.center,
-                    textAlignVertical: TextAlignVertical.center,
-                    textInputAction: TextInputAction.send,
-                    onSubmitted: (_) => _send(),
-                    style: AppText.body.copyWith(
-                      fontSize: 34,
-                      color: Colors.white,
-                      height: 1.05,
-                      fontWeight: FontWeight.w900,
-                    ),
-                    cursorColor: const Color(0xFFE8B84A),
-                    decoration: InputDecoration(
-                      hintText: widget.label,
-                      hintStyle: AppText.bodyMuted.copyWith(
-                        fontSize: 28,
-                        color: Colors.white70,
-                        height: 1.05,
-                        fontWeight: FontWeight.w800,
+                    listening: _listening,
+                    onTap: enabled ? _speak : null,
+                  ),
+                ),
+                Expanded(
+                  child: SizedBox.expand(
+                    child: Align(
+                      alignment: Alignment.center,
+                      child: TextField(
+                        controller: _controller,
+                        enabled: enabled,
+                        textAlign: TextAlign.center,
+                        textAlignVertical: TextAlignVertical.center,
+                        textInputAction: TextInputAction.send,
+                        onSubmitted: (_) => _send(),
+                        style: AppText.body.copyWith(
+                          fontSize: 28,
+                          color: Colors.white,
+                          height: 1.0,
+                          fontWeight: FontWeight.w900,
+                        ),
+                        cursorColor: const Color(0xFFE8B84A),
+                        decoration: InputDecoration(
+                          isCollapsed: true,
+                          hintText: enabled
+                              ? 'Type ${widget.label.toLowerCase()}'
+                              : widget.label,
+                          hintStyle: AppText.bodyMuted.copyWith(
+                            fontSize: 20,
+                            color: Colors.white70,
+                            height: 1.0,
+                            fontWeight: FontWeight.w800,
+                          ),
+                          border: InputBorder.none,
+                          contentPadding:
+                              const EdgeInsets.symmetric(horizontal: 6),
+                        ),
                       ),
-                      contentPadding: EdgeInsets.zero,
                     ),
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.all(4),
+                  padding: const EdgeInsets.fromLTRB(4, 4, 6, 4),
                   child: Semantics(
                     button: true,
                     label: 'Send',
@@ -263,6 +314,61 @@ class _WordInputState extends State<WordInput> {
                             const Icon(Icons.arrow_upward_rounded, size: 22),
                       ),
                     ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DockSpeakButton extends StatelessWidget {
+  const _DockSpeakButton({
+    required this.enabled,
+    required this.listening,
+    required this.onTap,
+  });
+
+  final bool enabled;
+  final bool listening;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: listening ? 'Listening' : 'Speak',
+      child: Material(
+        color: listening
+            ? const Color(0xFFE8B84A)
+            : AppColors.deepPurple.withValues(alpha: enabled ? 1 : 0.45),
+        shape: const StadiumBorder(
+          side: BorderSide(color: Color(0xFFE8B84A), width: 1),
+        ),
+        child: InkWell(
+          onTap: onTap,
+          customBorder: const StadiumBorder(),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  listening ? Icons.graphic_eq_rounded : Icons.mic_rounded,
+                  size: 22,
+                  color: listening ? const Color(0xFF24154A) : Colors.white,
+                ),
+                const SizedBox(width: 5),
+                Text(
+                  listening ? 'Listening' : 'Speak',
+                  style: TextStyle(
+                    color: listening ? const Color(0xFF24154A) : Colors.white,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 16,
+                    height: 1,
                   ),
                 ),
               ],

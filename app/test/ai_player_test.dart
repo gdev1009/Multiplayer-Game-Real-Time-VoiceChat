@@ -63,9 +63,52 @@ void main() {
         }
       }
       final rate = correct / trials;
-      // Roughly the tuned 70% accuracy — lively but beatable, never perfect.
-      expect(rate, greaterThan(0.5));
-      expect(rate, lessThan(0.9));
+      expect(rate, greaterThan(0.75));
+      expect(rate, lessThan(0.98));
+    });
+
+    test('looksForSeats keeps hair/glasses/hat/outfit unique in a match', () {
+      final looks = AiPlayer.looksForSeats('game-video23', [
+        (role: 'A1', name: 'Greg'),
+        (role: 'A2', name: 'Buddy'),
+        (role: 'B1', name: 'Rosie'),
+        (role: 'B2', name: 'Pearl'),
+      ]);
+      expect(looks.length, 4);
+      final hairs = looks.values.map((c) => c.hair).whereType<String>().toList();
+      expect(hairs.toSet().length, hairs.length);
+      final outfits =
+          looks.values.map((c) => c.outfit).whereType<String>().toList();
+      expect(outfits.toSet().length, outfits.length);
+      final glasses =
+          looks.values.map((c) => c.glasses ?? '__none__').toList();
+      expect(glasses.toSet().length, glasses.length);
+      final hats = looks.values.map((c) => c.hat ?? '__none__').toList();
+      expect(hats.toSet().length, hats.length);
+      // Stable for the same salt.
+      final again = AiPlayer.looksForSeats('game-video23', [
+        (role: 'A1', name: 'Greg'),
+        (role: 'A2', name: 'Buddy'),
+        (role: 'B1', name: 'Rosie'),
+        (role: 'B2', name: 'Pearl'),
+      ]);
+      expect(again['B1']!.hat, looks['B1']!.hat);
+      expect(again['B2']!.hat, looks['B2']!.hat);
+      expect(again['B1']!.hat, isNot(equals(again['B2']!.hat)));
+    });
+
+    test('fillNamesForGame varies by game id and skips taken names', () {
+      final a = AiPlayer.fillNamesForGame('game-aaa', count: 3, taken: ['Greg']);
+      final b = AiPlayer.fillNamesForGame('game-bbb', count: 3, taken: ['Greg']);
+      expect(a.length, 3);
+      expect(b.length, 3);
+      expect(a.toSet().length, 3);
+      expect(a, isNot(contains('Greg')));
+      expect(a, isNot(equals(b)));
+      expect(
+        AiPlayer.fillNamesForGame('game-aaa', count: 3, taken: ['Greg']),
+        a,
+      );
     });
   });
 }

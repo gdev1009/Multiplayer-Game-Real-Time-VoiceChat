@@ -23,6 +23,7 @@ dependencies:
   flutter_dotenv: ^5.1.0
   http: ^1.2.2
   path_provider: ^2.1.4
+  speech_to_text: ^7.4.0
 
 dev_dependencies:
   flutter_test:
@@ -55,6 +56,7 @@ flutter:
     - assets/images/host/host-idle.png
     - assets/images/host/host-stage-plate.png
     - assets/images/host/talk/
+    - assets/images/host/talk/welcome/
     - assets/images/Studio_background.png
     - assets/images/Seat_on.png
     - assets/images/Seat_off.png

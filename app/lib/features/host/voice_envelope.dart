@@ -34,13 +34,34 @@ class VoiceEnvelope {
   }
 
   static VoiceEnvelope synthetic(String asset, {int durationMs = 2500}) {
-    const hop = 40;
+    // Varied syllable pacing — fluid chatter, not a slow metronome.
+    const hop = 33;
     final n = math.max(1, durationMs ~/ hop);
     final samples = List<double>.generate(n, (i) {
-      final phase = i / n * math.pi * 10;
-      final gate = math.sin(i / n * math.pi); // fade in/out
-      final syllable = (math.sin(phase).abs() * 0.75 + 0.15);
-      return (syllable * gate).clamp(0.0, 1.0);
+      final t = i * hop / 1000.0;
+      // ~3.2–4.0 syllables/s — closer to natural speaking motion.
+      final rate = 3.2 + 0.8 * (0.5 + 0.5 * math.sin(t * 0.35));
+      final cycle = (t * rate) % 1.0;
+      double viseme;
+      if (cycle < 0.10) {
+        viseme = 0.0;
+      } else if (cycle < 0.20) {
+        viseme = 0.30;
+      } else if (cycle < 0.46) {
+        viseme = 0.45 + 0.30 * math.sin((cycle - 0.20) / 0.26 * math.pi);
+      } else if (cycle < 0.58) {
+        viseme = 0.32;
+      } else {
+        viseme = 0.0;
+      }
+      // Phrase arcs + irregular breath pauses.
+      final phrase = 0.55 + 0.45 * math.sin(t * math.pi / 1.2).abs();
+      final breathGate = math.sin(t * math.pi / 2.4 + 0.4);
+      final breath = breathGate > -0.72 ? 1.0 : 0.06;
+      // Occasional emphasis spikes (not on a fixed grid).
+      final emph = math.sin(t * 2.4) * math.sin(t * 5.6);
+      final snap = emph > 0.80 ? 0.28 : 0.0;
+      return ((viseme + snap) * phrase * breath).clamp(0.0, 1.0);
     });
     return VoiceEnvelope(
       asset: asset,

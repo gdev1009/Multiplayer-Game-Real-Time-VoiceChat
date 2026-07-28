@@ -37,14 +37,17 @@ class PrizeService {
     }
   }
 
-  /// Records that the signed-in player finished a match ([won] if their team
-  /// won). Grants milestone trophies/prizes server-side. Soft-fails when offline
-  /// or unsigned so gameplay never blocks on awards.
-  Future<void> recordMatchResult({required bool won}) async {
+  /// Records that the signed-in player finished a match. Grants Phase-1 clay /
+  /// milestone trophies on wins. Soft-fails when offline or unsigned so
+  /// gameplay never blocks on awards.
+  Future<void> recordMatchResult({required MatchOutcome outcome}) async {
     if (_client.auth.currentUser == null) return;
     try {
       final res = _asMap(
-        await _client.rpc('mw_record_match_result', params: {'p_won': won}),
+        await _client.rpc(
+          'mw_record_match_result',
+          params: {'p_outcome': outcome.rpcValue},
+        ),
       );
       if (res['ok'] != true) {
         debugPrint('[PrizeService] recordMatchResult: ${res['reason']}');

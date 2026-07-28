@@ -186,6 +186,10 @@ class LobbyController extends ChangeNotifier {
     // connection drop) we keep the last-known state instead of crashing.
     _playersSub = _service.watchPlayers(gameId).listen(
       (rows) {
+        // Ignore stale Realtime snapshots that are smaller than our last
+        // known list (e.g. a race right after fill_game_seats). Fresh loads
+        // and larger/equal lists always win.
+        if (rows.length < _players.length) return;
         _players = rows;
         // If real players filled the room during the wait, stop the countdown
         // so the studio players don't bump anyone.
@@ -207,7 +211,18 @@ class LobbyController extends ChangeNotifier {
   Future<bool> fillSeats() async {
     final game = _game;
     if (game == null) return false;
-    return _run(() => _service.fillSeats(game.id));
+    // RPC alone is not enough — Realtime can miss inserts right after enter
+    // (first tap looks dead; second works). Always reload seats locally.
+    final ok = await _run(() => _service.fillSeats(game.id));
+    if (!ok) return false;
+    try {
+      _players = await _service.loadPlayers(game.id);
+    } catch (_) {
+      // Keep whatever Realtime already delivered.
+    }
+    _cancelFillCountdown();
+    notifyListeners();
+    return true;
   }
 
   Future<bool> startGame() async {

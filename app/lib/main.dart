@@ -22,6 +22,7 @@ import 'services/gameplay_service.dart';
 import 'services/lobby_service.dart';
 import 'services/prize_service.dart';
 import 'services/profile_service.dart';
+import 'services/speech_input_service.dart';
 import 'services/trial_service.dart';
 
 Future<void> main() async {
@@ -75,6 +76,10 @@ Future<void> main() async {
         Provider<EntitlementService>.value(value: entitlementService),
         Provider<BillingService>.value(value: billingService),
         ChangeNotifierProvider(create: (_) => AudioController()),
+        Provider<SpeechInputService>(
+          create: (_) => SpeechInputService(),
+          dispose: (_, s) => s.dispose(),
+        ),
       ],
       child: const MatchWordApp(),
     ),
