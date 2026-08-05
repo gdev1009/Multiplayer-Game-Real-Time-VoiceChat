@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:match_word/features/game/ai_player.dart';
+import 'package:match_word/features/game/word_bank.dart';
 
 void main() {
   group('AiPlayer.clueFor', () {
@@ -31,6 +32,32 @@ void main() {
       final clue = AiPlayer.clueFor('zzxq');
       expect(clue.trim(), isNotEmpty);
       expect(clue.toLowerCase(), isNot(equals('zzxq')));
+    });
+
+    test('never uses Starts*/Ends*/LetterCount clues', () {
+      for (final word in WordBank.words.take(80).followedBy(const [
+        'Pink',
+        'Pillow',
+        'Accelerate',
+        'Zebra',
+        'zzxqabc',
+      ])) {
+        for (var v = 0; v < 5; v++) {
+          final clue = AiPlayer.clueFor(word, variant: v).toLowerCase();
+          expect(clue.startsWith('starts'), isFalse, reason: '$word → $clue');
+          expect(clue.startsWith('ends'), isFalse, reason: '$word → $clue');
+          expect(clue.contains('letter'), isFalse, reason: '$word → $clue');
+        }
+      }
+    });
+
+    test('pink gets a color-style clue, not StartsP', () {
+      final clue = AiPlayer.clueFor('pink');
+      expect(clue.toLowerCase(), isNot(equals('startsp')));
+      expect(
+        ['color', 'blush', 'rose'].contains(clue.toLowerCase()),
+        isTrue,
+      );
     });
   });
 

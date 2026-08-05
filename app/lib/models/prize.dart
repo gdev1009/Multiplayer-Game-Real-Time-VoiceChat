@@ -16,6 +16,9 @@ abstract final class PrizeAssets {
 
   /// Novelty prize shelf — deferred past Phase 1 (Ronna Jul 2026).
   static const showNoveltyPrizes = false;
+
+  /// Ronna: players need this many trophies for the yearly tournament.
+  static const yearlyTournamentTrophyQualifier = 50;
 }
 
 /// A trophy or novelty prize from the Prize Room catalog.
@@ -107,8 +110,8 @@ class PrizeRoom {
       (i) => PrizeItem(
         id: 'win-cup-slot-$i',
         kind: 'trophy',
-        title: n == 1 ? 'Win Trophy' : 'Win ${i + 1}',
-        description: 'Clay trophy for a Match Word win.',
+        title: n == 1 ? 'Trophy' : 'Trophy ${i + 1}',
+        description: 'Trophy for a Match Word win.',
         assetPath: asset,
         sortOrder: i,
         earned: true,
@@ -133,12 +136,12 @@ class PrizeRoom {
   String get signInTrophyLine {
     final n = winTrophyCount;
     if (n <= 0) {
-      return 'Win a game to earn a clay trophy — come back and collect more!';
+      return 'Win a game to earn a trophy — come back and collect more!';
     }
     if (n == 1) {
-      return 'You have 1 clay trophy. Ready for another win?';
+      return 'You have 1 trophy. Ready for another win?';
     }
-    return 'You have $n clay trophies. Ready for another win?';
+    return 'You have $n trophies. Ready for another win?';
   }
 
   factory PrizeRoom.empty() =>

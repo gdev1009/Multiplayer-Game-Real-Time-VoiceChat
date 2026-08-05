@@ -6,9 +6,12 @@ import 'package:match_word/features/host/host_audio.dart';
 /// transition fires — this is how the host "narrates" the game (Milestone 6).
 void main() {
   const names = {'A1': 'Sunny', 'A2': 'Walter', 'B1': 'Rosa', 'B2': 'Mabel'};
-  // 8 words; teams alternate who opens (A on even indices, B on odd).
-  final words = ['Flower', 'Slipper', 'Clock', 'Robin', 'Sandwich', 'Quilt',
-      'Holiday', 'Garden',];
+  // 16 words (8 per half); teams alternate who opens (A on even indices, B on odd).
+  final words = [
+    'Flower', 'Slipper', 'Clock', 'Robin', 'Sandwich', 'Quilt',
+    'Holiday', 'Garden', 'Teapot', 'Mirror', 'Apple', 'Honey',
+    'Puppy', 'Rainbow', 'Bicycle', 'Candle',
+  ];
 
   MatchState start() =>
       MatchEngine.start(words: words, names: names, config: const MatchConfig());
@@ -41,12 +44,47 @@ void main() {
       expect(s.effects, contains('audio/applause.mp3'));
     });
 
-    test('correct plays ding + cheer; steal plays buzzer', () {
+    test('correct plays ding + cheer and keeps Guy voice asset', () {
       final ok = HostAudio.soundsFor(SoundCue.correct);
       expect(ok.effects, contains('audio/ding.mp3'));
       expect(ok.effects, contains('audio/cheer.mp3'));
+      expect(ok.effects, isNot(contains('audio/applause.mp3')));
+      expect(ok.voice, 'audio/voice/nice_guess.mp3');
+    });
+
+    test('steal uses a single long buzzer asset for 3s', () {
       final bad = HostAudio.soundsFor(SoundCue.steal);
-      expect(bad.effects, contains('audio/buzzer.mp3'));
+      expect(bad.effects, equals(['audio/buzzer_long.mp3']));
+      expect(bad.effects, isNot(contains('audio/cheer.mp3')));
+      expect(HostAudio.buzzerHold, const Duration(seconds: 3));
+    });
+
+    test('reveal opens with a single long buzzer bed', () {
+      final r = HostAudio.soundsFor(SoundCue.reveal);
+      expect(r.effects.where((e) => e.contains('buzzer')).length, 1);
+      expect(r.effects.first, 'audio/buzzer_long.mp3');
+      expect(r.effects, contains('audio/reveal.mp3'));
+    });
+
+    test('winner plays cheer + applause after Guy (crowd on cue)', () {
+      final w = HostAudio.soundsFor(SoundCue.winner);
+      expect(w.effects, contains('audio/cheer.mp3'));
+      expect(w.effects, contains('audio/applause.mp3'));
+      expect(w.voice, isNotNull);
+    });
+
+    test('only correct and winner include crowd cheer/applause', () {
+      for (final cue in SoundCue.values) {
+        final effects = HostAudio.soundsFor(cue).effects;
+        final hasCrowd = effects.any(
+          (e) => e.contains('cheer') || e.contains('applause'),
+        );
+        if (cue == SoundCue.correct || cue == SoundCue.winner) {
+          expect(hasCrowd, isTrue, reason: '$cue should cheer');
+        } else {
+          expect(hasCrowd, isFalse, reason: '$cue must not cheer');
+        }
+      }
     });
 
     test('disconnect is flagged as an alarm (plays even when muted)', () {
@@ -95,8 +133,8 @@ void main() {
 
     test('entering halftime fires the halftime cue exactly once', () {
       var s = start();
-      // Play the 4 first-half words, each guessed correctly, then advance.
-      for (var i = 0; i < 4; i++) {
+      // Play the first-half words, each guessed correctly, then advance.
+      for (var i = 0; i < const MatchConfig().wordsPerHalf; i++) {
         s = MatchEngine.submitClue(s, 'clue');
         s = MatchEngine.submitGuess(s, s.secretWord);
         final before = s;

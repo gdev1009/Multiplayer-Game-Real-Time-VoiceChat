@@ -457,3 +457,81 @@ Project update (implemented):
 - One clay win trophy per match win (`profiles.games_won` drives the shelf count).
 - Opening / sign-in home shows `WinTrophyWelcome` (tap → Prize Room).
 - Milestone trophies (first win, 10 / 50 games) kept; novelty prizes stay in the catalog for later.
+---
+
+### Feedback pass — trophies, cheer, 6 rounds, speak/type (Jul 2026)
+
+She replied (after the latest build):
+1. Call them “trophies,” not “play trophies.”
+2. Can’t hear clapping/cheering on correct / end — sent Pixabay crowd cheer link.
+3. Slow typing time is good, but increase to **6 rounds per side**; also show a wrong-answer demo.
+4. Prize Room: note that players need **≥50 trophies** for the yearly tournament.
+5. Full game should land around **20–25 minutes**.
+6. Still can’t find type-or-speak — ask for a clip / clearer UI.
+Positive: Guy moving again looks great.
+
+Implemented in app:
+- Shelf / welcome copy → “Trophies” (not “Win trophies”).
+- Correct cue: ding + cheer + applause, louder crowd SFX; README notes her Pixabay clip for drop-in over `cheer.mp3`.
+- `MatchConfig.wordsPerHalf = 6` + migration `0025_six_rounds_per_half.sql` (`mw_begin_play`).
+- Tournament teaser: “at least 50 trophies… yearly tournament.”
+- Bottom dock label: **“Type or Speak — your clue/guess”** (taller dock).
+
+Follow-up (same pass):
+- Bundled Mixkit free crowd cheer/applause as stand-in (Pixabay CDN blocked); drop Ronna’s exact MP3 over cheer.mp3 when available.
+- Crowd SFX volume ×1.7; dock banner “TYPE · or · SPEAK”.
+- Apply migration `0025_six_rounds_per_half.sql` on live Supabase before online play.
+
+---
+
+### Feedback — video6 notes (Jul 30, 2026)
+
+Ronna:
+1. Overall volume too low — boost.
+2. Cheer before Guy on correct — move cheer **after** his confirm line.
+4. Word bank size? (~160 senior-friendly words.)
+5. Rename “Listen to Guy…” → **Skip Ahead**.
+6. Store invites not received — confirm email (ops, not code).
+Also: calm delay after guess timeout before buzzer / turn pass. Videos hard to judge full flow.
+
+Implemented:
+- Louder defaults + Guy voice boost (~1.55×) + crowd boost (~2.0×).
+- Correct / winner: ding → Guy → cheer (≤8s).
+- Intro dock label: **Skip Ahead**.
+- Guess timeout: `guessSeconds` + **2.5s** calm pause, then buzzer / steal.
+
+---
+
+### Word Database v1 (Jul 30, 2026)
+
+Ronna shared `docs/Match Word Database v1 (1).xlsx` — **1,209** words (Length 3–12).
+
+Implemented:
+- Client `WordBank` replaced with her full list (title case for display).
+- Server deal bank updated in migration `0027_ronna_word_database_v1.sql` (still 8 words/half).
+- Apply **0027** on live Supabase before online games use the new bank.
+
+---
+
+### Feedback — cheer / timeout / AI clues (Jul 30, 2026)
+
+Fixes:
+1. **Cheer** on correct + game end only: ding/fanfare → **Guy speaks** → crowd (≤8s). No cheer on other cues.
+2. **Guess timeout:** **18s** on the clock → calm host line (“Time’s up… take a breath.”) for **~6s** with the same team still focused → then buzzer / steal. No instant team-switch.
+3. **AI clues** — removed `Starts*`, `Ends*`, and letter-count (`FourLetters`). Full semantic map from Ronna’s Word Database v1 (category / related / peer associations).
+
+---
+
+### Feedback — volume + guessed word size (Aug 4, 2026)
+
+Ronna (on latest video):
+1. Audio still too quiet — check recording/export + in-app levels.
+2. Buzzer/timer timing — good.
+3. Make **guessed word** larger for seniors.
+4. Google/Apple access — still on her side.
+5. Wants a full start-to-finish run after fixes.
+
+Implemented (in-app):
+- Audio session: iOS **playback** + Android **media** stream with full focus (was ambient/game — easy to miss). Quieter bed music, harder duck under Guy.
+- One-time prefs lift so old quieter defaults get refreshed.
+- Guess speech bubbles **36pt** (was 26); reveal dock shows the word at **34pt**.

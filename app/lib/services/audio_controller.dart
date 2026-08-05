@@ -37,11 +37,15 @@ class AudioController extends ChangeNotifier {
   static const _kMusic = 'audio.musicVolume';
   static const _kSfx = 'audio.sfxVolume';
   static const _kVoice = 'audio.voiceVolume';
+  static const _kVolumeBoostV2 = 'audio.volumeBoostV2';
 
   bool _muted = false;
-  double _musicVolume = 0.6;
-  double _sfxVolume = 0.9;
+  // Music sits under the show so voice / SFX can stay at full media volume.
+  double _musicVolume = 0.48;
+  double _sfxVolume = 1.0;
   double _voiceVolume = 1.0;
+  /// Temporary duck while the mic is open — never written to prefs.
+  double _voiceDuck = 1.0;
   bool _themePlaying = false;
 
   // --- lipsync ---------------------------------------------------------------
@@ -54,6 +58,8 @@ class AudioController extends ChangeNotifier {
   VoiceEnvelope? _voiceEnvelope;
   Timer? _lipsyncTimer;
   int _voiceGeneration = 0;
+  /// Bumped by [stopHostSpeech] so an in-flight [playCue] abandons TTS / voice.
+  int _cueEpoch = 0;
 
   bool get voicePlaying => _voicePlaying;
   /// True while the long game-start welcome / rules line is running.
@@ -68,15 +74,37 @@ class AudioController extends ChangeNotifier {
 
   double get _effectiveMusic => _muted ? 0 : _musicVolume;
   double get _effectiveSfx => _muted ? 0 : _sfxVolume;
-  double get _effectiveVoice => _muted ? 0 : _voiceVolume;
+  double get _effectiveVoice => _muted ? 0 : _voiceVolume * _voiceDuck;
 
   Future<void> _load() async {
     try {
       _prefs ??= await SharedPreferences.getInstance();
       _muted = _prefs?.getBool(_kMuted) ?? false;
-      _musicVolume = _prefs?.getDouble(_kMusic) ?? 0.6;
-      _sfxVolume = _prefs?.getDouble(_kSfx) ?? 0.9;
+      _musicVolume = _prefs?.getDouble(_kMusic) ?? 0.48;
+      _sfxVolume = _prefs?.getDouble(_kSfx) ?? 1.0;
       _voiceVolume = _prefs?.getDouble(_kVoice) ?? 1.0;
+      // Older Speak-duck bug persisted 0 — treat as "use default" (mute is separate).
+      if (_voiceVolume <= 0.001) {
+        _voiceVolume = 1.0;
+        await _prefs?.setDouble(_kVoice, _voiceVolume);
+      }
+      // One-time lift for installs that still have the quieter defaults saved.
+      final boosted = _prefs?.getBool(_kVolumeBoostV2) ?? false;
+      if (!boosted) {
+        if (_musicVolume >= 0.65 && _musicVolume <= 0.75) {
+          _musicVolume = 0.48;
+          await _prefs?.setDouble(_kMusic, _musicVolume);
+        }
+        if (_sfxVolume < 1.0) {
+          _sfxVolume = 1.0;
+          await _prefs?.setDouble(_kSfx, _sfxVolume);
+        }
+        if (_voiceVolume < 1.0) {
+          _voiceVolume = 1.0;
+          await _prefs?.setDouble(_kVoice, _voiceVolume);
+        }
+        await _prefs?.setBool(_kVolumeBoostV2, true);
+      }
       notifyListeners();
     } catch (err) {
       debugPrint('AudioController._load failed (ignored): $err');
@@ -89,6 +117,7 @@ class AudioController extends ChangeNotifier {
     await _prefs?.setBool(_kMuted, value);
     await _out.setLoopVolume(_effectiveMusic);
     if (value) {
+      _cueEpoch++;
       await _out.stopAll();
       _hostIntroPlaying = false;
       _endLipsync();
@@ -117,6 +146,32 @@ class AudioController extends ChangeNotifier {
     _voiceVolume = value.clamp(0, 1);
     notifyListeners();
     await _prefs?.setDouble(_kVoice, _voiceVolume);
+  }
+
+  /// Duck music (and mute Guy) while the player uses Speak — does **not**
+  /// persist volume preferences (the old path wrote voice=0 to prefs and left
+  /// Guy silent for the rest of the session).
+  Future<void> beginSpeechInputDuck() async {
+    _voiceDuck = 0;
+    notifyListeners();
+    if (!_muted) {
+      await _out.setLoopVolume((_musicVolume * 0.08).clamp(0.0, 1.0));
+    }
+    await stopHostSpeech();
+  }
+
+  /// Restore levels and re-claim the audio session after speech recognition
+  /// (Android often keeps focus until we reconfigure).
+  Future<void> endSpeechInputDuck() async {
+    _voiceDuck = 1;
+    // Recover from older builds that persisted voice volume as 0 while ducking.
+    if (_voiceVolume <= 0.001) {
+      _voiceVolume = 1.0;
+      await _prefs?.setDouble(_kVoice, _voiceVolume);
+    }
+    notifyListeners();
+    await _out.reconfigureAudioSession();
+    await _out.setLoopVolume(_effectiveMusic);
   }
 
   Future<void> _beginLipsync(
@@ -222,11 +277,15 @@ class AudioController extends ChangeNotifier {
   }
 
   Future<void> playCue(SoundCue cue) async {
+    final epoch = _cueEpoch;
     final sounds = HostAudio.soundsFor(cue);
     final sfxVol = sounds.isAlarm ? (_muted ? 0.9 : _sfxVolume) : _effectiveSfx;
     final isIntro = cue == SoundCue.gameStart;
     final line = HostVoiceScripts.lineFor(cue);
     final fallback = HostVoiceScripts.fallbackAssetFor(cue) ?? sounds.voice;
+    // Correct + winner only: hold crowd until Guy finishes speaking.
+    final crowdAfterVoice =
+        cue == SoundCue.correct || cue == SoundCue.winner;
 
     // Prefetch welcome TTS while the opening bed plays so there is no silent
     // gap after the music ends (video25).
@@ -238,6 +297,7 @@ class AudioController extends ChangeNotifier {
         ttsFuture = _tts.synthesizeToFile(line);
       }
       await _playOpeningBed();
+      if (epoch != _cueEpoch) return;
     }
 
     if (sounds.stopMusic) {
@@ -247,27 +307,41 @@ class AudioController extends ChangeNotifier {
       _themePlaying = true;
       await _out.playLoop(sounds.music!, _effectiveMusic);
     }
+    if (epoch != _cueEpoch) return;
 
-    // Intro effects are the opening bed (already played above).
-    // Ding plays instantly; crowd cheer overlaps Guy and is held by the
-    // resolved-beat timer (~15s) so it isn't cut short (Ronna).
+    final crowdEffects = <String>[];
     if (!isIntro) {
       for (final effect in sounds.effects) {
-        final isCheer = effect.contains('cheer');
-        unawaited(
-          _out.playOneShot(
-            effect,
-            sfxVol,
-            awaitCompletion: isCheer,
-          ),
-        );
-        if (!isCheer) {
+        if (epoch != _cueEpoch) return;
+        final isCrowd =
+            effect.contains('cheer') || effect.contains('applause');
+        if (crowdAfterVoice && isCrowd) {
+          crowdEffects.add(effect);
+          continue;
+        }
+        final vol = isCrowd ? (sfxVol * _crowdBoost).clamp(0.0, 1.0) : sfxVol;
+        if (isCrowd) {
+          unawaited(
+            _out.playOneShot(effect, vol, awaitCompletion: true),
+          );
+        } else if (effect.contains('buzzer')) {
+          // Wrong / timeout: ring continuously for exactly 3s, then Guy.
+          unawaited(_out.playOneShot(effect, vol));
+          await Future<void>.delayed(HostAudio.buzzerHold);
+          if (epoch != _cueEpoch) return;
+          await _out.stopSfx();
+        } else {
+          unawaited(_out.playOneShot(effect, vol));
           await Future<void>.delayed(const Duration(milliseconds: 40));
         }
       }
     }
+    if (epoch != _cueEpoch) return;
 
     if (line == null && fallback == null) {
+      if (crowdEffects.isNotEmpty && epoch == _cueEpoch) {
+        await _playCrowdBed(crowdEffects, sfxVol, epoch);
+      }
       if (isIntro) {
         _hostIntroPlaying = false;
         await _startThemeAfterIntro();
@@ -276,16 +350,19 @@ class AudioController extends ChangeNotifier {
       return;
     }
 
-    final ducked = _themePlaying ? _effectiveMusic * 0.14 : null;
+    final ducked = _themePlaying ? _effectiveMusic * 0.06 : null;
     if (ducked != null) await _out.setLoopVolume(ducked);
 
     try {
+      if (epoch != _cueEpoch) return;
+
       String? filePath;
       if (line != null) {
         filePath = ttsFuture != null
             ? await ttsFuture
             : await _tts.synthesizeToFile(line);
       }
+      if (epoch != _cueEpoch) return;
 
       if (filePath != null) {
         final env = VoiceEnvelope.synthetic(
@@ -293,6 +370,10 @@ class AudioController extends ChangeNotifier {
           durationMs: _estimateMs(line!),
         );
         await _beginLipsync(filePath, envelope: env);
+        if (epoch != _cueEpoch) {
+          _endLipsync();
+          return;
+        }
         await _out.playOneShot(
           filePath,
           (_effectiveVoice * _hostVoiceBoost).clamp(0.0, 1.0),
@@ -302,6 +383,10 @@ class AudioController extends ChangeNotifier {
         );
       } else if (fallback != null) {
         await _beginLipsync(fallback);
+        if (epoch != _cueEpoch) {
+          _endLipsync();
+          return;
+        }
         await _out.playOneShot(
           fallback,
           (_effectiveVoice * _hostVoiceBoost).clamp(0.0, 1.0),
@@ -310,13 +395,37 @@ class AudioController extends ChangeNotifier {
         );
       }
     } finally {
-      _endLipsync();
-      if (isIntro) {
+      if (epoch == _cueEpoch) {
+        _endLipsync();
+      }
+      if (isIntro && epoch == _cueEpoch) {
         _hostIntroPlaying = false;
         await _startThemeAfterIntro();
         notifyListeners();
       }
       if (ducked != null) await _out.setLoopVolume(_effectiveMusic);
+    }
+
+    // Crowd cheer only after Guy confirms (correct / winner).
+    if (crowdEffects.isNotEmpty && epoch == _cueEpoch) {
+      await _playCrowdBed(crowdEffects, sfxVol, epoch);
+    }
+  }
+
+  Future<void> _playCrowdBed(
+    List<String> effects,
+    double sfxVol,
+    int epoch,
+  ) async {
+    final vol = (sfxVol * _crowdBoost).clamp(0.0, 1.0);
+    for (final effect in effects) {
+      if (epoch != _cueEpoch) return;
+      await _out.playOneShot(
+        effect,
+        vol,
+        awaitCompletion: true,
+        maxWait: HostAudio.crowdAfterVoiceMax,
+      );
     }
   }
 
@@ -335,9 +444,11 @@ class AudioController extends ChangeNotifier {
     );
   }
 
-  /// Deeper + louder Guy (Ronna) — slight rate drop + voice boost.
+  /// Deeper Guy (Ronna) — slight rate drop. Volume uses the media stream at full.
   static const double _hostPlaybackRate = 0.93;
-  static const double _hostVoiceBoost = 1.28;
+  static const double _hostVoiceBoost = 1.0;
+  /// Crowd at full media volume (values over 1 are clamped by the player).
+  static const double _crowdBoost = 1.0;
 
   Future<void> _startThemeAfterIntro() async {
     _themePlaying = true;
@@ -346,7 +457,17 @@ class AudioController extends ChangeNotifier {
 
   Future<void> playDisconnectAlarm() => playCue(SoundCue.disconnect);
 
+  /// Player tapped a control — hush Guy immediately and cancel any pending cue.
+  Future<void> stopHostSpeech() async {
+    _cueEpoch++;
+    _hostIntroPlaying = false;
+    _endLipsync();
+    await _out.stopVoice();
+    notifyListeners();
+  }
+
   Future<void> stopAll() async {
+    _cueEpoch++;
     _themePlaying = false;
     _hostIntroPlaying = false;
     _endLipsync();

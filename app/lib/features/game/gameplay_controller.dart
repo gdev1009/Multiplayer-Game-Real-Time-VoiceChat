@@ -42,9 +42,11 @@ class GameplayController extends ChangeNotifier {
   /// When true (welcome intro still playing), humans and AI cannot submit.
   bool Function()? inputBlocked;
 
-  /// True when the local human may type a clue/guess (intro finished + on clock).
+  /// True when the local human may type a clue/guess (on the clock).
+  /// Host speech does **not** block — tapping Speak/Send stops Guy.
+  /// During wrong/timeout spotlight hold, nobody acts until Guy finishes.
   bool get isMyTurn {
-    if (inputBlocked?.call() ?? false) return false;
+    if (_spotlightHoldRole != null) return false;
     if (isLocal) return true;
     final role = onClockRole;
     return role != null && role == _myRole;
@@ -69,6 +71,15 @@ class GameplayController extends ChangeNotifier {
   bool _isHost = false;
   Timer? _aiTimer;
   String? _pendingBeat; // the beat a host action is scheduled for (move/advance).
+  /// When the current guess window opened (host clock). Null if not awaiting a guess.
+  DateTime? _guessOpenedAt;
+  /// True after the guess clock expired, while we hold a calm beat before buzzer/steal.
+  bool _guessCalmPending = false;
+  /// Seat kept lit during wrong/timeout buzzer + Guy (cleared when his line ends).
+  String? _spotlightHoldRole;
+
+  /// Clock expired — TIME is on screen; buzz+Guy still need to play before steal.
+  bool _timeoutFanfarePending = false;
 
   Map<String, String> _names = const {}; // role -> display name, for polling.
   Timer? _pollTimer; // realtime fallback: re-fetch state on a short interval.
@@ -119,6 +130,79 @@ class GameplayController extends ChangeNotifier {
     final role = onClockRole;
     return role != null && (_aiByRole[role] ?? false);
   }
+
+  /// While set, the stage keeps this seat highlighted (wrong/timeout audio).
+  String? get spotlightHoldRole => _spotlightHoldRole;
+
+  /// True after the guess clock hits zero, until buzz + Guy finish and the steal applies.
+  bool get timeoutFanfarePending => _timeoutFanfarePending;
+
+  /// Name shown in the waiting dock (holds on the failing guesser during miss audio).
+  String get displayClockName {
+    final hold = _spotlightHoldRole;
+    if (hold != null) {
+      final n = _names[hold] ?? _state?.names[hold];
+      if (n != null && n.trim().isNotEmpty) return n.trim();
+    }
+    return onClockName;
+  }
+
+  /// Clears the post-miss spotlight hold so the next clue-giver lights up.
+  /// Called by [PlayScreen] after buzz + Guy finish.
+  void clearSpotlightHold() {
+    if (_spotlightHoldRole == null) return;
+    _spotlightHoldRole = null;
+    notifyListeners();
+    _maybeDriveComputer();
+  }
+
+  /// Hold [role] lit through buzz + Guy. Safe to call repeatedly.
+  void _holdSpotlight(String role) {
+    if (_spotlightHoldRole == role) return;
+    _spotlightHoldRole = role;
+  }
+
+  /// Hold the failing guesser's seat lit until Guy finishes the steal/reveal line.
+  /// Returns true when a miss hold is active (caller must not advance AI yet).
+  bool _armSpotlightHold(MatchState? prev, MatchState next) {
+    if (_spotlightHoldRole != null) return true; // already holding
+    if (prev == null) return false;
+    final miss = (next.lastOutcome == WordOutcome.wrong &&
+            prev.lastOutcome != WordOutcome.wrong) ||
+        (next.lastOutcome == WordOutcome.revealed &&
+            prev.lastOutcome != WordOutcome.revealed);
+    if (!miss) return false;
+    // Prefer the guesser who just failed; fall back to whoever was on the clock.
+    _holdSpotlight(
+      prev.step == TurnStep.awaitingGuess
+          ? prev.guesserRole
+          : prev.clueGiverRole,
+    );
+    return true;
+  }
+
+  /// PlayScreen finished timeout buzz+Guy — now apply the steal and release the seat.
+  Future<void> completeTimeoutFanfare() async {
+    if (!_timeoutFanfarePending) {
+      clearSpotlightHold();
+      return;
+    }
+    _timeoutFanfarePending = false;
+    _suppressMissAudio = true;
+    try {
+      final s = _state;
+      if (s != null && s.step == TurnStep.awaitingGuess) {
+        await timeoutGuess();
+      }
+    } finally {
+      _suppressMissAudio = false;
+      clearSpotlightHold();
+    }
+  }
+
+  /// When true, PlayScreen should not re-play steal/reveal (fanfare already done).
+  bool get suppressMissAudio => _suppressMissAudio;
+  bool _suppressMissAudio = false;
 
   // ---------------------------------------------------------------------------
   // Start
@@ -287,7 +371,7 @@ class GameplayController extends ChangeNotifier {
     }
 
     final s = prior;
-    _state = MatchState(
+    final next = MatchState(
       config: MatchConfig(
         wordsPerHalf: row.wordsPerHalf,
         maxExchanges: row.maxExchanges,
@@ -307,8 +391,11 @@ class GameplayController extends ChangeNotifier {
       lastOutcome: row.lastOutcome,
       hostLine: row.hostLine,
     );
+    final armedMiss = _armSpotlightHold(s, next);
+    _state = next;
     notifyListeners();
-    _maybeDriveComputer();
+    // Miss: PlayScreen plays buzz → Guy, then clearSpotlightHold drives AI.
+    if (!armedMiss) _maybeDriveComputer();
   }
 
   /// Patches one secret into the local cache + live state (server truth).
@@ -388,13 +475,23 @@ class GameplayController extends ChangeNotifier {
   /// request), so the game can never get permanently stuck waiting on a
   /// computer seat — the bug that left matches frozen at 0 – 0.
   void _maybeDriveComputer() {
-    // Online: only the host drives. Local demos: drive whenever AI seats are set.
+    // Online: only the host drives AI + the guess clock. Local demos: always.
     if (!isLocal && !_isHost) return;
-    if (isLocal && _aiByRole.isEmpty) return;
     final s = _state;
     if (s == null) {
       _aiTimer?.cancel();
       _pendingBeat = null;
+      _clearGuessClock();
+      return;
+    }
+
+    // Hold AI / timeouts while the failing guesser stays lit (buzz + Guy).
+    if (_spotlightHoldRole != null || _timeoutFanfarePending) {
+      _scheduleHostBeat(
+        'spotlightHold|${_spotlightHoldRole ?? "pending"}|${s.wordIndex}|${s.exchangeCount}',
+        const Duration(milliseconds: 400),
+        _maybeDriveComputer,
+      );
       return;
     }
 
@@ -410,6 +507,7 @@ class GameplayController extends ChangeNotifier {
 
     // Leave halftime for the second half after Guy finishes speaking + a beat.
     if (s.phase == GamePhase.halftime) {
+      _clearGuessClock();
       _scheduleHostBeat(
         'half|${s.wordIndex}',
         const Duration(milliseconds: 16000),
@@ -418,13 +516,15 @@ class GameplayController extends ChangeNotifier {
       return;
     }
 
-    // Advance the resolved beat after Guy finishes the outcome GIF + voice + cheer.
+    // Advance the resolved beat after the outcome celebration (cheer / flags).
     if (s.step == TurnStep.resolved &&
         (s.phase == GamePhase.firstHalf || s.phase == GamePhase.secondHalf)) {
-      // Cheer bed is ~12s — hold past it so applause isn't cut (Ronna).
+      _clearGuessClock();
+      // Guy's confirm line + up to 8s cheer after — hold the resolved beat.
+      // Reveal / timeout: longer buzzer bed + Guy before next word.
       final hold = s.lastOutcome == WordOutcome.guessed
-          ? const Duration(milliseconds: 15000)
-          : const Duration(milliseconds: 12000);
+          ? const Duration(milliseconds: 18000)
+          : const Duration(milliseconds: 14000);
       _scheduleHostBeat(
         'next|${s.wordIndex}|${s.lastOutcome}',
         hold,
@@ -433,8 +533,18 @@ class GameplayController extends ChangeNotifier {
       return;
     }
 
-    // Otherwise there's nothing to drive unless a turn is active.
+    // Human guess clock — always (even when there are no AI seats).
+    if (_scheduleHumanGuessTimeout(s)) return;
+
+    // Otherwise nothing to drive unless a turn is active with an AI seat.
     if (!s.isTurnActive) {
+      _aiTimer?.cancel();
+      _pendingBeat = null;
+      _clearGuessClock();
+      return;
+    }
+
+    if (isLocal && _aiByRole.isEmpty) {
       _aiTimer?.cancel();
       _pendingBeat = null;
       return;
@@ -442,19 +552,8 @@ class GameplayController extends ChangeNotifier {
 
     final role = onClockRole;
     if (role == null || !(_aiByRole[role] ?? false)) {
-      // Human on the clock — Ronna: 15–20s to guess before the buzzer.
-      if (s.step == TurnStep.awaitingGuess && (isLocal || _isHost)) {
-        _scheduleHostBeat(
-          'guessTimeout|${s.wordIndex}|${s.exchangeCount}|${s.cluingTeam}',
-          Duration(seconds: s.config.guessSeconds),
-          () {
-            unawaited(timeoutGuess());
-          },
-        );
-      } else {
-        _aiTimer?.cancel();
-        _pendingBeat = null;
-      }
+      _aiTimer?.cancel();
+      _pendingBeat = null;
       return;
     }
 
@@ -490,6 +589,79 @@ class GameplayController extends ChangeNotifier {
         _driveComputerSeat();
       },
     );
+  }
+
+  /// Starts / keeps the human guess deadline. Returns true when this beat owns
+  /// the host timer (caller should not schedule AI on top of it).
+  ///
+  /// Flow: [guessSeconds] on the clock → calm "Time's up" hold (~6s) with the
+  /// same team still focused → then buzzer / steal / reveal.
+  bool _scheduleHumanGuessTimeout(MatchState s) {
+    if (s.step != TurnStep.awaitingGuess || !s.isTurnActive) {
+      _clearGuessClock();
+      return false;
+    }
+    final role = onClockRole;
+    // AI guesser — no human clock.
+    if (role != null && (_aiByRole[role] ?? false)) {
+      _clearGuessClock();
+      return false;
+    }
+
+    // Phase 2: calm pause already in progress.
+    if (_guessCalmPending) {
+      return true;
+    }
+
+    // Phase 1: open the window once per guess turn.
+    _guessOpenedAt ??= DateTime.now();
+    final fireAt =
+        _guessOpenedAt!.add(Duration(seconds: s.config.guessSeconds));
+    final remaining = fireAt.difference(DateTime.now());
+    final beat =
+        'guessTimeout|${s.wordIndex}|${s.exchangeCount}|${s.cluingTeam}';
+    if (remaining <= Duration.zero) {
+      _beginGuessTimeoutCalm();
+      return true;
+    }
+    _scheduleHostBeat(beat, remaining, _beginGuessTimeoutCalm);
+    return true;
+  }
+
+  void _clearGuessClock() {
+    _guessOpenedAt = null;
+    _guessCalmPending = false;
+  }
+
+  /// Clock hit zero — show TIME on the guesser, keep their seat lit, play
+  /// buzz+Guy next. Team switch happens only after [completeTimeoutFanfare].
+  void _beginGuessTimeoutCalm() {
+    final s = _state;
+    if (s == null || s.step != TurnStep.awaitingGuess || !s.isTurnActive) {
+      _clearGuessClock();
+      return;
+    }
+    if (_guessCalmPending || _timeoutFanfarePending) return;
+    _guessCalmPending = true;
+    _guessOpenedAt = null;
+    _timeoutFanfarePending = true;
+    _holdSpotlight(s.guesserRole);
+    // TIME bubble now — still awaitingGuess so Greg stays the focus until Guy ends.
+    final timeEntry = PlayEntry(
+      kind: PlayKind.guess,
+      team: s.cluingTeam,
+      role: s.guesserRole,
+      playerName: s.guesserName,
+      text: 'TIME',
+      wordIndex: s.wordIndex,
+      correct: false,
+    );
+    _state = s.copyWith(
+      hostLine: "Time's up!",
+      feed: [...s.feed, timeEntry],
+    );
+    notifyListeners();
+    // Audio is driven by PlayScreen (steal cue) via [timeoutFanfarePending].
   }
 
   Future<void> _driveComputerSeat() async {
@@ -602,7 +774,8 @@ class GameplayController extends ChangeNotifier {
   // ---------------------------------------------------------------------------
 
   Future<void> submitClue(String text) async {
-    if (inputBlocked?.call() ?? false) return;
+    // Humans may barge in while Guy is talking (UI stops his voice first).
+    // AI paths still wait via [inputBlocked] in _driveComputerSeat.
     return _act(
       local: (s) => MatchEngine.submitClue(s, text),
       remote: (svc, id) => svc.submitClue(id, text),
@@ -613,6 +786,7 @@ class GameplayController extends ChangeNotifier {
   Future<void> timeoutGuess() async {
     final s = _state;
     if (s == null || s.step != TurnStep.awaitingGuess) return;
+    _guessCalmPending = false;
     if (isLocal) {
       return _act(
         local: MatchEngine.timeoutGuess,
@@ -621,6 +795,7 @@ class GameplayController extends ChangeNotifier {
     }
     // Online: only the host advances the clock; submit a miss token.
     if (!_isHost) return;
+    // TIME is already on the feed from the calm beat — grade as a miss.
     await submitGuess('TIME');
   }
 
@@ -651,16 +826,27 @@ class GameplayController extends ChangeNotifier {
 
     final previous = _state!;
     // Provisional bubble (no ✓/✗) until the server grades.
-    final pending = PlayEntry(
-      kind: PlayKind.guess,
-      team: previous.cluingTeam,
-      role: previous.guesserRole,
-      playerName: previous.guesserName,
-      text: trimmed,
-      wordIndex: previous.wordIndex,
-    );
-    _state = previous.copyWith(feed: [...previous.feed, pending]);
-    notifyListeners();
+    // Timeout calm may already have placed TIME — don't stack a second bubble.
+    final alreadyTime = previous.feed.isNotEmpty &&
+        previous.feed.last.kind == PlayKind.guess &&
+        previous.feed.last.role == previous.guesserRole &&
+        previous.feed.last.wordIndex == previous.wordIndex &&
+        previous.feed.last.text.trim().toUpperCase() == 'TIME';
+    if (!alreadyTime) {
+      final pending = PlayEntry(
+        kind: PlayKind.guess,
+        team: previous.cluingTeam,
+        role: previous.guesserRole,
+        playerName: previous.guesserName,
+        text: trimmed,
+        wordIndex: previous.wordIndex,
+      );
+      _state = previous.copyWith(feed: [...previous.feed, pending]);
+      notifyListeners();
+    } else {
+      // Keep the failing guesser lit through the server round-trip.
+      _holdSpotlight(previous.guesserRole);
+    }
 
     final service = _service!;
     final gameId = _gameId!;
@@ -719,20 +905,23 @@ class GameplayController extends ChangeNotifier {
     if (s == null) return;
 
     if (isLocal) {
-      _state = local(s);
+      final next = local(s);
+      final armedMiss = _armSpotlightHold(s, next);
+      _state = next;
       notifyListeners();
-      // Local AI seats only advance when we drive them after each action.
-      _maybeDriveComputer();
+      // Miss: PlayScreen plays buzz → Guy, then clearSpotlightHold drives AI.
+      if (!armedMiss) _maybeDriveComputer();
       return;
     }
 
     // Optimistic local update so the UI responds instantly, then confirm with
     // the server. Roll back if the RPC fails so a wrong local score never sticks.
     final previous = s;
-    _state = local(s);
+    final next = local(s);
+    final armedMiss = _armSpotlightHold(previous, next);
+    _state = next;
     notifyListeners();
-    // A local action may hand the clock to a computer seat — drive it.
-    _maybeDriveComputer();
+    if (!armedMiss) _maybeDriveComputer();
     final service = _service!;
     final gameId = _gameId!;
     final ok = await _guard(() async {

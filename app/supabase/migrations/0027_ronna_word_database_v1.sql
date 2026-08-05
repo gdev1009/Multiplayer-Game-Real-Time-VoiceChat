@@ -1,0 +1,224 @@
+-- =============================================================================
+-- 0027_ronna_word_database_v1.sql
+-- =============================================================================
+-- Replace the deal bank with Ronna's Word Database v1
+-- (`docs/Match Word Database v1 (1).xlsx`, 1,209 words). Keeps 8 words/half.
+
+create or replace function public.mw_begin_play(p_game uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid    uuid := auth.uid();
+  v_host   uuid;
+  v_status text;
+  v_wph    int  := 8;
+  v_total  int;
+  v_team   text;
+  i        int := 0;
+  v_word   text;
+  v_bank   text[] := array[
+    'Accelerate','Accept','Accident','Account','Accountant','Accuse','Actor','Actress',
+    'Add','Advise','Afternoon','Agree','Alert','Allow','Anchor','Anger',
+    'Ankle','Anniversary','Announce','Answer','Ant','Anthem','Apologize','Apple',
+    'Approve','Apricot','Apron','Arch','Architect','Arena','Argue','Arm',
+    'Armor','Army','Arrange','Arrive','Arrow','Artist','Ash','Ask',
+    'Assemble','Assist','Assume','Attack','Attic','Auditorium','Aunt','Author',
+    'Autumn','Axe','Baby','Back','Backpack','Badge','Bag','Bake',
+    'Baker','Bakery','Ball','Balloon','Banana','Bandage','Bank','Banker',
+    'Banner','Bar','Barber','Bark','Barn','Barrel','Baseball','Basement',
+    'Basket','Basketball','Bat','Bathroom','Battery','Battle','Beach','Bean',
+    'Bear','Beat','Bed','Bedroom','Bee','Beer','Beetle','Begin',
+    'Believe','Belt','Bend','Berry','Bicycle','Bill','Bird','Birthday',
+    'Bite','Black','Blame','Blanket','Blend','Blender','Blink','Blood',
+    'Blue','Blueberry','Board','Boat','Body','Boil','Bolt','Bomb',
+    'Bone','Book','Bookstore','Boot','Borrow','Bottle','Bowl','Box',
+    'Boxing','Boy','Brain','Brake','Bread','Break','Breeze','Bridge',
+    'Broccoli','Bronze','Broom','Brother','Brown','Brush','Bucket','Buckle',
+    'Budget','Build','Builder','Bump','Burn','Bury','Bus','Butcher',
+    'Butter','Butterfly','Button','Buy','Buzz','Cabbage','Cabinet','Cable',
+    'Cafe','Cafeteria','Cake','Call','Calm','Camera','Camping','Can',
+    'Candle','Candy','Cannon','Canyon','Cap','Captain','Car','Card',
+    'Carnival','Carpenter','Carpet','Carrot','Carry','Carve','Cash','Cashier',
+    'Castle','Cat','Catch','Cave','Ceiling','Celebration','Cell','Cello',
+    'Cent','Ceremony','Certificate','Chain','Chair','Change','Chapter','Charger',
+    'Chase','Chat','Check','Checker','Cheek','Cheese','Chef','Cherry',
+    'Chess','Chest','Chew','Chicken','Child','Chimney','Chin','Chirp',
+    'Chocolate','Choose','Chop','Chord','Church','Circle','Circus','City',
+    'Class','Classroom','Clay','Clean','Cleaner','Clerk','Cliff','Climate',
+    'Climb','Climbing','Clinic','Clock','Close','Closet','Cloud','Coach',
+    'Coast','Coat','Coconut','Coffee','Coin','College','Collide','Color',
+    'Combine','Comfort','Compete','Compromise','Computer','Concert','Condense','Conductor',
+    'Connect','Continent','Continue','Convert','Cook','Cookie','Coop','Copper',
+    'Corn','Cost','Couch','Council','Counselor','Count','Country','Court',
+    'Cousin','Cow','Crab','Crash','Crate','Crawl','Cream','Create',
+    'Credit','Crime','Criminal','Criticize','Crop','Crow','Cruise','Crumble',
+    'Crush','Crutch','Cry','Crystal','Cucumber','Cup','Cupboard','Curtain',
+    'Cut','Cycling','Dagger','Dam','Dance','Dancer','Day','Dean',
+    'Debate','Debt','Decide','Deer','Defend','Degree','Demolish','Dentist',
+    'Deny','Depart','Depth','Desert','Design','Desk','Destroy','Dew',
+    'Diamond','Dice','Dig','Diploma','Direct','Director','Dirt','Disagree',
+    'Disaster','Discover','Discuss','Disease','Dishwasher','Dislike','Dissolve','Distance',
+    'Dive','Divide','Doctor','Dog','Doll','Dollar','Dolphin','Domino',
+    'Donut','Door','Doubt','Downgrade','Drag','Dragon','Draw','Drawer',
+    'Dream','Dress','Drill','Drink','Drip','Drive','Driver','Driveway',
+    'Drop','Drought','Drum','Duck','Dust','Eagle','Ear','Earn',
+    'Earthquake','Eat','Editor','Egg','Elbow','Election','Electrician','Elephant',
+    'Email','Emerald','Emergency','Emotion','End','Energy','Engineer','Enjoy',
+    'Enter','Envelope','Evaporate','Evening','Evidence','Exam','Exchange','Exercise',
+    'Exit','Explain','Explore','Eye','Factory','Fair','Fall','Family',
+    'Famine','Farm','Farmer','Father','Fear','Feel','Feeling','Fence',
+    'Ferry','Fertilizer','Festival','Field','Fight','Film','Find','Finger',
+    'Finish','Fire','Firefighter','Fireplace','Fish','Fisherman','Fishing','Fix',
+    'Flag','Flame','Flash','Float','Flood','Floor','Florist','Flute',
+    'Fly','Fog','Fold','Folder','Follow','Foot','Football','Forbid',
+    'Force','Forehead','Forest','Forget','Forgive','Fork','Fountain','Fox',
+    'Frame','Freeze','Fridge','Friend','Frog','Frost','Frown','Fry',
+    'Funeral','Gale','Gallery','Game','Garage','Garden','Gardener','Garlic',
+    'Gate','Gather','Giant','Giraffe','Girl','Give','Glacier','Glance',
+    'Glass','Glide','Glitter','Glove','Glow','Goal','Goat','Gold',
+    'Golf','Government','Grab','Grade','Grandfather','Grandmother','Grape','Gray',
+    'Green','Greet','Grill','Grow','Growl','Guard','Guess','Guest',
+    'Guide','Guilt','Guitar','Gun','Gym','Hair','Hallway','Hammer',
+    'Hand','Harp','Harvest','Hat','Hate','Hawk','Head','Headphone',
+    'Health','Hear','Heart','Height','Helicopter','Helmet','Help','Highway',
+    'Hiking','Hill','Hip','Hiss','Hit','Hockey','Hold','Holiday',
+    'Home','Homework','Honey','Hook','Hoot','Hop','Hope','Horn',
+    'Horse','Hospital','Hotel','Hour','House','Hum','Hunting','Hurricane',
+    'Husband','Ice','Icecream','Idea','Illness','Imagine','Improve','Income',
+    'Increase','Inform','Instrument','Interest','Introduce','Invent','Iron','Irrigation',
+    'Island','Jacket','Jail','Jam','Janitor','Jar','Jeweler','Join',
+    'Joke','Journalist','Joy','Judge','Juice','Jump','Jumping','Jungle',
+    'Kangaroo','Kettle','Key','Keyboard','Kick','Kidney','King','Kitchen',
+    'Kite','Knee','Knife','Knight','Knock','Know','Laboratory','Ladder',
+    'Ladybug','Lake','Lamp','Land','Laptop','Laugh','Law','Lawyer',
+    'Lead','Learn','Leave','Lecture','Leg','Lemon','Lemonade','Lend',
+    'Length','Lesson','Letter','Lettuce','Librarian','Library','Lie','Lift',
+    'Lightning','Like','Lime','Link','Lion','Lip','Listen','Liver',
+    'Loan','Lobster','Lock','Locksmith','Look','Lose','Loss','Love',
+    'Lung','Magazine','Make','Mall','Man','Manager','Mango','Map',
+    'Marble','Market','Mayor','Maze','Meadow','Measure','Mechanic','Medal',
+    'Medicine','Meet','Melody','Melon','Melt','Memory','Mention','Mentor',
+    'Meow','Merge','Message','Milk','Milkshake','Mine','Miner','Minister',
+    'Minute','Mirror','Missile','Mist','Mitten','Mix','Mock','Mold',
+    'Money','Monkey','Month','Monument','Moon','Mop','Morning','Mosque',
+    'Mother','Motorcycle','Mountain','Mouse','Mouth','Movie','Mow','Mud',
+    'Muffin','Mug','Multiply','Muscle','Museum','Mushroom','Music','Musician',
+    'Nail','Napkin','Nation','Navigate','Navy','Neck','Need','Needle',
+    'Negotiate','Neighbor','Net','Newspaper','Night','Nose','Note','Notebook',
+    'Notify','Novel','Number','Nurse','Ocean','Octopus','Offer','Office',
+    'Officer','Onion','Open','Orange','Organize','Oval','Oven','Owl',
+    'Pack','Paddle','Page','Paint','Painter','Painting','Pajama','Palace',
+    'Pan','Pancake','Pants','Paper','Parade','Paragraph','Parent','Park',
+    'Parliament','Parrot','Party','Pasta','Pasture','Path','Patient','Pay',
+    'Pea','Peach','Pear','Pearl','Pen','Pencil','Penguin','Pepper',
+    'Permit','Pharmacist','Phone','Photograph','Photographer','Piano','Pick','Picture',
+    'Pie','Pig','Pill','Pillow','Pilot','Pin','Pineapple','Pink',
+    'Pizza','Plan','Plane','Plant','Plate','Play','Playground','Plow',
+    'Pluck','Plum','Plumber','Poem','Poet','Police','Polish','Porch',
+    'Postcard','Poster','Pot','Potato','Pour','Power','Practice','Praise',
+    'Prefer','Prepare','President','Prevent','Price','Pride','Prince','Princess',
+    'Principal','Print','Printer','Prison','Professor','Profit','Protect','Pull',
+    'Pumpkin','Punch','Purple','Purse','Push','Puzzle','Quarry','Queen',
+    'Rabbit','Race','Racket','Radio','Rain','Rainbow','Rake','Ranch',
+    'Raspberry','Rat','Read','Reap','Receipt','Receive','Recommend','Rectangle',
+    'Red','Reduce','Referee','Refuse','Reject','Relax','Remember','Remind',
+    'Repair','Report','Reporter','Rest','Restaurant','Return','Rhythm','Ribbon',
+    'Rice','Ride','Rip','Rise','River','Road','Roar','Roast',
+    'Robe','Robot','Rock','Rocket','Roll','Roof','Room','Rope',
+    'Rotate','Row','Rowing','Ruby','Rug','Rule','Run','Running',
+    'Sadness','Sail','Sailing','Sailor','Salad','Salary','Salesman','Salt',
+    'Sand','Sandwich','Sapphire','Sauce','Save','Saw','Saxophone','Say',
+    'Scanner','Scarf','Scholarship','School','Scientist','Scooter','Screen','Screw',
+    'Scrub','Sculpt','Sea','Search','Season','Second','See','Seed',
+    'Sell','Senator','Send','Sentence','Separate','Shade','Shake','Shame',
+    'Shape','Shark','Sheep','Sheet','Shelf','Shield','Shine','Ship',
+    'Shirt','Shoe','Shop','Shore','Shoulder','Shout','Shove','Shovel',
+    'Show','Shred','Shrimp','Sibling','Sidewalk','Sight','Signal','Silo',
+    'Silver','Sing','Singer','Sink','Sister','Sit','Size','Skating',
+    'Sketch','Skiing','Skin','Skip','Skirt','Sky','Slap','Sled',
+    'Sleep','Sleigh','Slice','Slide','Slip','Smell','Smile','Smoke',
+    'Snail','Snake','Sniff','Snow','Soar','Soccer','Sock','Soda',
+    'Sofa','Soil','Soldier','Song','Soothe','Sort','Sound','Soup',
+    'Sow','Spark','Sparkle','Speak','Speaker','Spear','Speed','Spend',
+    'Spider','Spill','Spin','Spinach','Splash','Split','Sponge','Spoon',
+    'Spring','Square','Squeeze','Stable','Stadium','Stair','Stamp','Stand',
+    'Star','Stare','Start','State','Statue','Steel','Steer','Stethoscope',
+    'Stir','Stomach','Stone','Stop','Store','Storm','Story','Stove',
+    'Straighten','Stranger','Strawberry','Street','Strength','Stress','String','Student',
+    'Study','Subtract','Subway','Sugar','Suggest','Suit','Suitcase','Summer',
+    'Sun','Support','Suppose','Surfing','Surgeon','Surgery','Swallow','Swan',
+    'Sweater','Sweep','Swim','Swimming','Sword','Syringe','Table','Tablet',
+    'Tailor','Take','Takeoff','Talk','Tank','Tap','Taste','Tax',
+    'Taxi','Tea','Teach','Teacher','Tear','Tease','Television','Tell',
+    'Temperature','Temple','Tennis','Test','Text','Thank','Theater','Thermometer',
+    'Think','Thought','Thread','Throw','Thumb','Thunder','Tie','Tiger',
+    'Toaster','Toe','Tomato','Tongue','Tooth','Tornado','Touch','Towel',
+    'Tower','Town','Toy','Tractor','Trade','Trail','Train','Trainer',
+    'Transform','Travel','Tremble','Trial','Triangle','Trim','Trophy','Truck',
+    'Trumpet','Trunk','Trust','Tune','Tunnel','Turn','Turtle','Tutor',
+    'Twin','Twinkle','Twist','Type','Umpire','Uncle','Understand','Unfold',
+    'Uniform','Unite','University','Unlock','Unpack','Unroll','Unwrap','Upgrade',
+    'Vaccine','Valley','Verdict','Vet','Veterinarian','Vibrate','Victim','Village',
+    'Violin','Visit','Visitor','Volcano','Volleyball','Vote','Waffle','Wage',
+    'Wagon','Wait','Waiter','Waitress','Wake','Walk','Wall','Wallet',
+    'Want','War','Warden','Warehouse','Warn','Wash','Watch','Water',
+    'Waterfall','Watermelon','Weakness','Weapon','Weather','Wedding','Week','Weigh',
+    'Weight','Welcome','Whale','Wheelchair','Whisper','Whistle','White','Width',
+    'Wife','Win','Wind','Window','Wine','Wink','Winter','Wipe',
+    'Wish','Witch','Witness','Wizard','Wobble','Wolf','Woman','Wonder',
+    'Word','Work','Workshop','Worm','Worry','Wrap','Wrench','Wrestling',
+    'Wrist','Write','Writer','Yard','Year','Yell','Yellow','Zebra',
+    'Zipper'
+  ];
+begin
+  if v_uid is null then
+    return jsonb_build_object('ok', false, 'reason', 'not_signed_in');
+  end if;
+
+  select host_id, status into v_host, v_status
+    from public.games where id = p_game;
+
+  if v_host is null then
+    return jsonb_build_object('ok', false, 'reason', 'not_found');
+  end if;
+  if v_host <> v_uid then
+    return jsonb_build_object('ok', false, 'reason', 'not_host');
+  end if;
+  if v_status <> 'in_progress' then
+    return jsonb_build_object('ok', false, 'reason', 'not_started');
+  end if;
+
+  if exists (select 1 from public.game_state where game_id = p_game) then
+    return jsonb_build_object('ok', true, 'already', true);
+  end if;
+
+  v_total := v_wph * 2;
+
+  for v_word in
+    select w
+    from unnest(v_bank) as w
+    order by md5(w || p_game::text)
+    limit v_total
+  loop
+    insert into public.game_words (game_id, word_index, word)
+    values (p_game, i, v_word);
+    i := i + 1;
+  end loop;
+
+  if i < v_total then
+    return jsonb_build_object('ok', false, 'reason', 'deal_failed');
+  end if;
+
+  v_team := public.mw_starting_team(0);
+  insert into public.game_state
+    (game_id, phase, word_index, cluing_team, step, words_per_half, host_line)
+  values
+    (p_game, 'first_half', 0, v_team, 'awaiting_clue', v_wph,
+     public.mw_clue_prompt(p_game, v_team, 'first_half'));
+
+  return jsonb_build_object('ok', true);
+end;
+$$;

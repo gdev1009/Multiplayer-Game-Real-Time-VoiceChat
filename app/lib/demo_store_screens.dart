@@ -82,7 +82,7 @@ void main() {
   final billing = BillingService(_offlineClient());
   final gameplay = GameplayController()
     ..startLocal(
-      words: WordBank.deal(8, random: Random(20260714)),
+      words: WordBank.deal(16, random: Random(20260714)),
       names: const {
         'A1': 'Greg',
         'A2': 'Buddy',
@@ -223,7 +223,7 @@ class _StoreSequencerState extends State<_StoreSequencer> {
   /// One steal cycle so A1, A2, B1, and B2 each have a speech bubble.
   void _seedAllSeatBubbles(GameplayController play) {
     play.startLocal(
-      words: WordBank.deal(8, random: Random(20260714)),
+      words: WordBank.deal(16, random: Random(20260714)),
       names: const {
         'A1': 'Greg',
         'A2': 'Buddy',
@@ -380,7 +380,7 @@ PrizeRoom _demoPrizeRoom() => PrizeRoom(
           id: 'trophy-win-cup',
           kind: 'trophy',
           title: 'Win Trophy',
-          description: 'A clay trophy for every Match Word win.',
+          description: 'A trophy for every Match Word win.',
           assetPath: 'assets/images/trophies/trophy-first-win.png',
           sortOrder: 5,
           earned: true,
@@ -432,7 +432,13 @@ class _SilentOutput implements SoundOutput {
   Future<void> setLoopVolume(double volume) async {}
   @override
   Future<void> playOneShot(String asset, double volume,
-      {bool voice = false, double playbackRate = 1.0, bool fromFile = false, bool awaitCompletion = false}) async {}
+      {bool voice = false, double playbackRate = 1.0, bool fromFile = false, bool awaitCompletion = false, Duration maxWait = const Duration(seconds: 50)}) async {}
+  @override
+  Future<void> stopVoice() async {}
+  @override
+  Future<void> stopSfx() async {}
+  @override
+  Future<void> reconfigureAudioSession() async {}
   @override
   Future<void> stopAll() async {}
   @override
@@ -591,7 +597,7 @@ class _DemoGameplayService extends GameplayService {
 
   @override
   Future<List<String>> loadWords(String gameId) async =>
-      WordBank.deal(8, random: Random(20260714));
+      WordBank.deal(16, random: Random(20260714));
 
   @override
   Future<void> submitClue(String gameId, String text) async {}

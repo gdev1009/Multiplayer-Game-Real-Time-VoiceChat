@@ -90,6 +90,12 @@ class HostAudio {
   /// How long to hold the opening bed before the welcome line.
   static const Duration openingBedDuration = Duration(milliseconds: 13000);
 
+  /// Exact buzz length on wrong / timeout before Guy speaks.
+  static const Duration buzzerHold = Duration(seconds: 3);
+
+  /// Max cheer / applause bed after Guy speaks on correct / winner (≤8s).
+  static const Duration crowdAfterVoiceMax = Duration(milliseconds: 8000);
+
   /// The concrete sounds for [cue].
   static CueSounds soundsFor(SoundCue cue) {
     switch (cue) {
@@ -106,20 +112,27 @@ class HostAudio {
           voice: '$_vox/your_turn.mp3',
         );
       case SoundCue.correct:
+        // Correct: ding → Guy confirms → crowd cheer (deferred in AudioController).
         return const CueSounds(
-          // Ronna: ding + crowd cheer (skip thin synthetic “correct” bed).
-          effects: ['$_sfx/ding.mp3', '$_sfx/cheer.mp3'],
+          effects: [
+            '$_sfx/ding.mp3',
+            '$_sfx/cheer.mp3',
+          ],
           voice: '$_vox/nice_guess.mp3',
         );
       case SoundCue.steal:
+        // Wrong guess / timed-out steal — one continuous long buzzer, then Guy.
         return const CueSounds(
-          // Ronna: Sports Buzzer only — voice carries the miss line.
-          effects: ['$_sfx/buzzer.mp3'],
+          effects: ['$_sfx/buzzer_long.mp3'],
           voice: '$_vox/good_try.mp3',
         );
       case SoundCue.reveal:
+        // Timed out with no points — long buzzer, then reveal sting + Guy.
         return const CueSounds(
-          effects: ['$_sfx/reveal.mp3'],
+          effects: [
+            '$_sfx/buzzer_long.mp3',
+            '$_sfx/reveal.mp3',
+          ],
           voice: '$_vox/word_revealed.mp3',
         );
       case SoundCue.halftime:
@@ -128,8 +141,13 @@ class HostAudio {
           voice: '$_vox/halftime.mp3',
         );
       case SoundCue.winner:
+        // Game end: fanfare → Guy wrap-up → crowd (cheer deferred in AudioController).
         return const CueSounds(
-          effects: ['$_sfx/winner.mp3', '$_sfx/applause.mp3'],
+          effects: [
+            '$_sfx/winner.mp3',
+            '$_sfx/cheer.mp3',
+            '$_sfx/applause.mp3',
+          ],
           voice: '$_vox/winner.mp3',
           stopMusic: true,
         );

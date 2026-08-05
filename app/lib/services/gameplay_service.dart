@@ -76,7 +76,7 @@ class GameStateRow {
         pendingClue: m['pending_clue'] as String?,
         lastOutcome: _outcome(m['last_outcome'] as String?),
         hostLine: (m['host_line'] as String?) ?? '',
-        wordsPerHalf: (m['words_per_half'] as num?)?.toInt() ?? 4,
+        wordsPerHalf: (m['words_per_half'] as num?)?.toInt() ?? 8,
         maxExchanges: (m['max_exchanges'] as num?)?.toInt() ?? 5,
         wordValue: (m['word_value'] as num?)?.toInt() ?? 5,
         updatedAt: DateTime.tryParse((m['updated_at'] as String?) ?? '')

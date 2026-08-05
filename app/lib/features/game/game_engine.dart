@@ -32,19 +32,22 @@ enum PlayKind { clue, guess }
 /// How the most recent word ended (drives the host's line and the banner).
 enum WordOutcome { none, guessed, revealed, wrong }
 
-/// Immutable tuning for a match. Defaults give a short, senior-friendly game.
+/// Immutable tuning for a match.
+///
+/// Defaults aim for a senior-friendly full game of about **20–25 minutes**
+/// (Ronna Jul 2026): 8 words per half × 2 halves, with generous guess time.
 class MatchConfig {
   const MatchConfig({
-    this.wordsPerHalf = 4,
+    this.wordsPerHalf = 8,
     this.maxExchanges = 5,
     this.wordValue = 5,
-    this.guessSeconds = 40,
+    this.guessSeconds = 18,
   })  : assert(wordsPerHalf > 0),
         assert(maxExchanges > 0),
         assert(wordValue > 0),
         assert(guessSeconds > 0);
 
-  /// Number of secret words played in each half.
+  /// Number of secret words played in each half (~20–25 min full match).
   final int wordsPerHalf;
 
   /// Exchanges (clue + guess) allowed on a word before it auto-reveals.
@@ -53,7 +56,7 @@ class MatchConfig {
   /// Points a freshly dealt word is worth; it drops by one per failed exchange.
   final int wordValue;
 
-  /// Wall-clock seconds the guesser has before the buzzer (seniors need time).
+  /// Seconds a guesser has before the buzzer (Ronna: ~15–20).
   final int guessSeconds;
 
   /// Total words across both halves.
@@ -319,16 +322,26 @@ class MatchEngine {
     if (!state.isTurnActive || state.step != TurnStep.awaitingGuess) {
       return state;
     }
-    final entry = PlayEntry(
-      kind: PlayKind.guess,
-      team: state.cluingTeam,
-      role: state.guesserRole,
-      playerName: state.guesserName,
-      text: 'TIME',
-      wordIndex: state.wordIndex,
-      correct: false,
-    );
-    final feed = [...state.feed, entry];
+    // Calm beat may have already placed a TIME bubble — don't duplicate it.
+    final hasTime = state.feed.isNotEmpty &&
+        state.feed.last.kind == PlayKind.guess &&
+        state.feed.last.role == state.guesserRole &&
+        state.feed.last.wordIndex == state.wordIndex &&
+        state.feed.last.text.trim().toUpperCase() == 'TIME';
+    final feed = hasTime
+        ? state.feed
+        : [
+            ...state.feed,
+            PlayEntry(
+              kind: PlayKind.guess,
+              team: state.cluingTeam,
+              role: state.guesserRole,
+              playerName: state.guesserName,
+              text: 'TIME',
+              wordIndex: state.wordIndex,
+              correct: false,
+            ),
+          ];
     final used = state.exchangeCount + 1;
     if (used >= state.config.maxExchanges) {
       return state.copyWith(

@@ -80,9 +80,13 @@ class SpeechInputService {
       );
       return heard;
     } finally {
-      if (_speech.isListening) {
-        await _speech.stop();
-      }
+      try {
+        if (_speech.isListening) {
+          await _speech.stop();
+        }
+      } catch (_) {}
+      // Give Android a beat to release the mic before game audio resumes.
+      await Future<void>.delayed(const Duration(milliseconds: 250));
     }
   }
 

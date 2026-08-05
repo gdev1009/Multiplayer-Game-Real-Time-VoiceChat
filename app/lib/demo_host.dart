@@ -44,7 +44,13 @@ class _SilentOutput implements SoundOutput {
   Future<void> setLoopVolume(double volume) async {}
   @override
   Future<void> playOneShot(String asset, double volume,
-      {bool voice = false, double playbackRate = 1.0, bool fromFile = false, bool awaitCompletion = false}) async {}
+      {bool voice = false, double playbackRate = 1.0, bool fromFile = false, bool awaitCompletion = false, Duration maxWait = const Duration(seconds: 50)}) async {}
+  @override
+  Future<void> stopVoice() async {}
+  @override
+  Future<void> stopSfx() async {}
+  @override
+  Future<void> reconfigureAudioSession() async {}
   @override
   Future<void> stopAll() async {}
   @override
@@ -63,7 +69,7 @@ void main() {
   final controller = GameplayController()
     ..startLocal(
       names: names,
-      words: WordBank.deal(8, random: Random(20260629)),
+      words: WordBank.deal(16, random: Random(20260629)),
       config: const MatchConfig(),
       myRole: 'A1',
       aiByRole: const {

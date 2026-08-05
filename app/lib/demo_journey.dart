@@ -75,7 +75,7 @@ void main() {
             id: 'trophy-win-cup',
             kind: 'trophy',
             title: 'Win Trophy',
-            description: 'A clay trophy for every Match Word win.',
+            description: 'A trophy for every Match Word win.',
             assetPath: 'assets/images/trophies/trophy-first-win.png',
             sortOrder: 5,
             earned: true,
@@ -171,7 +171,13 @@ class _SilentOutput implements SoundOutput {
   Future<void> setLoopVolume(double volume) async {}
   @override
   Future<void> playOneShot(String asset, double volume,
-      {bool voice = false, double playbackRate = 1.0, bool fromFile = false, bool awaitCompletion = false}) async {}
+      {bool voice = false, double playbackRate = 1.0, bool fromFile = false, bool awaitCompletion = false, Duration maxWait = const Duration(seconds: 50)}) async {}
+  @override
+  Future<void> stopVoice() async {}
+  @override
+  Future<void> stopSfx() async {}
+  @override
+  Future<void> reconfigureAudioSession() async {}
   @override
   Future<void> stopAll() async {}
   @override
@@ -417,7 +423,7 @@ class _DemoGameplayService extends GameplayService {
 
   // Seeded so the recorded game is reproducible:
   // Flower, Slipper, Clock, Robin, Sandwich, Quilt, Holiday, Garden.
-  final List<String> _words = WordBank.deal(8, random: Random(20260629));
+  final List<String> _words = WordBank.deal(16, random: Random(20260629));
 
   @override
   String? get currentUserId => 'demo-host';

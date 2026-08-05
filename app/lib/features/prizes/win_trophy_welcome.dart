@@ -44,7 +44,7 @@ class WinTrophyWelcome extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      count > 0 ? 'Your clay trophies' : 'Clay trophies',
+                      count > 0 ? 'Your trophies' : 'Trophies',
                       style: AppText.title.copyWith(fontSize: 20),
                     ),
                     const SizedBox(height: 4),

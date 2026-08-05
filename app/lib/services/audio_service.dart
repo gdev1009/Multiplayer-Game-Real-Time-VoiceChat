@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 
@@ -37,7 +39,8 @@ abstract class SoundOutput {
   /// [playbackRate] below 1.0 lowers pitch (Guy Smiley reads deeper).
   /// [asset] is normally an AssetSource path; when [fromFile] is true it is an
   /// absolute filesystem path (ElevenLabs cache).
-  /// When [awaitCompletion] is true, wait until the one-shot finishes (cheer).
+  /// When [awaitCompletion] is true, wait until the one-shot finishes (cheer),
+  /// or until [maxWait] elapses — whichever comes first.
   Future<void> playOneShot(
     String asset,
     double volume, {
@@ -45,10 +48,20 @@ abstract class SoundOutput {
     double playbackRate = 1.0,
     bool fromFile = false,
     bool awaitCompletion = false,
+    Duration maxWait = const Duration(seconds: 50),
   });
+
+  /// Stop the host voice channel only (music / SFX keep playing).
+  Future<void> stopVoice();
+
+  /// Stop effect one-shots only (buzzer bed, ding, etc.). Voice / music keep going.
+  Future<void> stopSfx();
 
   /// Stop everything immediately.
   Future<void> stopAll();
+
+  /// Re-apply the audio session after speech recognition releases the mic.
+  Future<void> reconfigureAudioSession();
 
   void dispose();
 }
@@ -59,9 +72,9 @@ abstract class SoundOutput {
 /// - One dedicated player for host voice (a new line replaces the old).
 /// - A small round-robin pool for effects so short cues can overlap.
 ///
-/// The audio session uses the iOS *ambient* category so the app **respects the
-/// hardware silent switch** (a guiding-principle requirement — no surprise
-/// noise for seniors), and ducks rather than stops other audio on Android.
+/// The audio session uses the iOS *playback* category so Guy, the buzzer, and
+/// cheer stay on the media volume path (seniors often miss ambient/silent-mode
+/// audio). Android uses the media usage stream with full audio focus.
 class AudioService implements SoundOutput {
   AudioService({int sfxVoices = 4})
       : _sfxPool = List.generate(sfxVoices, (_) => AudioPlayer());
@@ -71,6 +84,7 @@ class AudioService implements SoundOutput {
   final List<AudioPlayer> _sfxPool;
   int _next = 0;
   bool _configured = false;
+  Completer<void>? _voiceWait;
 
   @override
   bool get isSilent => false;
@@ -80,18 +94,21 @@ class AudioService implements SoundOutput {
     if (_configured) return;
     _configured = true;
     try {
+      // Playback (not ambient): uses the media volume slider and ignores the
+      // hardware silent switch so Guy / buzzer / cheer stay audible for seniors
+      // (Ronna: still too quiet on reviews).
       await AudioPlayer.global.setAudioContext(
         AudioContext(
           iOS: AudioContextIOS(
-            category: AVAudioSessionCategory.ambient,
-            options: const {AVAudioSessionOptions.mixWithOthers},
+            category: AVAudioSessionCategory.playback,
+            options: const {AVAudioSessionOptions.duckOthers},
           ),
           android: const AudioContextAndroid(
-            isSpeakerphoneOn: false,
+            isSpeakerphoneOn: true,
             stayAwake: false,
             contentType: AndroidContentType.music,
-            usageType: AndroidUsageType.game,
-            audioFocus: AndroidAudioFocus.gainTransientMayDuck,
+            usageType: AndroidUsageType.media,
+            audioFocus: AndroidAudioFocus.gain,
           ),
         ),
       );
@@ -99,7 +116,18 @@ class AudioService implements SoundOutput {
       await _music.setPlayerMode(PlayerMode.mediaPlayer);
     } catch (err) {
       debugPrint('AudioService.configure failed (ignored): $err');
+      _configured = false;
     }
+  }
+
+  @override
+  Future<void> reconfigureAudioSession() async {
+    _configured = false;
+    await configure();
+    // Nudge the voice player so the next line isn't stuck after STT.
+    try {
+      await _voice.stop();
+    } catch (_) {}
   }
 
   @override
@@ -165,22 +193,32 @@ class AudioService implements SoundOutput {
     double playbackRate = 1.0,
     bool fromFile = false,
     bool awaitCompletion = false,
+    Duration maxWait = const Duration(seconds: 50),
   }) async {
     await configure();
     try {
       final source = fromFile ? DeviceFileSource(asset) : AssetSource(asset);
       if (voice) {
+        // Cancel any prior voice wait so barge-in / stopHostSpeech unblocks.
+        _voiceWait?.complete();
+        _voiceWait = Completer<void>();
+        final wait = _voiceWait!;
         await _voice.stop();
         await _voice.setPlaybackRate(playbackRate.clamp(0.5, 1.5));
         await _voice.setVolume(volume.clamp(0.0, 1.0));
         await _voice.play(source, volume: volume.clamp(0.0, 1.0));
-        // Hold the game beat until Guy finishes speaking so the next action
-        // never cuts him off mid-line. Long intros can exceed 30s.
+        // Complete when the line finishes *or* stopVoice() is called.
+        late final StreamSubscription<void> sub;
+        sub = _voice.onPlayerComplete.listen((_) {
+          if (!wait.isCompleted) wait.complete();
+        });
         try {
-          await _voice.onPlayerComplete.first.timeout(
-            const Duration(seconds: 90),
-          );
-        } catch (_) {}
+          await wait.future.timeout(const Duration(seconds: 90));
+        } catch (_) {
+        } finally {
+          await sub.cancel();
+          if (identical(_voiceWait, wait)) _voiceWait = null;
+        }
         return;
       }
       final player = _sfxPool[_next];
@@ -189,14 +227,32 @@ class AudioService implements SoundOutput {
       await player.play(source, volume: volume);
       if (awaitCompletion) {
         try {
-          await player.onPlayerComplete.first.timeout(
-            const Duration(seconds: 20),
-          );
+          await player.onPlayerComplete.first.timeout(maxWait);
         } catch (_) {}
       }
     } catch (err) {
       debugPrint('AudioService.playOneShot($asset) failed (ignored): $err');
     }
+  }
+
+  @override
+  Future<void> stopVoice() async {
+    try {
+      await _voice.stop();
+    } catch (_) {}
+    final wait = _voiceWait;
+    if (wait != null && !wait.isCompleted) {
+      wait.complete();
+    }
+  }
+
+  @override
+  Future<void> stopSfx() async {
+    try {
+      for (final p in _sfxPool) {
+        await p.stop();
+      }
+    } catch (_) {}
   }
 
   @override
@@ -208,6 +264,10 @@ class AudioService implements SoundOutput {
         await p.stop();
       }
     } catch (_) {}
+    final wait = _voiceWait;
+    if (wait != null && !wait.isCompleted) {
+      wait.complete();
+    }
   }
 
   @override

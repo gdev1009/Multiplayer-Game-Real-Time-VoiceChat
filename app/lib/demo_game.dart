@@ -44,12 +44,19 @@ class _SilentOutput implements SoundOutput {
     double playbackRate = 1.0,
     bool fromFile = false,
     bool awaitCompletion = false,
+    Duration maxWait = const Duration(seconds: 50),
   }) async {
     if (voice) {
       // Keep lipsync ticking for a beat in silent demos.
       await Future<void>.delayed(const Duration(milliseconds: 1600));
     }
   }
+  @override
+  Future<void> stopVoice() async {}
+  @override
+  Future<void> stopSfx() async {}
+  @override
+  Future<void> reconfigureAudioSession() async {}
   @override
   Future<void> stopAll() async {}
   @override
@@ -68,7 +75,7 @@ void main() {
       },
       // A seeded RNG so the demo always deals the same words — screenshots stay
       // reproducible across runs.
-      words: WordBank.deal(8, random: Random(20260629)),
+      words: WordBank.deal(16, random: Random(20260629)),
       config: const MatchConfig(),
     );
 

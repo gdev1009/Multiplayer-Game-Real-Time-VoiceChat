@@ -15,8 +15,11 @@ void main() {
     'Garden',
   ];
 
-  MatchState start() =>
-      MatchEngine.start(words: words, names: names, config: const MatchConfig());
+  MatchState start() => MatchEngine.start(
+        words: words,
+        names: names,
+        config: const MatchConfig(wordsPerHalf: 4),
+      );
 
   test('every HostAction has transparent PNG frames', () {
     for (final action in HostAction.values) {

@@ -124,32 +124,13 @@ class CharacterPreview extends StatelessWidget {
           child: image,
         );
       }
-      // Male outfit art sits a hair low vs the neck column — nudge it up so
-      // collars meet the jaw the way female outfits already do.
-      if (layer == CharacterLayer.outfit && character.base == 'body-male') {
-        image = Transform.translate(
-          offset: Offset(0, -size * 0.022),
-          child: image,
-        );
-      }
+      // Outfit registration matches punched collar windows; do not shift
+      // outfits up (that covered necks on open collars).
       layers.add(image);
     }
 
-    // Soft skin bridge under the chin so outfit collars never flash a hole
-    // (the grey diamond neck artifact on the studio bust).
-    if (character.base != null) {
-      final bridge = CustomPaint(
-        size: Size(size, size),
-        painter: _NeckBridgePainter(
-          female: character.base == 'body-female',
-        ),
-      );
-      // Insert after base (index 0 or 1 if backdrop shadow…) — layers start
-      // with base as first character layer; put bridge right after first layer.
-      if (layers.isNotEmpty) {
-        layers.insert(1, bridge);
-      }
-    }
+    // No painted NeckBridge oval — it read as a fake trapezoid over collars.
+    // Male and female both use punched collar windows over the real neck column.
 
     final stage = SizedBox(
       width: size,
@@ -295,56 +276,6 @@ class CharacterPartThumb extends StatelessWidget {
 // ---------------------------------------------------------------------------
 // Backdrop + grounding
 // ---------------------------------------------------------------------------
-
-/// Soft skin oval under the chin so open collars never show a hole / diamond.
-class _NeckBridgePainter extends CustomPainter {
-  _NeckBridgePainter({required this.female});
-  final bool female;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final skin = female
-        ? const Color(0xFFF6C49A)
-        : const Color(0xFFF9C28B);
-    final w = size.width;
-    final h = size.height;
-    // Chin ~ y 360/1254 ≈ 0.287; shoulders ~ 0.375 — fill that band.
-    // Male open collars need a taller bridge; female holes are already clean.
-    final centerY = female ? h * 0.325 : h * 0.312;
-    final rect = Rect.fromCenter(
-      center: Offset(w * 0.5, centerY),
-      width: w * (female ? 0.18 : 0.22),
-      height: h * (female ? 0.085 : 0.13),
-    );
-    final paint = Paint()
-      ..color = skin
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, w * 0.012);
-    canvas.drawOval(rect, paint);
-    // Slightly denser core so thin collar gaps stay filled.
-    canvas.drawOval(
-      rect.deflate(w * 0.02),
-      Paint()..color = skin.withValues(alpha: 0.95),
-    );
-    if (!female) {
-      // Soft second oval lower in the collar V (open shirts / track jackets).
-      final lower = Rect.fromCenter(
-        center: Offset(w * 0.5, h * 0.355),
-        width: w * 0.14,
-        height: h * 0.07,
-      );
-      canvas.drawOval(
-        lower,
-        Paint()
-          ..color = skin.withValues(alpha: 0.9)
-          ..maskFilter = MaskFilter.blur(BlurStyle.normal, w * 0.01),
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _NeckBridgePainter oldDelegate) =>
-      oldDelegate.female != female;
-}
 
 class _StageBackdrop extends StatelessWidget {
   const _StageBackdrop();

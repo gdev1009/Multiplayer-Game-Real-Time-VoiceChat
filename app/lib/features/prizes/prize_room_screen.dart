@@ -77,10 +77,10 @@ class _PrizeRoomScreenState extends State<PrizeRoomScreen> {
                 children: [
                   _ShelfSection(
                     title: room.winTrophyCount <= 1
-                        ? 'Win trophies'
-                        : 'Win trophies (${room.winTrophyCount})',
+                        ? 'Trophies'
+                        : 'Trophies (${room.winTrophyCount})',
                     items: winCups,
-                    emptyHint: 'Win a game to earn your first clay trophy.',
+                    emptyHint: 'Win a game to earn your first trophy.',
                     overflowLabel: extraWins > 0 ? '+$extraWins more' : null,
                   ),
                   const SizedBox(height: AppSpacing.lg),
@@ -122,7 +122,7 @@ class _PrizeRoomScreenState extends State<PrizeRoomScreen> {
     }
     switch (room.roomLevel) {
       case 0:
-        return 'Your shelves are waiting for clay trophies.';
+        return 'Your shelves are waiting for trophies.';
       case 1:
         return 'A lovely start — the shelves are waking up.';
       case 2:
@@ -215,7 +215,9 @@ class _TournamentTeaser extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8),
       child: Text(
-        'Stay tuned for our annual tournament involving all top scorers.',
+        'Players need at least ${PrizeAssets.yearlyTournamentTrophyQualifier} '
+        'trophies to qualify for our yearly tournament. '
+        'Stay tuned — top scorers, you’re invited!',
         textAlign: TextAlign.center,
         style: AppText.bodyMuted.copyWith(
           fontSize: 17,

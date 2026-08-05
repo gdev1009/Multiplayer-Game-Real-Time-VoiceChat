@@ -218,6 +218,7 @@ class StudioStage extends StatelessWidget {
     this.charactersByRole = const {},
     this.bottomInset = 0,
     this.showScoreboards = false,
+    this.spotlightHoldRole,
   });
 
   final MatchState state;
@@ -225,6 +226,8 @@ class StudioStage extends StatelessWidget {
   final Map<String, Character> charactersByRole;
   final double bottomInset;
   final bool showScoreboards;
+  /// When set, only this seat stays lit (during wrong/timeout buzzer + Guy).
+  final String? spotlightHoldRole;
 
   /// Map a normalised rect on Studio_background into screen space under
   /// [BoxFit.cover] + [Alignment.topCenter].
@@ -296,6 +299,7 @@ class StudioStage extends StatelessWidget {
                   height: seatH,
                   character: charactersByRole[role],
                   foreground: foreground,
+                  spotlightHoldRole: spotlightHoldRole,
                 ),
               ),
             );
@@ -537,6 +541,7 @@ class _SeatPod extends StatelessWidget {
     required this.height,
     this.character,
     this.foreground = false,
+    this.spotlightHoldRole,
   });
 
   final MatchState state;
@@ -545,8 +550,12 @@ class _SeatPod extends StatelessWidget {
   final double height;
   final Character? character;
   final bool foreground;
+  final String? spotlightHoldRole;
 
   bool get _active {
+    // During wrong/timeout audio, keep the failing guesser lit until Guy ends.
+    final hold = spotlightHoldRole;
+    if (hold != null) return role == hold;
     if (!state.isTurnActive) return false;
     if (state.step == TurnStep.awaitingClue) {
       return role == state.clueGiverRole;
@@ -797,18 +806,29 @@ class _PlayerBubble extends StatelessWidget {
             ? 'TIME'
             : raw;
 
+    final isGuess = entry.kind == PlayKind.guess && !isTimeout;
+    // Guesses read larger for seniors (Ronna); clues stay a bit calmer.
+    final textSize = isGuess ? 36.0 : (isTimeout ? 32.0 : 28.0);
+    final iconSize = isGuess ? 28.0 : 24.0;
+    final maxW = isGuess ? 300.0 : 268.0;
+
     return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 168, minWidth: 72),
+      constraints: BoxConstraints(maxWidth: maxW, minWidth: 96),
       child: CustomPaint(
         painter: _SpeechBubblePainter(
           fill: bg.withValues(alpha: 0.98),
           border: border,
-          borderWidth: correct || wrong ? 2.4 : 1.4,
+          borderWidth: correct || wrong ? 2.6 : 1.4,
           radius: _radius,
           tailHeight: _tailH,
         ),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8 + _tailH, 12, 8),
+          padding: EdgeInsets.fromLTRB(
+            isGuess ? 14 : 12,
+            (isGuess ? 10 : 8) + _tailH,
+            isGuess ? 14 : 12,
+            isGuess ? 10 : 8,
+          ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
@@ -817,9 +837,9 @@ class _PlayerBubble extends StatelessWidget {
                 Icon(
                   correct ? Icons.check_circle_rounded : Icons.cancel_rounded,
                   color: fg,
-                  size: 22,
+                  size: iconSize,
                 ),
-                const SizedBox(width: 5),
+                SizedBox(width: isGuess ? 7 : 5),
               ],
               Flexible(
                 child: Text(
@@ -830,8 +850,9 @@ class _PlayerBubble extends StatelessWidget {
                   style: AppText.body.copyWith(
                     color: fg,
                     fontWeight: FontWeight.w900,
-                    fontSize: 26,
+                    fontSize: textSize,
                     height: 1.0,
+                    letterSpacing: isGuess ? 0.4 : 0,
                   ),
                 ),
               ),

@@ -243,9 +243,9 @@ void main() {
 
   group('WordBank', () {
     test('deals the requested number of distinct words', () {
-      final dealt = WordBank.deal(8, random: Random(1));
-      expect(dealt, hasLength(8));
-      expect(dealt.toSet(), hasLength(8));
+      final dealt = WordBank.deal(16, random: Random(1));
+      expect(dealt, hasLength(16));
+      expect(dealt.toSet(), hasLength(16));
     });
 
     test('never runs short even if more than the bank is requested', () {

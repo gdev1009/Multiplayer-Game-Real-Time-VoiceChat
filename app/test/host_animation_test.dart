@@ -138,8 +138,11 @@ void main() {
     const names = {'A1': 'Sunny', 'A2': 'Walter', 'B1': 'Rosa', 'B2': 'Mabel'};
     final words = List.generate(8, (i) => 'Word$i');
 
-    MatchState start() =>
-        MatchEngine.start(words: words, names: names, config: const MatchConfig());
+    MatchState start() => MatchEngine.start(
+          words: words,
+          names: names,
+          config: const MatchConfig(wordsPerHalf: 4),
+        );
 
     test('correct sticky → excited', () {
       expect(

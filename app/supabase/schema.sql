@@ -1045,7 +1045,7 @@ create table if not exists public.game_state (
   last_outcome   text not null default 'none'
                    check (last_outcome in ('none', 'guessed', 'revealed')),
   host_line      text not null default '',
-  words_per_half int  not null default 4,
+  words_per_half int  not null default 6,
   max_exchanges  int  not null default 5,
   word_value     int  not null default 5,
   updated_at     timestamptz not null default now()
@@ -1150,7 +1150,7 @@ declare
   v_uid    uuid := auth.uid();
   v_host   uuid;
   v_status text;
-  v_wph    int  := 4;   -- words per half
+  v_wph    int  := 6;   -- words per half (Ronna: 6 rounds/side)
   v_total  int;
   v_team   text;
   i        int;

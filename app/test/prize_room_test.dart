@@ -21,12 +21,21 @@ void main() {
       );
       expect(
         const PrizeRoom(gamesPlayed: 1, gamesWon: 1, items: []).signInTrophyLine,
-        contains('1 clay trophy'),
+        contains('1 trophy'),
       );
       expect(
         const PrizeRoom(gamesPlayed: 4, gamesWon: 3, items: []).signInTrophyLine,
-        contains('3 clay trophies'),
+        contains('3 trophies'),
       );
+      // Ronna: call them trophies (not “play/win trophies”).
+      expect(
+        const PrizeRoom(gamesPlayed: 4, gamesWon: 3, items: []).signInTrophyLine,
+        isNot(contains('play troph')),
+      );
+    });
+
+    test('yearly tournament qualifier is 50 trophies', () {
+      expect(PrizeAssets.yearlyTournamentTrophyQualifier, 50);
     });
 
     test('gamesLost accounts for ties', () {

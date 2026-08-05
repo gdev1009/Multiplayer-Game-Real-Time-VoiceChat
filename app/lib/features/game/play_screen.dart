@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -11,6 +13,7 @@ import '../../models/character.dart';
 import '../../services/audio_controller.dart';
 import '../../services/speech_input_service.dart';
 import '../character/character_controller.dart';
+import '../host/host_audio.dart';
 import '../host/host_stage.dart';
 import '../host/sound_settings.dart';
 import '../host/studio_stage.dart';
@@ -84,6 +87,7 @@ class _PlayScreenState extends State<PlayScreen> {
   MatchState? _prevState;
   bool _startedShow = false;
   bool _awardedPrizes = false;
+  bool _timeoutFanfareStarted = false;
   String? _alarmMessage;
 
   @override
@@ -96,16 +100,16 @@ class _PlayScreenState extends State<PlayScreen> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     final controller = context.read<GameplayController>();
-    controller.inputBlocked = () {
-      try {
-        final audio = context.read<AudioController>();
-        // Hold the show while Guy is speaking (intro or any host line) so
-        // lines aren't cut off mid-word (halftime, etc.).
+    try {
+      final audio = context.read<AudioController>();
+      // Hold AI / auto-advance while Guy talks. Humans can tap to barge in
+      // (Speak / Send / Next stop his voice via [stopHostSpeech]).
+      controller.inputBlocked = () {
         return audio.hostIntroPlaying || audio.voicePlaying;
-      } catch (_) {
-        return false;
-      }
-    };
+      };
+    } catch (_) {
+      controller.inputBlocked = null;
+    }
   }
 
   @override
@@ -133,22 +137,85 @@ class _PlayScreenState extends State<PlayScreen> {
 
   /// Feed each game-state change to the host audio (after the frame so playback
   /// never blocks the build).
-  void _reactToAudio(MatchState state) {
+  ///
+  /// Timeout: TIME is shown first (controller calm), then we play buzz → Guy,
+  /// then [GameplayController.completeTimeoutFanfare] switches the team.
+  /// Wrong guess: steal/reveal plays while the failing seat stays lit; only
+  /// after that audio do we clear the spotlight.
+  void _reactToAudio(MatchState state, GameplayController controller) {
     final audio = _audioMaybe;
-    if (audio == null) return;
     final prev = _prevState;
     if (identical(prev, state)) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+
+    final timeoutFanfare = controller.timeoutFanfarePending && !_timeoutFanfareStarted;
+    final cues = HostAudio.cuesForTransition(prev, state);
+    final missCues = controller.suppressMissAudio
+        ? const <SoundCue>[]
+        : cues
+            .where((c) => c == SoundCue.steal || c == SoundCue.reveal)
+            .toList();
+    final otherCues = cues
+        .where((c) => c != SoundCue.steal && c != SoundCue.reveal)
+        .toList();
+    _prevState = state;
+
+    // Stray updates while a seat is held must NOT clear the spotlight.
+    if (!timeoutFanfare &&
+        missCues.isEmpty &&
+        otherCues.isEmpty &&
+        _startedShow) {
+      return;
+    }
+
+    if (audio == null) {
+      if (timeoutFanfare) {
+        _timeoutFanfareStarted = true;
+        unawaited(controller.completeTimeoutFanfare());
+      } else if (missCues.isNotEmpty) {
+        controller.clearSpotlightHold();
+      }
+      return;
+    }
+
+    if (timeoutFanfare) _timeoutFanfareStarted = true;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
-      if (!_startedShow) {
-        _startedShow = true;
-        audio.markHostIntroStarted();
-        audio.reactToTransition(null, state); // opens the show (theme + intro)
-      } else {
-        audio.reactToTransition(prev, state);
+      try {
+        if (!_startedShow) {
+          _startedShow = true;
+          audio.markHostIntroStarted();
+          await audio.reactToTransition(null, state); // opens the show
+          return;
+        }
+        if (timeoutFanfare) {
+          // TIME is already on Greg — buzz → Guy → then Team B.
+          try {
+            await audio.playCue(SoundCue.steal);
+          } finally {
+            await controller.completeTimeoutFanfare();
+            if (mounted) _timeoutFanfareStarted = false;
+          }
+          return;
+        }
+        for (final cue in missCues) {
+          await audio.playCue(cue);
+        }
+        if (missCues.isNotEmpty) {
+          controller.clearSpotlightHold();
+        }
+        for (final cue in otherCues) {
+          await audio.playCue(cue);
+        }
+      } catch (_) {
+        if (timeoutFanfare) {
+          await controller.completeTimeoutFanfare();
+          _timeoutFanfareStarted = false;
+        } else if (missCues.isNotEmpty) {
+          controller.clearSpotlightHold();
+        }
       }
     });
-    _prevState = state;
   }
 
   /// Soft-records Prize Room stats once when the match ends.
@@ -188,7 +255,7 @@ class _PlayScreenState extends State<PlayScreen> {
       introPlaying = context.watch<AudioController>().hostIntroPlaying;
     } catch (_) {}
     if (state != null) {
-      _reactToAudio(state);
+      _reactToAudio(state, controller);
       _maybeAwardPrizes(controller, state);
     }
 
@@ -250,8 +317,8 @@ class _MatchBody extends StatelessWidget {
         amClueGiver &&
         state.secretWord.trim().isNotEmpty;
 
-    // Bottom dock: clue/guess input only. Mystery word is on the stage.
-    final panelH = (size.height * 0.095).clamp(74.0, 92.0);
+    // Bottom dock hugs content (Ronna: Type or Speak, large print — no empty bar).
+    const panelH = 118.0;
     final panelBottom =
         MediaQuery.paddingOf(context).bottom + 6 + viewInsets.bottom * 0.1;
     final dockReserve = panelH + 14 + viewInsets.bottom * 0.12;
@@ -272,6 +339,7 @@ class _MatchBody extends StatelessWidget {
             charactersByRole: _stageCharacters(context, controller),
             bottomInset: dockReserve,
             showScoreboards: true,
+            spotlightHoldRole: controller.spotlightHoldRole,
           ),
         ),
         // Mystery word sits on the marquee — above the upper seat heads
@@ -320,11 +388,18 @@ class _MatchBody extends StatelessWidget {
               left: margin,
               right: margin,
               bottom: panelBottom,
-              height: panelH,
-              child: const _WaitingPanel(
-                name: '',
-                giving: true,
-                message: 'Listen to Guy…',
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  try {
+                    context.read<AudioController>().stopHostSpeech();
+                  } catch (_) {}
+                },
+                child: const _WaitingPanel(
+                  name: '',
+                  giving: true,
+                  message: 'Skip Ahead',
+                ),
               ),
             )
           else
@@ -332,7 +407,6 @@ class _MatchBody extends StatelessWidget {
               left: margin,
               right: margin,
               bottom: panelBottom,
-              height: panelH,
               child: _InputArea(state: state, controller: controller),
             ),
         ],
@@ -397,27 +471,25 @@ class _StageMysteryWord extends StatelessWidget {
   }
 }
 
-/// Shared dock chrome so word + waiting/input share identical outer bounds.
+/// Shared dock chrome for waiting notes (input uses WordInput’s own chrome).
 class _DockPanel extends StatelessWidget {
   const _DockPanel({required this.child});
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox.expand(
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: const Color(0xEE160C30),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: const Color(0xFFF1B159).withValues(alpha: 0.65),
-            width: 1.0,
-          ),
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0xEE160C30),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFFF1B159).withValues(alpha: 0.75),
+          width: 1.5,
         ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          child: child,
-        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        child: child,
       ),
     );
   }
@@ -434,9 +506,11 @@ class _InputArea extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!controller.isMyTurn) {
+      final holding = controller.spotlightHoldRole != null;
       return _WaitingPanel(
-        name: controller.onClockName,
-        giving: state.step == TurnStep.awaitingClue,
+        name: controller.displayClockName,
+        // During miss fanfare, keep the failing guesser as the focus.
+        giving: holding ? false : state.step == TurnStep.awaitingClue,
       );
     }
     final giving = state.step == TurnStep.awaitingClue;
@@ -456,28 +530,29 @@ class _InputArea extends StatelessWidget {
       key: ValueKey('${state.wordIndex}-${state.step}-${state.cluingTeam}'),
       label: giving ? 'One-word clue' : 'Guess',
       hint: giving ? 'A word that hints at it…' : 'What is the word?',
-      onSubmit: giving ? controller.submitClue : controller.submitGuess,
+      onSubmit: (text) async {
+        await audio?.stopHostSpeech();
+        if (giving) {
+          await controller.submitClue(text);
+        } else {
+          await controller.submitGuess(text);
+        }
+      },
       compact: true,
       onSpeakRequested: speech == null
           ? null
           : () async {
-              // Duck studio bed so the mic hears the player clearly.
               final a = audio;
-              final prevMusic = a?.musicVolume ?? 0.55;
-              final prevVoice = a?.voiceVolume ?? 0.9;
-              if (a != null && !a.muted) {
-                await a.setMusicVolume((prevMusic * 0.08).clamp(0.0, 1.0));
-                await a.setVoiceVolume(0);
-              }
+              await a?.beginSpeechInputDuck();
               try {
                 return await speech!.listenForWord();
               } finally {
-                if (a != null && !a.muted) {
-                  await a.setMusicVolume(prevMusic);
-                  await a.setVoiceVolume(prevVoice);
-                }
+                await a?.endSpeechInputDuck();
               }
             },
+      onInteract: () {
+        unawaited(audio?.stopHostSpeech());
+      },
     );
   }
 }
@@ -550,17 +625,17 @@ class _ResolvedPanel extends StatelessWidget {
     final headline = guessed
         ? (secret.isEmpty
             ? 'Nice work! On to the next word.'
-            : 'Yes — it was “$secret”!')
+            : 'Yes — it was')
         : (secret.isEmpty
             ? 'Time’s up — on to the next word.'
-            : 'Time’s up! The word was “$secret”.');
+            : 'Time’s up! The word was');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Container(
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.sm,
-            vertical: 8,
+            vertical: 10,
           ),
           decoration: BoxDecoration(
             color: guessed ? AppColors.lavenderSoft : AppColors.warmBeige,
@@ -571,21 +646,47 @@ class _ResolvedPanel extends StatelessWidget {
             ),
           ),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Icon(
                 guessed ? Icons.stars_rounded : Icons.visibility_rounded,
                 color: guessed ? AppColors.success : AppColors.gold,
-                size: 26,
+                size: 30,
               ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
-                child: Text(
-                  headline,
-                  style: AppText.body.copyWith(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
+                child: secret.isEmpty
+                    ? Text(
+                        headline,
+                        style: AppText.body.copyWith(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      )
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            headline,
+                            style: AppText.body.copyWith(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '“$secret”',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppText.body.copyWith(
+                              fontSize: 34,
+                              fontWeight: FontWeight.w900,
+                              height: 1.05,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                        ],
+                      ),
               ),
             ],
           ),
@@ -595,7 +696,14 @@ class _ResolvedPanel extends StatelessWidget {
           label: 'Next word',
           icon: Icons.arrow_forward_rounded,
           isLoading: controller.busy,
-          onPressed: controller.busy ? null : controller.nextWord,
+          onPressed: controller.busy
+              ? null
+              : () {
+                  try {
+                    context.read<AudioController>().stopHostSpeech();
+                  } catch (_) {}
+                  controller.nextWord();
+                },
         ),
       ],
     );
@@ -669,7 +777,14 @@ class _HalftimePanel extends StatelessWidget {
             label: 'Start second half',
             icon: Icons.play_arrow_rounded,
             isLoading: controller.busy,
-            onPressed: controller.busy ? null : controller.beginSecondHalf,
+            onPressed: controller.busy
+                ? null
+                : () {
+                    try {
+                      context.read<AudioController>().stopHostSpeech();
+                    } catch (_) {}
+                    controller.beginSecondHalf();
+                  },
           )
         else
           const _WaitingPanel(
@@ -719,7 +834,7 @@ class _GameOverPanel extends StatelessWidget {
           Text(
             winner == null
                 ? 'Thanks for playing Match Word!'
-                : 'A clay trophy is waiting on your shelf — see you next game!',
+                : 'A trophy is waiting on your shelf — see you next game!',
             style: AppText.body,
             textAlign: TextAlign.center,
           ),
