@@ -1,17 +1,15 @@
 # Codemagic CI/CD — Match Word (Flutter in `app/`)
 #
 # Secrets are never committed. Load them in the Codemagic UI under
-# Environment variables → group `appstore_credentials` (see docs/Codemagic Setup.md).
+# Environment variables (see docs/Codemagic Setup.md).
 #
-# App Store Connect API key (Ronna):
+# Group `appstore_credentials` (all Secret):
 #   APP_STORE_CONNECT_ISSUER_ID
 #   APP_STORE_CONNECT_KEY_IDENTIFIER
 #   APP_STORE_CONNECT_PRIVATE_KEY   ← contents of AuthKey_….p8
+#   CERTIFICATE_PRIVATE_KEY         ← REQUIRED (RSA PEM for Distribution cert)
 #
-# Optional (recommended for auto-created Distribution certificates):
-#   CERTIFICATE_PRIVATE_KEY        ← RSA private key PEM (see Codemagic docs)
-#
-# Optional app runtime secrets (group `matchword_app_secrets`) so CI can write app/.env:
+# Group `matchword_app_secrets` (Secret) so CI can write app/.env:
 #   SUPABASE_URL, SUPABASE_ANON_KEY, ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID
 
 workflows:
@@ -24,7 +22,8 @@ workflows:
         - appstore_credentials
         - matchword_app_secrets
       vars:
-        BUNDLE_ID: com.matchword.matchWord
+        # Hardcoded so another app’s BUNDLE_ID secret cannot override Match Word.
+        BUNDLE_ID: "com.matchword.matchWord"
       flutter: stable
       xcode: latest
       cocoapods: default
@@ -56,7 +55,6 @@ workflows:
       - name: Install CocoaPods
         script: |
           cd "$CM_BUILD_DIR/app"
-          # First iOS build may generate Podfile if missing locally.
           flutter precache --ios
           if [ ! -f ios/Podfile ]; then
             flutter build ios --config-only --no-codesign || true
@@ -66,9 +64,28 @@ workflows:
       - name: Set up keychain
         script: keychain initialize
 
+      - name: Check App Store signing secrets
+        script: |
+          set -euo pipefail
+          missing=0
+          for v in APP_STORE_CONNECT_ISSUER_ID APP_STORE_CONNECT_KEY_IDENTIFIER APP_STORE_CONNECT_PRIVATE_KEY CERTIFICATE_PRIVATE_KEY; do
+            if [ -z "${!v:-}" ]; then
+              echo "ERROR: missing secret $v in Codemagic group appstore_credentials"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "See docs/Codemagic Setup.md — Codemagic needs CERTIFICATE_PRIVATE_KEY"
+            echo "to create/save the Apple Distribution certificate."
+            exit 1
+          fi
+          echo "Signing secrets present. Bundle ID will be: com.matchword.matchWord"
+
       - name: Fetch / create App Store signing files
         script: |
-          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+          set -euo pipefail
+          # Explicit Match Word bundle — do not use a mutable env override here.
+          app-store-connect fetch-signing-files "com.matchword.matchWord" \
             --type IOS_APP_STORE \
             --create
 
@@ -81,7 +98,6 @@ workflows:
       - name: Flutter build IPA
         script: |
           cd "$CM_BUILD_DIR/app"
-          # Prefer TestFlight / App Store build number when the app exists in ASC.
           BUILD_NUMBER="${PROJECT_BUILD_NUMBER:-$(date +%Y%m%d%H%M)}"
           if [ -n "${APP_STORE_APPLE_ID:-}" ]; then
             LATEST="$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID" || true)"
@@ -109,11 +125,9 @@ workflows:
         api_key: $APP_STORE_CONNECT_PRIVATE_KEY
         key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
         issuer_id: $APP_STORE_CONNECT_ISSUER_ID
-        # Upload to TestFlight. Flip submit_to_app_store when ready for review.
         submit_to_testflight: true
         submit_to_app_store: false
 
-  # Optional: Android APK for QA (unsigned/debug-friendly unless keystore is configured).
   android-apk:
     name: Android APK (CI)
     instance_type: linux_x2

@@ -13,6 +13,10 @@ docs/Internal_note.md
 **/AuthKey_*.p8
 **/*.p8
 docs/AuthKey_*.p8
+secrets/
+**/certificate_private_key.pem
+**/asc_distribution_key
+**/asc_distribution_key.pub
 
 # Flutter / Dart build artifacts
 app/.dart_tool/
