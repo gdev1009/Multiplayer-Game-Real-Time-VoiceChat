@@ -9,6 +9,11 @@ docs/Internal_note.md
 **/google-services.json
 **/GoogleService-Info.plist
 
+# App Store Connect API keys (Codemagic secrets — never commit)
+**/AuthKey_*.p8
+**/*.p8
+docs/AuthKey_*.p8
+
 # Flutter / Dart build artifacts
 app/.dart_tool/
 app/.flutter-plugins
@@ -37,3 +42,7 @@ app/dist/
 # JS tooling (frame extraction scripts, etc.)
 node_modules/
 **/node_modules/
+
+# Python bytecode / local tool backups
+**/__pycache__/
+app/tools/collar_fix_backup/

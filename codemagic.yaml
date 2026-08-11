@@ -1,0 +1,153 @@
+# Codemagic CI/CD — Match Word (Flutter in `app/`)
+#
+# Secrets are never committed. Load them in the Codemagic UI under
+# Environment variables → group `appstore_credentials` (see docs/Codemagic Setup.md).
+#
+# App Store Connect API key (Ronna):
+#   APP_STORE_CONNECT_ISSUER_ID
+#   APP_STORE_CONNECT_KEY_IDENTIFIER
+#   APP_STORE_CONNECT_PRIVATE_KEY   ← contents of AuthKey_….p8
+#
+# Optional (recommended for auto-created Distribution certificates):
+#   CERTIFICATE_PRIVATE_KEY        ← RSA private key PEM (see Codemagic docs)
+#
+# Optional app runtime secrets (group `matchword_app_secrets`) so CI can write app/.env:
+#   SUPABASE_URL, SUPABASE_ANON_KEY, ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID
+
+workflows:
+  ios-testflight:
+    name: iOS → TestFlight
+    instance_type: mac_mini_m2
+    max_build_duration: 120
+    environment:
+      groups:
+        - appstore_credentials
+        - matchword_app_secrets
+      vars:
+        BUNDLE_ID: com.matchword.matchWord
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+    scripts:
+      - name: Ensure Flutter app/.env for bundled assets
+        script: |
+          set -euo pipefail
+          ENV_FILE="$CM_BUILD_DIR/app/.env"
+          if [ -n "${SUPABASE_URL:-}" ]; then
+            printf '%s\n' \
+              "SUPABASE_URL=${SUPABASE_URL}" \
+              "SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}" \
+              "ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY:-}" \
+              "ELEVENLABS_VOICE_ID=${ELEVENLABS_VOICE_ID:-DHeX7CCuOXUPRpnb0AdT}" \
+              > "$ENV_FILE"
+            echo "Wrote $ENV_FILE from Codemagic secrets."
+          elif [ -f "$ENV_FILE" ]; then
+            echo "Using existing $ENV_FILE"
+          else
+            echo "ERROR: add group matchword_app_secrets (SUPABASE_URL, SUPABASE_ANON_KEY, …)"
+            exit 1
+          fi
+
+      - name: Get Flutter packages
+        script: |
+          cd "$CM_BUILD_DIR/app"
+          flutter pub get
+
+      - name: Install CocoaPods
+        script: |
+          cd "$CM_BUILD_DIR/app"
+          # First iOS build may generate Podfile if missing locally.
+          flutter precache --ios
+          if [ ! -f ios/Podfile ]; then
+            flutter build ios --config-only --no-codesign || true
+          fi
+          find ios -name "Podfile" -execdir pod install \;
+
+      - name: Set up keychain
+        script: keychain initialize
+
+      - name: Fetch / create App Store signing files
+        script: |
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --create
+
+      - name: Add certificates to keychain
+        script: keychain add-certificates
+
+      - name: Apply provisioning profiles to Xcode project
+        script: xcode-project use-profiles
+
+      - name: Flutter build IPA
+        script: |
+          cd "$CM_BUILD_DIR/app"
+          # Prefer TestFlight / App Store build number when the app exists in ASC.
+          BUILD_NUMBER="${PROJECT_BUILD_NUMBER:-$(date +%Y%m%d%H%M)}"
+          if [ -n "${APP_STORE_APPLE_ID:-}" ]; then
+            LATEST="$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID" || true)"
+            if [ -n "${LATEST:-}" ] && [ "$LATEST" != "None" ]; then
+              BUILD_NUMBER=$((LATEST + 1))
+            fi
+          fi
+          flutter build ipa --release \
+            --build-name=1.0.0 \
+            --build-number="$BUILD_NUMBER" \
+            --export-options-plist=/Users/builder/export_options.plist
+
+    artifacts:
+      - app/build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+
+    publishing:
+      email:
+        recipients:
+          - rljjmckenzie@gmail.com
+        notify:
+          success: true
+          failure: true
+      app_store_connect:
+        api_key: $APP_STORE_CONNECT_PRIVATE_KEY
+        key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
+        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
+        # Upload to TestFlight. Flip submit_to_app_store when ready for review.
+        submit_to_testflight: true
+        submit_to_app_store: false
+
+  # Optional: Android APK for QA (unsigned/debug-friendly unless keystore is configured).
+  android-apk:
+    name: Android APK (CI)
+    instance_type: linux_x2
+    max_build_duration: 60
+    environment:
+      groups:
+        - matchword_app_secrets
+      flutter: stable
+    scripts:
+      - name: Ensure Flutter app/.env
+        script: |
+          set -euo pipefail
+          ENV_FILE="$CM_BUILD_DIR/app/.env"
+          if [ -n "${SUPABASE_URL:-}" ]; then
+            printf '%s\n' \
+              "SUPABASE_URL=${SUPABASE_URL}" \
+              "SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}" \
+              "ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY:-}" \
+              "ELEVENLABS_VOICE_ID=${ELEVENLABS_VOICE_ID:-DHeX7CCuOXUPRpnb0AdT}" \
+              > "$ENV_FILE"
+          elif [ ! -f "$ENV_FILE" ]; then
+            echo "ERROR: add matchword_app_secrets"
+            exit 1
+          fi
+      - name: Set up local.properties
+        script: |
+          echo "flutter.sdk=$HOME/programs/flutter" > "$CM_BUILD_DIR/app/android/local.properties"
+      - name: Get Flutter packages
+        script: |
+          cd "$CM_BUILD_DIR/app"
+          flutter pub get
+      - name: Build release APK
+        script: |
+          cd "$CM_BUILD_DIR/app"
+          flutter build apk --release
+    artifacts:
+      - app/build/app/outputs/flutter-apk/*.apk
