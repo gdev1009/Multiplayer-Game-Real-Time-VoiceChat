@@ -17,6 +17,10 @@ abstract final class PrizeAssets {
   /// Novelty prize shelf — deferred past Phase 1 (Ronna Jul 2026).
   static const showNoveltyPrizes = false;
 
+  /// Full Prize Room screen — Tier 2 / future (Ronna Aug 2026).
+  /// Home uses the compact trophy badge + points popup instead.
+  static const showPrizeRoomEntry = false;
+
   /// Ronna: players need this many trophies for the yearly tournament.
   static const yearlyTournamentTrophyQualifier = 50;
 }

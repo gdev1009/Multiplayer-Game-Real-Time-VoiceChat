@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/navigation/app_routes.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_responsive.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text.dart';
 import '../../core/widgets/app_page.dart';
@@ -62,6 +63,7 @@ class _UpcomingGamesScreenState extends State<UpcomingGamesScreen> {
     return AppPage(
       title: 'Play a Game',
       showBack: true,
+      scrollable: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -194,36 +196,47 @@ class _OpenGameTile extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 56,
-            height: 56,
+            width: AppResponsive.s(context, 56).clamp(48.0, 56.0),
+            height: AppResponsive.s(context, 56).clamp(48.0, 56.0),
             alignment: Alignment.center,
             decoration: BoxDecoration(
               gradient: AppColors.brandGradient,
               borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
             ),
-            child: const Icon(
+            child: Icon(
               Icons.groups_rounded,
               color: Colors.white,
-              size: 30,
+              size: AppResponsive.isNarrow(context) ? 26 : 30,
             ),
           ),
-          const SizedBox(width: AppSpacing.md),
+          SizedBox(
+            width: AppResponsive.isNarrow(context)
+                ? AppSpacing.sm
+                : AppSpacing.md,
+          ),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Game ${game.code}', style: AppText.title),
-                const SizedBox(height: 2),
+                Text(
+                  'Game ${game.code}',
+                  style: AppText.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
                 Text(
                   _playersLabel(game),
                   style: AppText.bodyMuted,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
           ),
           const SizedBox(width: AppSpacing.sm),
           SizedBox(
-            width: 108,
+            width: AppResponsive.isNarrow(context) ? 96 : 112,
             child: BigButton(
               label: 'Join',
               variant: BigButtonVariant.secondary,

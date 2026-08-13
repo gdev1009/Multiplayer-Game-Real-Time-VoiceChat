@@ -13,7 +13,7 @@ class AppSpacing {
   static const double minTapTarget = 48;
 
   /// Standard height for the large primary buttons used across the app.
-  static const double buttonHeight = 64;
+  static const double buttonHeight = 68;
 
   /// Page horizontal padding.
   static const double pagePadding = 24;

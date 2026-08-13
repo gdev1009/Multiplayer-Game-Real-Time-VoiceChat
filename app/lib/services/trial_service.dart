@@ -1,10 +1,8 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-/// Records and checks the device-id trial ledger.
+/// Records and checks the device trial ledger (one free trial per device).
 ///
-/// The ledger lives in the `device_trials` table. The logic runs silently:
-/// when a brand-new account is created we check whether this device has ever
-/// started a trial before. If it has, no new trial is granted.
+/// IP-based checks are held for a later phase (Ronna Aug 2026).
 class TrialService {
   TrialService(this._client);
 
@@ -28,5 +26,13 @@ class TrialService {
       onConflict: 'device_id',
       ignoreDuplicates: true,
     );
+  }
+
+  /// One trial per device. Returns true when a new trial was granted.
+  Future<bool> claimTrial(String deviceId) async {
+    final used = await hasUsedTrial(deviceId);
+    if (used) return false;
+    await recordTrialStart(deviceId);
+    return true;
   }
 }

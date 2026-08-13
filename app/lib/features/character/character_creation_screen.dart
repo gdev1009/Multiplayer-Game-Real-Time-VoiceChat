@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_responsive.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text.dart';
 import '../../core/widgets/app_page.dart';
@@ -102,19 +103,31 @@ class _CharacterCreationScreenState extends State<CharacterCreationScreen> {
       title: 'Character Studio',
       showBack: true,
       onBack: _back,
+      scrollable: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _StepProgress(current: _index, total: _steps.length),
-          const SizedBox(height: AppSpacing.md),
+          SizedBox(
+            height: AppResponsive.isShort(context)
+                ? AppSpacing.sm
+                : AppSpacing.md,
+          ),
           Center(
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 250),
               curve: Curves.easeOut,
-              child: CharacterPreview(character: controller.draft, size: 240),
+              child: CharacterPreview(
+                character: controller.draft,
+                size: AppResponsive.s(context, 240).clamp(160.0, 240.0),
+              ),
             ),
           ),
-          const SizedBox(height: AppSpacing.lg),
+          SizedBox(
+            height: AppResponsive.isShort(context)
+                ? AppSpacing.md
+                : AppSpacing.lg,
+          ),
           Expanded(
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 220),

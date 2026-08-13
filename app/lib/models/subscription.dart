@@ -1,5 +1,5 @@
 /// Monthly Match Word subscription product id (App Store + Play Console).
-const String kMatchWordMonthlyProductId = 'matchword_monthly_599';
+const String kMatchWordMonthlyProductId = 'matchword_monthly_699';
 
 /// Mirrored entitlement row from Supabase `subscriptions`.
 class SubscriptionEntitlement {

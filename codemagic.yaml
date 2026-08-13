@@ -159,9 +159,18 @@ workflows:
         script: |
           cd "$CM_BUILD_DIR/app"
           flutter pub get
-      - name: Build release APK
+      - name: Build universal release APK
         script: |
+          # Fat APK (all ABIs). Do not add --target-platform or --split-per-abi.
+          set -euo pipefail
           cd "$CM_BUILD_DIR/app"
           flutter build apk --release
+          BUILD_NUM="$(grep -E '^version:' pubspec.yaml | head -1 | sed 's/.*+//')"
+          STAMP="$(date +%Y%m%d)"
+          mkdir -p "$CM_BUILD_DIR/apks"
+          cp -f build/app/outputs/flutter-apk/app-release.apk \
+            "$CM_BUILD_DIR/apks/MatchWord-v${BUILD_NUM}Universal-${STAMP}.apk"
+          ls -lh "$CM_BUILD_DIR/apks"/MatchWord-v${BUILD_NUM}Universal-*.apk
     artifacts:
       - app/build/app/outputs/flutter-apk/*.apk
+      - apks/MatchWord-*Universal-*.apk

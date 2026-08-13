@@ -102,6 +102,7 @@ class _JoinPreviewScreenState extends State<JoinPreviewScreen> {
     return AppPage(
       title: 'Join Game',
       showBack: true,
+      scrollable: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -312,8 +313,8 @@ class _Pill extends StatelessWidget {
       child: Text(
         label,
         style: const TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.w700,
+          fontSize: 18,
+          fontWeight: FontWeight.w800,
           color: AppColors.black,
         ),
       ),

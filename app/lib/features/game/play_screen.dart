@@ -317,13 +317,17 @@ class _MatchBody extends StatelessWidget {
         amClueGiver &&
         state.secretWord.trim().isNotEmpty;
 
-    // Bottom dock hugs content (Ronna: Type or Speak, large print — no empty bar).
-    const panelH = 118.0;
+    // Bottom dock hugs content — shorter on narrow/short phones.
+    final narrowPhone = size.width < 400;
+    final shortPhone = size.height < 700;
+    final panelH = narrowPhone
+        ? (shortPhone ? 104.0 : 112.0)
+        : (shortPhone ? 118.0 : 128.0);
     final panelBottom =
         MediaQuery.paddingOf(context).bottom + 6 + viewInsets.bottom * 0.1;
     final dockReserve = panelH + 14 + viewInsets.bottom * 0.12;
 
-    const margin = 10.0;
+    final margin = narrowPhone ? 6.0 : 10.0;
 
     return Stack(
       fit: StackFit.expand,
@@ -543,7 +547,10 @@ class _InputArea extends StatelessWidget {
           ? null
           : () async {
               final a = audio;
+              // Fully release game audio so Android STT can take the mic
+              // (media playback session otherwise steals recognition).
               await a?.beginSpeechInputDuck();
+              await a?.stopAll();
               try {
                 return await speech!.listenForWord();
               } finally {
@@ -633,9 +640,10 @@ class _ResolvedPanel extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Container(
+          width: double.infinity,
           padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.sm,
-            vertical: 10,
+            horizontal: AppSpacing.md,
+            vertical: 12,
           ),
           decoration: BoxDecoration(
             color: guessed ? AppColors.lavenderSoft : AppColors.warmBeige,
@@ -645,51 +653,73 @@ class _ResolvedPanel extends StatelessWidget {
               width: 1.5,
             ),
           ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Icon(
-                guessed ? Icons.stars_rounded : Icons.visibility_rounded,
-                color: guessed ? AppColors.success : AppColors.gold,
-                size: 30,
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: secret.isEmpty
-                    ? Text(
+          child: secret.isEmpty
+              ? Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      guessed
+                          ? Icons.stars_rounded
+                          : Icons.visibility_rounded,
+                      color: guessed ? AppColors.success : AppColors.gold,
+                      size: 28,
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Flexible(
+                      child: Text(
                         headline,
+                        textAlign: TextAlign.center,
                         style: AppText.body.copyWith(
-                          fontSize: 24,
+                          fontSize: 22,
                           fontWeight: FontWeight.w900,
                         ),
-                      )
-                    : Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
+                      ),
+                    ),
+                  ],
+                )
+              : Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          guessed
+                              ? Icons.stars_rounded
+                              : Icons.visibility_rounded,
+                          color:
+                              guessed ? AppColors.success : AppColors.gold,
+                          size: 26,
+                        ),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
                             headline,
+                            textAlign: TextAlign.center,
                             style: AppText.body.copyWith(
-                              fontSize: 20,
+                              fontSize: 18,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
-                          const SizedBox(height: 2),
-                          Text(
-                            '“$secret”',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppText.body.copyWith(
-                              fontSize: 34,
-                              fontWeight: FontWeight.w900,
-                              height: 1.05,
-                              letterSpacing: 0.3,
-                            ),
-                          ),
-                        ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        '“$secret”',
+                        maxLines: 1,
+                        textAlign: TextAlign.center,
+                        style: AppText.body.copyWith(
+                          fontSize: 36,
+                          fontWeight: FontWeight.w900,
+                          height: 1.05,
+                          letterSpacing: 0.4,
+                        ),
                       ),
-              ),
-            ],
-          ),
+                    ),
+                  ],
+                ),
         ),
         const SizedBox(height: AppSpacing.sm),
         BigButton(

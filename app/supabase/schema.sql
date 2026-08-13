@@ -2125,3 +2125,34 @@ comment on function public.mw_game_characters(uuid) is
   'data. Computer seats have no row (the client draws them locally).';
 
 grant execute on function public.mw_game_characters(uuid) to authenticated;
+
+
+-- ============================================================================
+-- 0028_onboarding_seen.sql
+-- ============================================================================
+alter table public.profiles
+  add column if not exists onboarding_seen boolean not null default false;
+
+comment on column public.profiles.onboarding_seen is
+  'True after the player finishes or skips the first-launch walkthrough.';
+
+
+-- ============================================================================
+-- 0029_subscription_product_699.sql
+-- ============================================================================
+alter table public.subscriptions
+  alter column product_id set default 'matchword_monthly_699';
+
+comment on column public.subscriptions.product_id is
+  'Store product. Current paid plan: matchword_monthly_699 ($6.99 CAD/mo).';
+
+
+-- ============================================================================
+-- 0030_device_trials_ip.sql
+-- ============================================================================
+create unique index if not exists device_trials_ip_address_uidx
+  on public.device_trials (ip_address)
+  where ip_address is not null;
+
+comment on table public.device_trials is
+  'One free trial per device_id and per ip_address. Written by claim-trial Edge Function.';

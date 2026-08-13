@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_responsive.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text.dart';
 import '../../core/widgets/app_page.dart';
@@ -35,18 +36,21 @@ class _PrizeRoomScreenState extends State<PrizeRoomScreen> {
     final extraWins = room.winTrophyCount - winCups.length;
 
     return AppPage(
+      scrollable: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
             'Prize Room',
-            style: AppText.display.copyWith(fontSize: 36),
+            style: AppText.display.copyWith(
+              fontSize: AppResponsive.displaySize(context),
+            ),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 6),
           Text(
             _roomBlurb(room),
-            style: AppText.bodyMuted.copyWith(fontSize: 18, height: 1.35),
+            style: AppText.bodyMuted,
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: AppSpacing.md),
@@ -196,8 +200,7 @@ class _Stat extends StatelessWidget {
         const SizedBox(width: 6),
         Text(
           label,
-          style: AppText.bodyMuted.copyWith(
-            fontSize: 16,
+          style: AppText.caption.copyWith(
             fontWeight: FontWeight.w700,
           ),
         ),
@@ -220,10 +223,8 @@ class _TournamentTeaser extends StatelessWidget {
         'Stay tuned — top scorers, you’re invited!',
         textAlign: TextAlign.center,
         style: AppText.bodyMuted.copyWith(
-          fontSize: 17,
-          height: 1.35,
-          fontWeight: FontWeight.w600,
           fontStyle: FontStyle.italic,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );
@@ -250,26 +251,26 @@ class _ShelfSection extends StatelessWidget {
       children: [
         Text(
           title,
-          style: AppText.body.copyWith(
-            fontWeight: FontWeight.w700,
-            fontSize: 18,
-            letterSpacing: 0.6,
-            color: AppColors.textSecondary,
+          style: AppText.title.copyWith(
+            fontSize: 24,
+            color: AppColors.deepPurple,
           ),
         ),
         const SizedBox(height: AppSpacing.sm),
         Container(
-          padding: const EdgeInsets.fromLTRB(12, 18, 12, 14),
+          padding: const EdgeInsets.fromLTRB(14, 20, 14, 16),
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.72),
+            color: Colors.white.withValues(alpha: 0.85),
             borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: AppColors.divider, width: 1.5),
+            boxShadow: AppColors.tileShadow,
           ),
           child: items.isEmpty
               ? Padding(
                   padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
                   child: Text(
                     emptyHint,
-                    style: AppText.bodyMuted.copyWith(fontSize: 18),
+                    style: AppText.bodyMuted,
                     textAlign: TextAlign.center,
                   ),
                 )
@@ -298,9 +299,9 @@ class _ShelfSection extends StatelessWidget {
                           const SizedBox(height: 10),
                           Text(
                             overflowLabel!,
-                            style: AppText.bodyMuted.copyWith(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
+                            style: AppText.caption.copyWith(
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.deepPurple,
                             ),
                           ),
                         ],
@@ -381,21 +382,23 @@ class _ShelfSlot extends StatelessWidget {
         Text(
           item.title,
           style: AppText.body.copyWith(
-            fontSize: 16,
+            fontSize: 18,
             fontWeight: FontWeight.w700,
-            height: 1.2,
+            height: 1.25,
             color: earned ? AppColors.textPrimary : AppColors.textSecondary,
           ),
           textAlign: TextAlign.center,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
         ),
-        const SizedBox(height: 2),
+        const SizedBox(height: 4),
         Text(
           earned ? 'Earned' : 'Locked',
-          style: AppText.bodyMuted.copyWith(
-            fontSize: 14,
-            color: earned ? AppColors.success : AppColors.textSecondary.withValues(alpha: 0.7),
+          style: AppText.caption.copyWith(
+            color: earned
+                ? AppColors.success
+                : AppColors.textSecondary,
+            fontWeight: FontWeight.w700,
           ),
           textAlign: TextAlign.center,
         ),

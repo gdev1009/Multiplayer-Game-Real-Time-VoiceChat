@@ -1,4 +1,4 @@
-/// Match Word free-trial rules (Ronna: 5 days, then $5.99/month).
+/// Match Word free-trial + membership rules.
 class TrialPolicy {
   const TrialPolicy._();
 
@@ -9,6 +9,6 @@ class TrialPolicy {
   /// With a 5-day trial: soft banner on days 1–2, countdown on days 3–5.
   static const int countdownAtOrBelowDays = 3;
 
-  /// Monthly subscription price shown in the paywall and store copy.
-  static const String monthlyPriceLabel = r'$5.99';
+  /// Paid membership price shown in the paywall and store copy.
+  static const String monthlyPriceLabel = r'$6.99 CAD';
 }

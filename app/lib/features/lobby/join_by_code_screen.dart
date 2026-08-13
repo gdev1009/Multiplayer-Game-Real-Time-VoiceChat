@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_responsive.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text.dart';
 import '../../core/widgets/app_page.dart';
@@ -58,13 +59,25 @@ class _JoinByCodeScreenState extends State<JoinByCodeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const SizedBox(height: AppSpacing.md),
+          SizedBox(
+            height: AppResponsive.isShort(context)
+                ? AppSpacing.sm
+                : AppSpacing.md,
+          ),
           const HostGreeting(
             message: 'Type the four numbers your friend shared with you.',
           ),
-          const SizedBox(height: AppSpacing.xl),
+          SizedBox(
+            height: AppResponsive.isShort(context)
+                ? AppSpacing.md
+                : AppSpacing.xl,
+          ),
           _CodeBoxes(code: _code),
-          const SizedBox(height: AppSpacing.xl),
+          SizedBox(
+            height: AppResponsive.isShort(context)
+                ? AppSpacing.md
+                : AppSpacing.xl,
+          ),
           PinPad(
             value: _code,
             onChanged: (v) => setState(() => _code = v),
@@ -92,14 +105,16 @@ class _CodeBoxes extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final boxW = AppResponsive.s(context, 60).clamp(48.0, 60.0);
+    final boxH = AppResponsive.s(context, 76).clamp(56.0, 76.0);
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: List.generate(4, (i) {
         final filled = i < code.length;
         return Container(
           margin: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
-          width: 60,
-          height: 76,
+          width: boxW,
+          height: boxH,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: AppColors.surface,
@@ -111,7 +126,9 @@ class _CodeBoxes extends StatelessWidget {
           ),
           child: Text(
             filled ? code[i] : '',
-            style: AppText.display,
+            style: AppText.display.copyWith(
+              fontSize: AppResponsive.displaySize(context),
+            ),
           ),
         );
       }),

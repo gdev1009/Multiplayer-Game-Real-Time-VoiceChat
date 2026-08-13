@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/navigation/app_routes.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_responsive.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text.dart';
 import '../../core/widgets/app_page.dart';
@@ -46,24 +47,43 @@ class StudioScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final lobby = context.watch<LobbyController>();
 
+    final iconSize = AppResponsive.s(context, 88).clamp(64.0, 88.0);
+
     return AppPage(
       title: 'The Studio',
       showBack: true,
+      scrollable: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const SizedBox(height: AppSpacing.lg),
-          const HostGreeting(
-            message: 'Welcome to the studio! Start your own game and share the '
-                'code with friends, or join a game with a friend\'s code.',
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  SizedBox(
+                    height: AppResponsive.isShort(context)
+                        ? AppSpacing.md
+                        : AppSpacing.lg,
+                  ),
+                  const HostGreeting(
+                    message:
+                        'Welcome to the studio! Start your own game and share the '
+                        'code with friends, or join a game with a friend\'s code.',
+                  ),
+                  SizedBox(
+                    height: AppResponsive.isShort(context)
+                        ? AppSpacing.lg
+                        : AppSpacing.xxl,
+                  ),
+                  Icon(
+                    Icons.theater_comedy_rounded,
+                    size: iconSize,
+                    color: AppColors.gold,
+                  ),
+                ],
+              ),
+            ),
           ),
-          const SizedBox(height: AppSpacing.xxl),
-          const Icon(
-            Icons.theater_comedy_rounded,
-            size: 88,
-            color: AppColors.gold,
-          ),
-          const Spacer(),
           BigButton(
             label: 'Start a New Game',
             icon: Icons.add_circle_outline_rounded,

@@ -77,4 +77,13 @@ class ProfileService {
         .from('profiles')
         .update({'pin_hash': pinHash, 'pin_salt': pinSalt}).eq('id', userId);
   }
+
+  /// Marks the first-launch walkthrough as seen for the signed-in player.
+  Future<void> markOnboardingSeen() async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) return;
+    await _client
+        .from('profiles')
+        .update({'onboarding_seen': true}).eq('id', userId);
+  }
 }

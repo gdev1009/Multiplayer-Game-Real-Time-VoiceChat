@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_responsive.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_text.dart';
 
@@ -33,23 +34,31 @@ class PinPad extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final gap = AppResponsive.isShort(context)
+        ? AppResponsive.s(context, AppSpacing.sm)
+        : AppSpacing.md;
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         _Dots(filled: value.length, total: length),
-        const SizedBox(height: AppSpacing.xl),
-        _padRow(['1', '2', '3']),
-        const SizedBox(height: AppSpacing.md),
-        _padRow(['4', '5', '6']),
-        const SizedBox(height: AppSpacing.md),
-        _padRow(['7', '8', '9']),
-        const SizedBox(height: AppSpacing.md),
-        _padRow(['', '0', '<']),
+        SizedBox(
+          height: AppResponsive.isShort(context)
+              ? AppSpacing.md
+              : AppSpacing.xl,
+        ),
+        _padRow(context, ['1', '2', '3'], gap),
+        SizedBox(height: gap),
+        _padRow(context, ['4', '5', '6'], gap),
+        SizedBox(height: gap),
+        _padRow(context, ['7', '8', '9'], gap),
+        SizedBox(height: gap),
+        _padRow(context, ['', '0', '<'], gap),
       ],
     );
   }
 
-  Widget _padRow(List<String> keys) {
+  Widget _padRow(BuildContext context, List<String> keys, double gap) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
@@ -62,7 +71,7 @@ class PinPad extends StatelessWidget {
               _ => () => _addDigit(key),
             },
           ),
-          if (key != keys.last) const SizedBox(width: AppSpacing.md),
+          if (key != keys.last) SizedBox(width: gap),
         ],
       ],
     );
@@ -77,14 +86,17 @@ class _Dots extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dot = AppResponsive.s(context, 24);
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         for (int i = 0; i < total; i++)
           Container(
-            margin: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-            width: 24,
-            height: 24,
+            margin: EdgeInsets.symmetric(
+              horizontal: AppResponsive.s(context, AppSpacing.sm),
+            ),
+            width: dot,
+            height: dot,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: i < filled ? AppColors.deepPurple : Colors.transparent,
@@ -104,8 +116,11 @@ class _PadKey extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Keep >= 48 tap target; shrink a bit on narrow/short phones so the pad
+    // fits above the keyboard / next button without scrolling off.
+    final keySize = AppResponsive.s(context, 84).clamp(56.0, 84.0);
     if (label.isEmpty) {
-      return const SizedBox(width: 84, height: 84);
+      return SizedBox(width: keySize, height: keySize);
     }
 
     final bool isBackspace = label == '<';
@@ -113,8 +128,8 @@ class _PadKey extends StatelessWidget {
       button: true,
       label: isBackspace ? 'Delete' : label,
       child: SizedBox(
-        width: 84,
-        height: 84,
+        width: keySize,
+        height: keySize,
         child: Material(
           color: AppColors.surface,
           shape: const CircleBorder(
@@ -125,9 +140,17 @@ class _PadKey extends StatelessWidget {
             onTap: onTap,
             child: Center(
               child: isBackspace
-                  ? const Icon(Icons.backspace_outlined,
-                    size: 30, color: AppColors.deepPurple,)
-                  : Text(label, style: AppText.title),
+                  ? Icon(
+                      Icons.backspace_outlined,
+                      size: keySize * 0.36,
+                      color: AppColors.deepPurple,
+                    )
+                  : Text(
+                      label,
+                      style: AppText.title.copyWith(
+                        fontSize: keySize * 0.36,
+                      ),
+                    ),
             ),
           ),
         ),

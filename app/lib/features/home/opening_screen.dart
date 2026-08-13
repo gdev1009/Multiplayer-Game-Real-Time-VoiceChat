@@ -3,23 +3,25 @@ import 'package:provider/provider.dart';
 
 import '../../core/navigation/app_routes.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_responsive.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text.dart';
 import '../../core/widgets/app_page.dart';
 import '../../core/widgets/big_button.dart';
 import '../../core/widgets/host_greeting.dart';
+import '../../models/prize.dart';
 import '../../services/entitlement_service.dart';
 import '../auth/auth_controller.dart';
 import '../character/character_controller.dart';
 import '../character/idle_character_preview.dart';
+import '../prizes/player_trophy_badge.dart';
 import '../prizes/prize_controller.dart';
-import '../prizes/win_trophy_welcome.dart';
 
 /// The Opening screen.
 ///
-/// Shown right after sign-in. Greets the player by name with the show host and
-/// offers the two main actions: *Check Upcoming Games* and *Enter the Studio*.
-/// One clear primary action per button, large targets, high contrast.
+/// Shown right after sign-in. Greets the player by name with a win trophy
+/// badge (tap for points). Primary actions: Upcoming Games + Enter the Studio.
+/// Prize Room and tournaments are later-phase (Ronna Aug 2026).
 class OpeningScreen extends StatefulWidget {
   const OpeningScreen({super.key});
 
@@ -31,7 +33,6 @@ class _OpeningScreenState extends State<OpeningScreen> {
   @override
   void initState() {
     super.initState();
-    // Reload character + prize shelves whenever Opening appears (sign-in home).
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       context.read<CharacterController>().load();
@@ -53,7 +54,6 @@ class _OpeningScreenState extends State<OpeningScreen> {
   Widget build(BuildContext context) {
     final controller = context.watch<AuthController>();
     final profile = controller.profile;
-    // Prefer the character display name over the account first name.
     final characterName =
         context.watch<CharacterController>().saved?.displayName.trim() ?? '';
     final name = characterName.isNotEmpty
@@ -62,52 +62,82 @@ class _OpeningScreenState extends State<OpeningScreen> {
     final trialDays = profile?.trialDaysRemaining ?? 0;
     final entitlement = context.read<EntitlementService>();
     final access = entitlement.evaluate(profile: profile);
+    final prizes = context.watch<PrizeController>();
+
+    final logoH = AppResponsive.s(context, 88).clamp(68.0, 96.0);
+    final gap = AppResponsive.isShort(context) ? AppSpacing.sm : AppSpacing.md;
 
     return AppPage(
+      scrollable: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const SizedBox(height: AppSpacing.md),
-          Image.asset(
-            'assets/images/grandmac-logo.jpg',
-            height: 96,
-            fit: BoxFit.contain,
-            semanticLabel: 'Grandma Mac logo',
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          HostGreeting(
-            message: 'Hello $name! So glad you are here. '
-                'What would you like to do today?',
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Builder(
-            builder: (context) {
-              final prizes = context.watch<PrizeController>();
-              return WinTrophyWelcome(
-                room: prizes.room,
-                loading: prizes.loading,
-              );
-            },
-          ),
-          if (access == AccessLevel.expired) ...[
-            const SizedBox(height: AppSpacing.lg),
-            const _TrialBanner(
-              daysLeft: 0,
-              expired: true,
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SizedBox(
+                    height: AppResponsive.isShort(context)
+                        ? AppSpacing.xs
+                        : AppSpacing.sm,
+                  ),
+                  Image.asset(
+                    'assets/images/grandmac-logo.jpg',
+                    height: logoH,
+                    fit: BoxFit.contain,
+                    semanticLabel: 'Grandma Mac logo',
+                  ),
+                  SizedBox(height: gap),
+                  // Name + win trophy (badge updates automatically after games).
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          name,
+                          style: AppText.display.copyWith(
+                            fontSize: AppResponsive.displaySize(context),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      PlayerTrophyBadge(
+                        room: prizes.room,
+                        loading: prizes.loading,
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: gap),
+                  const HostGreeting(
+                    message: 'So glad you are here. '
+                        'What would you like to do today?',
+                  ),
+                  if (access == AccessLevel.expired) ...[
+                    SizedBox(height: gap),
+                    const _TrialBanner(
+                      daysLeft: 0,
+                      expired: true,
+                    ),
+                  ] else if (trialDays > 0) ...[
+                    SizedBox(height: gap),
+                    _TrialBanner(
+                      daysLeft: trialDays,
+                      countdown: access == AccessLevel.trialCountdown,
+                    ),
+                  ],
+                  SizedBox(height: gap),
+                  _CharacterCard(
+                    onCreate: () => _openCharacterBuilder(edit: false),
+                    onEdit: () => _openCharacterBuilder(edit: true),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                ],
+              ),
             ),
-          ] else if (trialDays > 0) ...[
-            const SizedBox(height: AppSpacing.lg),
-            _TrialBanner(
-              daysLeft: trialDays,
-              countdown: access == AccessLevel.trialCountdown,
-            ),
-          ],
-          const SizedBox(height: AppSpacing.lg),
-          _CharacterCard(
-            onCreate: () => _openCharacterBuilder(edit: false),
-            onEdit: () => _openCharacterBuilder(edit: true),
           ),
-          const Spacer(),
           BigButton(
             label: 'Check Upcoming Games',
             icon: Icons.event_available_rounded,
@@ -119,14 +149,16 @@ class _OpeningScreenState extends State<OpeningScreen> {
             icon: Icons.theater_comedy_rounded,
             onPressed: () => _goPlay(context, access, AppRoutes.studio),
           ),
-          const SizedBox(height: AppSpacing.md),
-          BigButton(
-            label: 'Prize Room',
-            icon: Icons.emoji_events_rounded,
-            onPressed: () =>
-                Navigator.of(context).pushNamed(AppRoutes.prizeRoom),
-          ),
-          const SizedBox(height: AppSpacing.lg),
+          if (PrizeAssets.showPrizeRoomEntry) ...[
+            const SizedBox(height: AppSpacing.md),
+            BigButton(
+              label: 'Prize Room',
+              icon: Icons.emoji_events_rounded,
+              onPressed: () =>
+                  Navigator.of(context).pushNamed(AppRoutes.prizeRoom),
+            ),
+          ],
+          const SizedBox(height: AppSpacing.sm),
           Center(
             child: TextButton.icon(
               onPressed: () => controller.signOut(),
@@ -141,7 +173,6 @@ class _OpeningScreenState extends State<OpeningScreen> {
               ),
             ),
           ),
-          const SizedBox(height: AppSpacing.md),
         ],
       ),
     );
@@ -161,8 +192,6 @@ class _OpeningScreenState extends State<OpeningScreen> {
   }
 }
 
-/// Shows the player's character (or a prompt to make one) with a create/edit
-/// Create or edit the player's character.
 class _CharacterCard extends StatelessWidget {
   const _CharacterCard({required this.onCreate, required this.onEdit});
 
@@ -173,6 +202,7 @@ class _CharacterCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final characters = context.watch<CharacterController>();
     final saved = characters.saved;
+    final avatar = AppResponsive.s(context, 88).clamp(72.0, 92.0);
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -187,22 +217,21 @@ class _CharacterCard extends StatelessWidget {
           if (saved != null)
             IdleCharacterPreview(
               character: saved,
-              size: 92,
-              // Keep a stable look on Home — pose cycling felt like a glitch.
+              size: avatar,
               animatePoses: false,
             )
           else
             Container(
-              width: 92,
-              height: 92,
+              width: avatar,
+              height: avatar,
               decoration: BoxDecoration(
                 gradient: AppColors.stageGradient,
                 borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
                 boxShadow: AppColors.tileShadow,
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.face_retouching_natural,
-                size: 46,
+                size: avatar * 0.5,
                 color: AppColors.deepPurple,
               ),
             ),
@@ -213,13 +242,15 @@ class _CharacterCard extends StatelessWidget {
               children: [
                 Text(
                   saved == null ? 'Make your character' : saved.displayName,
-                  style: AppText.title,
+                  style: AppText.title.copyWith(fontSize: 26),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: AppSpacing.xs),
                 Text(
                   saved == null
                       ? 'Build a fun clay character to play with.'
-                      : 'Tap to change your look.',
+                      : 'Tap Edit to change your look.',
                   style: AppText.bodyMuted,
                 ),
                 const SizedBox(height: AppSpacing.sm),

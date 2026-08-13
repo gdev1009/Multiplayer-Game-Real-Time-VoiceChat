@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_responsive.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text.dart';
 import '../../core/widgets/app_page.dart';
@@ -57,6 +58,7 @@ class LobbyRoomScreen extends StatelessWidget {
       child: AppPage(
         title: 'Game Room',
         showBack: true,
+        scrollable: false,
         onBack: () async {
           await _confirmLeave(context);
           if (context.mounted) Navigator.of(context).pop();
@@ -302,11 +304,11 @@ class _CodeCard extends StatelessWidget {
           const SizedBox(height: AppSpacing.xs),
           Text(
             code,
-            style: const TextStyle(
-              fontSize: 56,
+            style: TextStyle(
+              fontSize: AppResponsive.codeSize(context),
               fontWeight: FontWeight.w800,
               color: Colors.white,
-              letterSpacing: 12,
+              letterSpacing: AppResponsive.isNarrow(context) ? 8 : 12,
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -540,8 +542,8 @@ class _Tag extends StatelessWidget {
       child: Text(
         label,
         style: const TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.w700,
+          fontSize: 18,
+          fontWeight: FontWeight.w800,
           color: AppColors.black,
         ),
       ),

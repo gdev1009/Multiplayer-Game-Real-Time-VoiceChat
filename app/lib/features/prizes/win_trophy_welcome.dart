@@ -45,24 +45,20 @@ class WinTrophyWelcome extends StatelessWidget {
                   children: [
                     Text(
                       count > 0 ? 'Your trophies' : 'Trophies',
-                      style: AppText.title.copyWith(fontSize: 20),
+                      style: AppText.title.copyWith(fontSize: 24),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 6),
                     Text(
                       loading && count == 0
                           ? 'Loading your shelves…'
                           : room.signInTrophyLine,
-                      style: AppText.bodyMuted.copyWith(
-                        fontSize: 16,
-                        height: 1.3,
-                      ),
+                      style: AppText.bodyMuted,
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 8),
                     Text(
                       'Tap to open Prize Room',
-                      style: AppText.bodyMuted.copyWith(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
+                      style: AppText.caption.copyWith(
+                        fontWeight: FontWeight.w800,
                         color: AppColors.deepPurple,
                       ),
                     ),
@@ -157,7 +153,7 @@ class _TrophyPreview extends StatelessWidget {
                   '+${count - show.length}',
                   style: AppText.body.copyWith(
                     color: Colors.white,
-                    fontSize: 12,
+                    fontSize: 16,
                     fontWeight: FontWeight.w800,
                   ),
                 ),

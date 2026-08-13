@@ -13,6 +13,7 @@ class SpeechInputService {
   final SpeechToText _speech = SpeechToText();
   bool _ready = false;
   bool _initAttempted = false;
+  String? _localeId;
 
   bool get isAvailable => _ready;
   bool get isListening => _speech.isListening;
@@ -20,7 +21,7 @@ class SpeechInputService {
   Future<bool> ensureReady() async {
     if (_ready) return true;
     if (_initAttempted && !_ready) {
-      // Allow one more try after a failed init (permission denied then granted).
+      // Allow another try after a failed init (permission denied then granted).
       _initAttempted = false;
     }
     if (_initAttempted) return _ready;
@@ -29,7 +30,12 @@ class SpeechInputService {
       _ready = await _speech.initialize(
         onError: (e) => debugPrint('SpeechInput error: ${e.errorMsg}'),
         onStatus: (s) => debugPrint('SpeechInput status: $s'),
+        // Short finalTimeout so a one-word utterance finishes promptly.
+        finalTimeout: const Duration(milliseconds: 1200),
       );
+      if (_ready) {
+        _localeId = await _pickLocale();
+      }
     } catch (e) {
       debugPrint('SpeechInput init failed: $e');
       _ready = false;
@@ -37,15 +43,38 @@ class SpeechInputService {
     return _ready;
   }
 
+  /// Prefer an English voice pack when present; otherwise OS default.
+  Future<String?> _pickLocale() async {
+    try {
+      final locales = await _speech.locales();
+      if (locales.isEmpty) return null;
+      for (final prefer in ['en_US', 'en_GB', 'en_AU', 'en_CA', 'en_IN']) {
+        for (final loc in locales) {
+          if (loc.localeId == prefer) return prefer;
+        }
+      }
+      for (final loc in locales) {
+        if (loc.localeId.toLowerCase().startsWith('en')) {
+          return loc.localeId;
+        }
+      }
+      return locales.first.localeId;
+    } catch (e) {
+      debugPrint('SpeechInput locales failed: $e');
+      return null;
+    }
+  }
+
   /// Listen for a short phrase and return a cleaned single word, or null.
   Future<String?> listenForWord({
-    Duration listenFor = const Duration(seconds: 8),
-    Duration pauseFor = const Duration(seconds: 3),
+    Duration listenFor = const Duration(seconds: 12),
+    Duration pauseFor = const Duration(milliseconds: 2200),
   }) async {
     if (!await ensureReady()) return null;
 
     if (_speech.isListening) {
       await _speech.stop();
+      await Future<void>.delayed(const Duration(milliseconds: 200));
     }
 
     final done = Completer<String?>();
@@ -63,9 +92,14 @@ class SpeechInputService {
           listenFor: listenFor,
           pauseFor: pauseFor,
           partialResults: true,
-          cancelOnError: true,
-          listenMode: ListenMode.confirmation,
-          localeId: 'en_US',
+          // Keep going through brief noise; our timeout still finishes.
+          cancelOnError: false,
+          // Dictation catches single words more reliably on phones than
+          // confirmation mode (Ronna / mobile: Speak missed words).
+          listenMode: ListenMode.dictation,
+          autoPunctuation: false,
+          enableHapticFeedback: false,
+          localeId: _localeId,
         ),
       );
     } catch (e) {
@@ -75,10 +109,10 @@ class SpeechInputService {
 
     try {
       final heard = await done.future.timeout(
-        listenFor + const Duration(seconds: 1),
+        listenFor + const Duration(seconds: 2),
         onTimeout: () => cleanWord(latest),
       );
-      return heard;
+      return heard ?? cleanWord(latest);
     } finally {
       try {
         if (_speech.isListening) {
@@ -86,7 +120,7 @@ class SpeechInputService {
         }
       } catch (_) {}
       // Give Android a beat to release the mic before game audio resumes.
-      await Future<void>.delayed(const Duration(milliseconds: 250));
+      await Future<void>.delayed(const Duration(milliseconds: 350));
     }
   }
 

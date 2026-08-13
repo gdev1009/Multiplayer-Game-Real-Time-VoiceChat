@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'core/navigation/app_routes.dart';
+import 'core/theme/app_responsive.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/auth_controller.dart';
 import 'features/auth/auth_gate.dart';
@@ -11,6 +12,7 @@ import 'features/friends/friends_screen.dart';
 import 'features/lobby/join_by_code_screen.dart';
 import 'features/lobby/lobby_room_screen.dart';
 import 'features/lobby/upcoming_games_screen.dart';
+import 'features/onboarding/onboarding_controller.dart';
 import 'features/prizes/prize_room_screen.dart';
 import 'features/studio/studio_screen.dart';
 
@@ -28,6 +30,7 @@ class _MatchWordAppState extends State<MatchWordApp> {
     super.initState();
     // Decide the first screen once the first frame is ready.
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<OnboardingController>().load();
       context.read<AuthController>().bootstrap();
     });
   }
@@ -38,6 +41,17 @@ class _MatchWordAppState extends State<MatchWordApp> {
       title: 'Match Word',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
+      builder: (context, child) {
+        // Soft-clamp OS font scaling so layouts stay usable on every phone,
+        // while still allowing a modest accessibility bump.
+        final mq = MediaQuery.of(context);
+        return MediaQuery(
+          data: mq.copyWith(
+            textScaler: AppResponsive.textScalerOf(context),
+          ),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
       home: const AuthGate(),
       routes: {
         AppRoutes.upcomingGames: (_) => const UpcomingGamesScreen(),

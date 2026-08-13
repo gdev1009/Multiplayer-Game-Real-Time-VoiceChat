@@ -570,18 +570,27 @@ class _SeatPod extends StatelessWidget {
     if (state.isResolved || state.isHalftime || state.isOver) return null;
     // Quiet during the opening welcome — no leftover bubbles on stage.
     if (state.wordIndex == 0 && state.feed.isEmpty) return null;
+
+    // Each seat keeps its own latest line for *this* word:
+    // clue stays visible while the partner answers (was vanishing when a
+    // guess/wrong became the global "latest"), and wrong answers stay sticky.
+    PlayEntry? mine;
     for (var i = state.feed.length - 1; i >= 0; i--) {
       final e = state.feed[i];
-      if (e.role != role || e.wordIndex != state.wordIndex) continue;
-      // Hide a stale clue while this seat is composing the next one.
-      if (state.step == TurnStep.awaitingClue &&
-          e.kind == PlayKind.clue &&
-          role == state.clueGiverRole) {
-        return null;
+      if (e.wordIndex == state.wordIndex && e.role == role) {
+        mine = e;
+        break;
       }
-      return e;
     }
-    return null;
+    if (mine == null) return null;
+
+    // Don't show your own prior clue while you're typing the next one.
+    if (state.step == TurnStep.awaitingClue &&
+        mine.kind == PlayKind.clue &&
+        role == state.clueGiverRole) {
+      return null;
+    }
+    return mine;
   }
 
   @override
@@ -693,25 +702,33 @@ class _SeatPod extends StatelessWidget {
 
     if (line == null) return pod;
 
-    // Bubbles sit just under the nameplate, biased inward toward the host so
-    // they never clip off the left/right screen edge (video20).
-    final isTeamB = role.startsWith('B');
-    final bubbleTop = foreground ? height * 0.66 : height * 0.68;
+    // Just under the nameplate (still on the seat art). Too low and the dock
+    // covers lower-row wrong answers so they look like they "vanished".
+    final nameTop =
+        active ? _RefLayout.nameplateTopOn : _RefLayout.nameplateTopOff;
+    final nameH =
+        active ? _RefLayout.nameplateHeightOn : _RefLayout.nameplateHeightOff;
+    // Foreground (lower) seats sit tighter to the dock — keep bubbles higher.
+    final gap = foreground ? 0.008 : 0.018;
+    final bubbleTop = (height * (nameTop + nameH + gap))
+        .clamp(height * 0.66, height * (foreground ? 0.78 : 0.84));
+    final maxBubbleW = (width * 0.96).clamp(110.0, 260.0);
     return Stack(
       clipBehavior: Clip.none,
       children: [
         pod,
         Positioned(
           top: bubbleTop,
-          left: isTeamB ? width * 0.02 : width * 0.08,
-          right: isTeamB ? width * 0.08 : width * 0.02,
+          left: width * 0.04,
+          right: width * 0.04,
           child: Align(
-            alignment: isTeamB ? Alignment.centerRight : Alignment.centerLeft,
-            child: Transform.scale(
-              scale: foreground ? 0.92 : 0.86,
-              alignment:
-                  isTeamB ? Alignment.centerRight : Alignment.centerLeft,
-              child: _PlayerBubble(entry: line),
+            alignment: Alignment.topCenter,
+            child: _PlayerBubble(
+              key: ValueKey(
+                '${line.wordIndex}-${line.kind}-${line.role}-${line.text}',
+              ),
+              entry: line,
+              maxWidth: maxBubbleW,
             ),
           ),
         ),
@@ -772,12 +789,19 @@ class _NameplateText extends StatelessWidget {
 // ─── Speech bubble ───────────────────────────────────────────────────────────
 
 class _PlayerBubble extends StatelessWidget {
-  const _PlayerBubble({required this.entry});
+  const _PlayerBubble({
+    super.key,
+    required this.entry,
+    required this.maxWidth,
+  });
 
   final PlayEntry entry;
+  final double maxWidth;
 
-  static const _tailH = 8.0;
-  static const _radius = 16.0;
+  static const _tailH = 28.0;
+  static const _radius = 18.0;
+  /// Half-width at the base of the upward tail (longer stem stays readable).
+  static const _tailHalfW = 13.0;
 
   @override
   Widget build(BuildContext context) {
@@ -800,34 +824,36 @@ class _PlayerBubble extends StatelessWidget {
             : const Color(0xFFAA5BAC).withValues(alpha: 0.55);
     final raw = entry.text.trim();
     final isTimeout = raw == '…' || raw.toLowerCase() == 'time';
-    final label = entry.kind == PlayKind.clue
-        ? '“$raw”'
-        : isTimeout
-            ? 'TIME'
-            : raw;
+    final label = raw;
 
     final isGuess = entry.kind == PlayKind.guess && !isTimeout;
-    // Guesses read larger for seniors (Ronna); clues stay a bit calmer.
-    final textSize = isGuess ? 36.0 : (isTimeout ? 32.0 : 28.0);
-    final iconSize = isGuess ? 28.0 : 24.0;
-    final maxW = isGuess ? 300.0 : 268.0;
+    // Scale bubble type down on narrow phones so long words still fit.
+    final narrow = MediaQuery.sizeOf(context).width < 380;
+    final targetSize = isGuess
+        ? (narrow ? 36.0 : 44.0)
+        : (isTimeout ? (narrow ? 34.0 : 42.0) : (narrow ? 32.0 : 40.0));
+    final iconSize = isGuess ? (narrow ? 24.0 : 30.0) : (narrow ? 22.0 : 28.0);
 
     return ConstrainedBox(
-      constraints: BoxConstraints(maxWidth: maxW, minWidth: 96),
+      constraints: BoxConstraints(
+        maxWidth: maxWidth,
+        minWidth: 96,
+      ),
       child: CustomPaint(
         painter: _SpeechBubblePainter(
           fill: bg.withValues(alpha: 0.98),
           border: border,
-          borderWidth: correct || wrong ? 2.6 : 1.4,
+          borderWidth: correct || wrong ? 2.4 : 1.4,
           radius: _radius,
           tailHeight: _tailH,
+          tailHalfWidth: _tailHalfW,
         ),
         child: Padding(
-          padding: EdgeInsets.fromLTRB(
-            isGuess ? 14 : 12,
-            (isGuess ? 10 : 8) + _tailH,
-            isGuess ? 14 : 12,
-            isGuess ? 10 : 8,
+          padding: const EdgeInsets.fromLTRB(
+            12,
+            6 + _tailH,
+            12,
+            8,
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -839,20 +865,24 @@ class _PlayerBubble extends StatelessWidget {
                   color: fg,
                   size: iconSize,
                 ),
-                SizedBox(width: isGuess ? 7 : 5),
+                const SizedBox(width: 5),
               ],
               Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  softWrap: false,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppText.body.copyWith(
-                    color: fg,
-                    fontWeight: FontWeight.w900,
-                    fontSize: textSize,
-                    height: 1.0,
-                    letterSpacing: isGuess ? 0.4 : 0,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.center,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    softWrap: false,
+                    textAlign: TextAlign.center,
+                    style: AppText.body.copyWith(
+                      color: fg,
+                      fontWeight: FontWeight.w900,
+                      fontSize: targetSize,
+                      height: 1.0,
+                      letterSpacing: isGuess ? 0.3 : 0,
+                    ),
                   ),
                 ),
               ),
@@ -871,6 +901,7 @@ class _SpeechBubblePainter extends CustomPainter {
     required this.borderWidth,
     required this.radius,
     required this.tailHeight,
+    this.tailHalfWidth = 12.0,
   });
 
   final Color fill;
@@ -878,6 +909,7 @@ class _SpeechBubblePainter extends CustomPainter {
   final double borderWidth;
   final double radius;
   final double tailHeight;
+  final double tailHalfWidth;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -894,7 +926,7 @@ class _SpeechBubblePainter extends CustomPainter {
     );
   }
 
-  /// Bubble body with a short upward tail (sits under the seat).
+  /// Rounded body with a long upward tail aimed at the seat bust.
   Path _path(Size size) {
     final w = size.width;
     final h = size.height;
@@ -902,9 +934,12 @@ class _SpeechBubblePainter extends CustomPainter {
     final top = th;
     final r = radius.clamp(0.0, (h - th) / 2).toDouble();
     final midX = w * 0.5;
-    const tw = 9.0; // short tail half-width
+    final tw = tailHalfWidth.clamp(8.0, w * 0.18);
+    // Slightly flared tip so the long stem still reads at a glance.
+    final tipW = (tw * 0.35).clamp(3.5, 6.0);
     return Path()
       ..moveTo(midX, 0)
+      ..lineTo(midX + tipW, th * 0.35)
       ..lineTo(midX + tw, top)
       ..lineTo(w - r, top)
       ..arcToPoint(Offset(w, top + r), radius: Radius.circular(r))
@@ -915,6 +950,7 @@ class _SpeechBubblePainter extends CustomPainter {
       ..lineTo(0, top + r)
       ..arcToPoint(Offset(r, top), radius: Radius.circular(r))
       ..lineTo(midX - tw, top)
+      ..lineTo(midX - tipW, th * 0.35)
       ..close();
   }
 
@@ -924,7 +960,8 @@ class _SpeechBubblePainter extends CustomPainter {
       old.border != border ||
       old.borderWidth != borderWidth ||
       old.radius != radius ||
-      old.tailHeight != tailHeight;
+      old.tailHeight != tailHeight ||
+      old.tailHalfWidth != tailHalfWidth;
 }
 
 // ─── Contestant bust ─────────────────────────────────────────────────────────

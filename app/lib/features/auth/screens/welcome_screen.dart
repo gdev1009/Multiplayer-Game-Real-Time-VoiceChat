@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_responsive.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text.dart';
 import '../../../core/widgets/app_page.dart';
@@ -13,38 +14,54 @@ class WelcomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final logoH = AppResponsive.s(context, 140).clamp(96.0, 140.0);
+    final displaySize = AppResponsive.displaySize(context);
+
     return AppPage(
+      scrollable: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const SizedBox(height: AppSpacing.xl),
-          Center(
-            child: Image.asset(
-              'assets/images/grandmac-logo.jpg',
-              height: 140,
-              fit: BoxFit.contain,
-              semanticLabel: 'Grandma Mac logo',
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SizedBox(
+                    height: AppResponsive.isShort(context)
+                        ? AppSpacing.md
+                        : AppSpacing.xl,
+                  ),
+                  Center(
+                    child: Image.asset(
+                      'assets/images/grandmac-logo.jpg',
+                      height: logoH,
+                      fit: BoxFit.contain,
+                      semanticLabel: 'Grandma Mac logo',
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  const Text(
+                    'Welcome to',
+                    style: AppText.title,
+                    textAlign: TextAlign.center,
+                  ),
+                  Text(
+                    'Match Word',
+                    style: AppText.display.copyWith(fontSize: displaySize),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  const Text(
+                    'A fun word game where you play with friends, '
+                    'laugh, and connect.',
+                    style: AppText.bodyMuted,
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
             ),
           ),
-          const SizedBox(height: AppSpacing.lg),
-          const Text(
-            'Welcome to',
-            style: AppText.title,
-            textAlign: TextAlign.center,
-          ),
-          const Text(
-            'Match Word',
-            style: AppText.display,
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: AppSpacing.md),
-          const Text(
-            'A fun word game where you play with friends, '
-            'laugh, and connect.',
-            style: AppText.bodyMuted,
-            textAlign: TextAlign.center,
-          ),
-          const Spacer(),
           BigButton(
             label: 'Create My Account',
             icon: Icons.person_add_alt_1,
@@ -68,7 +85,11 @@ class WelcomeScreen extends StatelessWidget {
               );
             },
           ),
-          const SizedBox(height: AppSpacing.xl),
+          SizedBox(
+            height: AppResponsive.isShort(context)
+                ? AppSpacing.md
+                : AppSpacing.xl,
+          ),
         ],
       ),
     );

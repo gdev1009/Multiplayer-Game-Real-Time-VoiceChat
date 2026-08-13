@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_responsive.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text.dart';
 import '../../../core/widgets/app_page.dart';
@@ -61,10 +62,14 @@ class _DailyLoginScreenState extends State<DailyLoginScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const SizedBox(height: AppSpacing.xl),
-          const Icon(
+          SizedBox(
+            height: AppResponsive.isShort(context)
+                ? AppSpacing.md
+                : AppSpacing.xl,
+          ),
+          Icon(
             Icons.waving_hand_rounded,
-            size: 72,
+            size: AppResponsive.s(context, 72).clamp(56.0, 72.0),
             color: AppColors.gold,
           ),
           const SizedBox(height: AppSpacing.md),
@@ -73,14 +78,28 @@ class _DailyLoginScreenState extends State<DailyLoginScreen> {
             style: AppText.title,
             textAlign: TextAlign.center,
           ),
-          Text(name, style: AppText.display, textAlign: TextAlign.center),
-          const SizedBox(height: AppSpacing.lg),
+          Text(
+            name,
+            style: AppText.display.copyWith(
+              fontSize: AppResponsive.displaySize(context),
+            ),
+            textAlign: TextAlign.center,
+          ),
+          SizedBox(
+            height: AppResponsive.isShort(context)
+                ? AppSpacing.md
+                : AppSpacing.lg,
+          ),
           const Text(
             'Enter your 4-number PIN',
             style: AppText.body,
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: AppSpacing.lg),
+          SizedBox(
+            height: AppResponsive.isShort(context)
+                ? AppSpacing.md
+                : AppSpacing.lg,
+          ),
           if (_busy)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: AppSpacing.xxl),

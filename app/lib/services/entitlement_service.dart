@@ -15,11 +15,14 @@ enum AccessLevel {
   /// Paid / grace period from the store entitlement mirror.
   subscribed,
 
-  /// Trial ended and no paid entitlement — soft-gate play.
+  /// Trial ended and not subscribed — play is gated behind the paywall.
   expired,
 }
 
-/// Decides whether the player may start or join a game.
+/// Decides whether the player may enter games / studio.
+///
+/// Launch model (Ronna Aug 2026): free trial, then $6.99 CAD/month.
+/// Ads / free-forever and tournaments are held for a later phase.
 class EntitlementService {
   EntitlementService({
     required ProfileService profileService,
@@ -50,13 +53,12 @@ class EntitlementService {
 
     final days = profile?.trialDaysRemaining ?? 0;
     if (days <= 0) return AccessLevel.expired;
-    // Day-3 through Day-5 of the 5-day trial (Ronna).
     if (days <= TrialPolicy.countdownAtOrBelowDays) {
       return AccessLevel.trialCountdown;
     }
     return AccessLevel.trialEarly;
   }
 
-  /// Whether gameplay (create / join / quick match) is allowed.
+  /// Play / studio require an active trial or paid membership.
   bool canPlay(AccessLevel level) => level != AccessLevel.expired;
 }

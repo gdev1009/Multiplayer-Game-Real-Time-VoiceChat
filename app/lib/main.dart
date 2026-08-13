@@ -10,6 +10,7 @@ import 'features/auth/auth_controller.dart';
 import 'features/character/character_controller.dart';
 import 'features/friends/friend_controller.dart';
 import 'features/lobby/lobby_controller.dart';
+import 'features/onboarding/onboarding_controller.dart';
 import 'features/prizes/prize_controller.dart';
 import 'services/audio_controller.dart';
 import 'services/auth_service.dart';
@@ -20,6 +21,7 @@ import 'services/entitlement_service.dart';
 import 'services/friend_service.dart';
 import 'services/gameplay_service.dart';
 import 'services/lobby_service.dart';
+import 'services/onboarding_service.dart';
 import 'services/prize_service.dart';
 import 'services/profile_service.dart';
 import 'services/speech_input_service.dart';
@@ -61,11 +63,15 @@ Future<void> main() async {
     profileService: profileService,
     billingService: billingService,
   );
+  final onboardingService = OnboardingService(profileService);
 
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthController(authService)),
+        ChangeNotifierProvider(
+          create: (_) => OnboardingController(onboardingService),
+        ),
         ChangeNotifierProvider(
           create: (_) => CharacterController(characterService),
         ),

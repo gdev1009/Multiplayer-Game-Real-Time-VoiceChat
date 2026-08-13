@@ -506,6 +506,8 @@ class MatchEngine {
       exchangeCount: 0,
       pendingClue: null,
       lastOutcome: WordOutcome.none,
+      // Drop prior-word feed so stage bubbles cannot reappear after "Next word".
+      feed: const [],
       hostLine: _clueLine(team, phase, state.names),
     );
   }

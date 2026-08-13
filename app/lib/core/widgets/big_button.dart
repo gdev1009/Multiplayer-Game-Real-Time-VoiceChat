@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_responsive.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_text.dart';
 
@@ -27,6 +28,9 @@ class BigButton extends StatelessWidget {
     final Color foreground =
         isPrimary ? AppColors.onPrimary : AppColors.deepPurple;
     final bool enabled = onPressed != null && !isLoading;
+    final height = AppResponsive.buttonHeight(context);
+    final labelStyle = AppText.action.copyWith(color: foreground);
+    const iconSize = 28.0;
 
     final Widget content = isLoading
         ? const SizedBox(
@@ -41,14 +45,16 @@ class BigButton extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               if (icon != null) ...[
-                Icon(icon, size: 28, color: foreground),
+                Icon(icon, size: iconSize, color: foreground),
                 const SizedBox(width: AppSpacing.sm),
               ],
               Flexible(
                 child: Text(
                   label,
                   textAlign: TextAlign.center,
-                  style: AppText.action.copyWith(color: foreground),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: labelStyle,
                 ),
               ),
             ],
@@ -56,14 +62,14 @@ class BigButton extends StatelessWidget {
 
     return SizedBox(
       width: double.infinity,
-      height: AppSpacing.buttonHeight,
+      height: height,
       child: Semantics(
         button: true,
         label: label,
         child: DecoratedBox(
           decoration: BoxDecoration(
             gradient: isPrimary && enabled ? AppColors.brandGradient : null,
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(20),
             boxShadow: isPrimary && enabled ? AppColors.softShadow : null,
           ),
           child: ElevatedButton(
@@ -76,7 +82,7 @@ class BigButton extends StatelessWidget {
                   isPrimary ? AppColors.divider : Colors.transparent,
               elevation: 0,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(20),
                 side: isPrimary
                     ? BorderSide.none
                     : const BorderSide(color: AppColors.deepPurple, width: 3),

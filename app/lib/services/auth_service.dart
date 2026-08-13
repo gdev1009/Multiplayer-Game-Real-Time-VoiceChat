@@ -82,10 +82,6 @@ class AuthService {
   }) async {
     final deviceId = await _device.deviceId();
 
-    // Silent trial-abuse check: device-id is the primary signal.
-    final trialUsedBefore = await _trials.hasUsedTrial(deviceId);
-    final grantTrial = !trialUsedBefore;
-
     final password = _generatePassword();
 
     final AuthResponse res;
@@ -110,6 +106,9 @@ class AuthService {
     final salt = PinHasher.generateSalt();
     final hash = PinHasher.hash(pin, salt);
 
+    // Device-id trial ledger (IP layer held for a later phase).
+    final grantTrial = await _trials.claimTrial(deviceId);
+
     await _profiles.createProfile(
       userId: user.id,
       firstName: firstName,
@@ -118,10 +117,6 @@ class AuthService {
       pinSalt: salt,
       grantTrial: grantTrial,
     );
-
-    if (grantTrial) {
-      await _trials.recordTrialStart(deviceId);
-    }
 
     await _remember(name: firstName, email: email, password: password);
 

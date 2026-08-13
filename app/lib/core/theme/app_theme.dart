@@ -35,17 +35,18 @@ class AppTheme {
         elevation: 0,
         titleTextStyle: TextStyle(
           fontFamily: 'Roboto',
-          fontSize: 24,
+          fontSize: 26,
           fontWeight: FontWeight.w700,
           color: Colors.white,
+          letterSpacing: 0.1,
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: AppColors.surface,
         contentPadding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
-          vertical: AppSpacing.md,
+          horizontal: AppSpacing.lg,
+          vertical: AppSpacing.md + 2,
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),

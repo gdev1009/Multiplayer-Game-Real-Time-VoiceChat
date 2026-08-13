@@ -14,6 +14,7 @@ class Profile {
     required this.createdAt,
     this.gamesPlayed = 0,
     this.gamesWon = 0,
+    this.onboardingSeen = false,
   });
 
   final String id;
@@ -28,6 +29,9 @@ class Profile {
 
   /// Matches finished on the winning team.
   final int gamesWon;
+
+  /// First-launch walkthrough already finished or skipped.
+  final bool onboardingSeen;
 
   /// Days remaining in the free trial (0 if expired or none).
   int get trialDaysRemaining {
@@ -50,6 +54,7 @@ class Profile {
       createdAt: DateTime.parse(map['created_at'] as String),
       gamesPlayed: (map['games_played'] as num?)?.toInt() ?? 0,
       gamesWon: (map['games_won'] as num?)?.toInt() ?? 0,
+      onboardingSeen: (map['onboarding_seen'] as bool?) ?? false,
     );
   }
 

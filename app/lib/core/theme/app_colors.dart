@@ -27,7 +27,8 @@ class AppColors {
   static const Color primary = deepPurple;
   static const Color onPrimary = Colors.white;
   static const Color textPrimary = black;
-  static const Color textSecondary = Color(0xFF4A4458);
+  /// Darker secondary so muted copy stays readable on warm parchment.
+  static const Color textSecondary = Color(0xFF3A3348);
   static const Color error = Color(0xFFB3261E);
   static const Color success = Color(0xFF2E7D32);
   static const Color divider = Color(0xFFD8CDEA);
