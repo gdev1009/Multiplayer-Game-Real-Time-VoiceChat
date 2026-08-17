@@ -52,38 +52,30 @@ class StudioScreen extends StatelessWidget {
     return AppPage(
       title: 'The Studio',
       showBack: true,
-      scrollable: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                children: [
-                  SizedBox(
-                    height: AppResponsive.isShort(context)
-                        ? AppSpacing.md
-                        : AppSpacing.lg,
-                  ),
-                  const HostGreeting(
-                    message:
-                        'Welcome to the studio! Start your own game and share the '
-                        'code with friends, or join a game with a friend\'s code.',
-                  ),
-                  SizedBox(
-                    height: AppResponsive.isShort(context)
-                        ? AppSpacing.lg
-                        : AppSpacing.xxl,
-                  ),
-                  Icon(
-                    Icons.theater_comedy_rounded,
-                    size: iconSize,
-                    color: AppColors.gold,
-                  ),
-                ],
-              ),
-            ),
+          SizedBox(
+            height: AppResponsive.isShort(context)
+                ? AppSpacing.md
+                : AppSpacing.lg,
           ),
+          const HostGreeting(
+            message:
+                'Welcome to the studio! Start your own game and share the '
+                'code with friends, or join a game with a friend\'s code.',
+          ),
+          SizedBox(
+            height: AppResponsive.isShort(context)
+                ? AppSpacing.lg
+                : AppSpacing.xxl,
+          ),
+          Icon(
+            Icons.theater_comedy_rounded,
+            size: iconSize,
+            color: AppColors.gold,
+          ),
+          const SizedBox(height: AppSpacing.xl),
           BigButton(
             label: 'Start a New Game',
             icon: Icons.add_circle_outline_rounded,

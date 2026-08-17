@@ -40,9 +40,9 @@ class _RefLayout {
   static const seatOverhang = 0.040;
   static const maxSeatWidth = 0.50;
 
-  // Host — room for gesture hand; centered on stage.
+  // Host — room for gesture hand; geometrically centered on stage.
   static const hostWidth = 0.50;
-  static const hostShiftX = 0.02;
+  static const hostShiftX = 0.0;
 
   // Seat nameplates (measured from Seat_on / Seat_off art).
   static const nameplateTopOn = 0.620;
@@ -397,12 +397,130 @@ class StudioStage extends StatelessWidget {
                 seatW: lowerW,
                 seatH: lowerH,
               ),
+
+              // Speech sits on top of Guy so his hand never covers the word.
+              ..._speechOverlays(
+                state: state,
+                stageW: w,
+                aLeft: aLeft,
+                bLeft: bLeft,
+                upperTop: upperTop,
+                lowerTop: lowerTop,
+                seatW: upperW,
+                seatH: upperH,
+                lowerH: lowerH,
+                spotlightHoldRole: spotlightHoldRole,
+              ),
             ],
           );
         },
       ),
     );
   }
+}
+
+List<Widget> _speechOverlays({
+  required MatchState state,
+  required double stageW,
+  required double aLeft,
+  required double bLeft,
+  required double upperTop,
+  required double lowerTop,
+  required double seatW,
+  required double seatH,
+  required double lowerH,
+  String? spotlightHoldRole,
+}) {
+  Widget? bubble({
+    required String role,
+    required double left,
+    required double top,
+    required double h,
+    required bool foreground,
+  }) {
+    final line = _lineForSeat(state, role);
+    if (line == null) return null;
+
+    // Same as v69: just under the nameplate on the seat art — not over faces.
+    final active =
+        _seatIsActive(state, role, spotlightHoldRole: spotlightHoldRole);
+    final nameTop =
+        active ? _RefLayout.nameplateTopOn : _RefLayout.nameplateTopOff;
+    final nameH =
+        active ? _RefLayout.nameplateHeightOn : _RefLayout.nameplateHeightOff;
+    final gap = foreground ? 0.008 : 0.018;
+    final bubbleTop = (top + h * (nameTop + nameH + gap))
+        .clamp(top + h * 0.66, top + h * (foreground ? 0.78 : 0.84))
+        .toDouble();
+
+    final maxBubbleW = (seatW * 0.96).clamp(110.0, 260.0).toDouble();
+    var x = left + seatW * 0.04;
+    final maxX = math.max(4.0, stageW - maxBubbleW - 4.0);
+    x = x.clamp(4.0, maxX).toDouble();
+
+    return Positioned(
+      left: x,
+      width: seatW * 0.92,
+      top: bubbleTop,
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: _PlayerBubble(
+          key: ValueKey(
+            '${line.wordIndex}-${line.kind}-${line.role}-${line.text}',
+          ),
+          entry: line,
+          maxWidth: maxBubbleW,
+        ),
+      ),
+    );
+  }
+
+  return [
+    for (final item in <Widget?>[
+      bubble(
+        role: 'A1',
+        left: aLeft,
+        top: upperTop,
+        h: seatH,
+        foreground: false,
+      ),
+      bubble(
+        role: 'B1',
+        left: bLeft,
+        top: upperTop,
+        h: seatH,
+        foreground: false,
+      ),
+      bubble(
+        role: 'A2',
+        left: aLeft,
+        top: lowerTop,
+        h: lowerH,
+        foreground: true,
+      ),
+      bubble(
+        role: 'B2',
+        left: bLeft,
+        top: lowerTop,
+        h: lowerH,
+        foreground: true,
+      ),
+    ])
+      if (item != null) item,
+  ];
+}
+
+bool _seatIsActive(MatchState state, String role, {String? spotlightHoldRole}) {
+  final hold = spotlightHoldRole;
+  if (hold != null) return role == hold;
+  if (!state.isTurnActive) return false;
+  if (state.step == TurnStep.awaitingClue) {
+    return role == state.clueGiverRole;
+  }
+  if (state.step == TurnStep.awaitingGuess) {
+    return role == state.guesserRole;
+  }
+  return false;
 }
 
 // ─── Score digits (frames baked into Studio_background) ─────────────────────
@@ -533,6 +651,26 @@ class _SevenSegPainter extends CustomPainter {
 
 // ─── Seat pod (Seat_on / Seat_off + avatar + name text) ─────────────────────
 
+PlayEntry? _lineForSeat(MatchState state, String role) {
+  if (state.isResolved || state.isHalftime || state.isOver) return null;
+  if (state.wordIndex == 0 && state.feed.isEmpty) return null;
+  PlayEntry? mine;
+  for (var i = state.feed.length - 1; i >= 0; i--) {
+    final e = state.feed[i];
+    if (e.wordIndex == state.wordIndex && e.role == role) {
+      mine = e;
+      break;
+    }
+  }
+  if (mine == null) return null;
+  if (state.step == TurnStep.awaitingClue &&
+      mine.kind == PlayKind.clue &&
+      role == state.clueGiverRole) {
+    return null;
+  }
+  return mine;
+}
+
 class _SeatPod extends StatelessWidget {
   const _SeatPod({
     required this.state,
@@ -566,39 +704,11 @@ class _SeatPod extends StatelessWidget {
     return false;
   }
 
-  PlayEntry? get _line {
-    if (state.isResolved || state.isHalftime || state.isOver) return null;
-    // Quiet during the opening welcome — no leftover bubbles on stage.
-    if (state.wordIndex == 0 && state.feed.isEmpty) return null;
-
-    // Each seat keeps its own latest line for *this* word:
-    // clue stays visible while the partner answers (was vanishing when a
-    // guess/wrong became the global "latest"), and wrong answers stay sticky.
-    PlayEntry? mine;
-    for (var i = state.feed.length - 1; i >= 0; i--) {
-      final e = state.feed[i];
-      if (e.wordIndex == state.wordIndex && e.role == role) {
-        mine = e;
-        break;
-      }
-    }
-    if (mine == null) return null;
-
-    // Don't show your own prior clue while you're typing the next one.
-    if (state.step == TurnStep.awaitingClue &&
-        mine.kind == PlayKind.clue &&
-        role == state.clueGiverRole) {
-      return null;
-    }
-    return mine;
-  }
-
   @override
   Widget build(BuildContext context) {
     final name = state.names[role] ?? role;
     final team = role.isNotEmpty ? role[0] : '?';
     final active = _active;
-    final line = _line;
 
     final artW = active ? _RefLayout.seatOnW : _RefLayout.seatOffW;
     final artH = active ? _RefLayout.seatOnH : _RefLayout.seatOffH;
@@ -700,40 +810,7 @@ class _SeatPod extends StatelessWidget {
       ),
     );
 
-    if (line == null) return pod;
-
-    // Just under the nameplate (still on the seat art). Too low and the dock
-    // covers lower-row wrong answers so they look like they "vanished".
-    final nameTop =
-        active ? _RefLayout.nameplateTopOn : _RefLayout.nameplateTopOff;
-    final nameH =
-        active ? _RefLayout.nameplateHeightOn : _RefLayout.nameplateHeightOff;
-    // Foreground (lower) seats sit tighter to the dock — keep bubbles higher.
-    final gap = foreground ? 0.008 : 0.018;
-    final bubbleTop = (height * (nameTop + nameH + gap))
-        .clamp(height * 0.66, height * (foreground ? 0.78 : 0.84));
-    final maxBubbleW = (width * 0.96).clamp(110.0, 260.0);
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        pod,
-        Positioned(
-          top: bubbleTop,
-          left: width * 0.04,
-          right: width * 0.04,
-          child: Align(
-            alignment: Alignment.topCenter,
-            child: _PlayerBubble(
-              key: ValueKey(
-                '${line.wordIndex}-${line.kind}-${line.role}-${line.text}',
-              ),
-              entry: line,
-              maxWidth: maxBubbleW,
-            ),
-          ),
-        ),
-      ],
-    );
+    return pod;
   }
 }
 
@@ -798,10 +875,10 @@ class _PlayerBubble extends StatelessWidget {
   final PlayEntry entry;
   final double maxWidth;
 
-  static const _tailH = 28.0;
-  static const _radius = 18.0;
+  static const _tailH = 14.0;
+  static const _radius = 16.0;
   /// Half-width at the base of the upward tail (longer stem stays readable).
-  static const _tailHalfW = 13.0;
+  static const _tailHalfW = 10.0;
 
   @override
   Widget build(BuildContext context) {
@@ -837,7 +914,7 @@ class _PlayerBubble extends StatelessWidget {
     return ConstrainedBox(
       constraints: BoxConstraints(
         maxWidth: maxWidth,
-        minWidth: 96,
+        minWidth: math.min(96.0, maxWidth),
       ),
       child: CustomPaint(
         painter: _SpeechBubblePainter(

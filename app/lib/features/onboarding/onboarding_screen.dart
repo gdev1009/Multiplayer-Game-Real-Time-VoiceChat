@@ -63,7 +63,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     ),
   ];
 
-  final _pager = PageController();
   int _index = 0;
 
   bool get _isLast => _index >= _pages.length - 1;
@@ -77,24 +76,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       _finish();
       return;
     }
-    _pager.nextPage(
-      duration: const Duration(milliseconds: 280),
-      curve: Curves.easeOutCubic,
-    );
-  }
-
-  @override
-  void dispose() {
-    _pager.dispose();
-    super.dispose();
+    setState(() => _index++);
   }
 
   @override
   Widget build(BuildContext context) {
     final iconSize = AppResponsive.s(context, 88).clamp(64.0, 96.0);
+    final p = _pages[_index];
 
     return AppPage(
-      scrollable: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -105,6 +95,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               style: TextButton.styleFrom(
                 foregroundColor: AppColors.deepPurple,
                 minimumSize: const Size(64, 48),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
               child: Text(
                 OnboardingCopy.skip,
@@ -112,68 +103,52 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
             ),
           ),
-          Expanded(
-            child: PageView.builder(
-              controller: _pager,
-              itemCount: _pages.length,
-              onPageChanged: (i) => setState(() => _index = i),
-              itemBuilder: (context, i) {
-                final p = _pages[i];
-                return SingleChildScrollView(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: Column(
-                      children: [
-                        SizedBox(
-                          height: AppResponsive.isShort(context)
-                              ? AppSpacing.sm
-                              : AppSpacing.lg,
-                        ),
-                        if (p.showTrophy)
-                          _TrophyDemo(size: iconSize)
-                        else
-                          Container(
-                            width: iconSize + 24,
-                            height: iconSize + 24,
-                            decoration: BoxDecoration(
-                              color: AppColors.lavenderSoft,
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: AppColors.divider,
-                                width: 2,
-                              ),
-                            ),
-                            child: Icon(
-                              p.icon,
-                              size: iconSize * 0.55,
-                              color: AppColors.gold,
-                            ),
-                          ),
-                        SizedBox(
-                          height: AppResponsive.isShort(context)
-                              ? AppSpacing.md
-                              : AppSpacing.xl,
-                        ),
-                        Text(
-                          p.title,
-                          style: AppText.display.copyWith(
-                            fontSize: AppResponsive.displaySize(context),
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: AppSpacing.md),
-                        Text(
-                          p.body,
-                          style: AppText.body,
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
+          SizedBox(
+            height: AppResponsive.isShort(context)
+                ? AppSpacing.sm
+                : AppSpacing.lg,
           ),
+          if (p.showTrophy)
+            Center(child: _TrophyDemo(size: iconSize))
+          else
+            Center(
+              child: Container(
+                width: iconSize + 24,
+                height: iconSize + 24,
+                decoration: BoxDecoration(
+                  color: AppColors.lavenderSoft,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: AppColors.divider,
+                    width: 2,
+                  ),
+                ),
+                child: Icon(
+                  p.icon,
+                  size: iconSize * 0.55,
+                  color: AppColors.gold,
+                ),
+              ),
+            ),
+          SizedBox(
+            height: AppResponsive.isShort(context)
+                ? AppSpacing.md
+                : AppSpacing.xl,
+          ),
+          Text(
+            p.title,
+            style: AppText.display.copyWith(
+              fontSize: AppResponsive.displaySize(context),
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            p.body,
+            style: AppText.body,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: AppSpacing.xl),
           Text(
             '${_index + 1} ${OnboardingCopy.pageOf} ${_pages.length}',
             style: AppText.caption,
@@ -223,13 +198,15 @@ class _TrophyDemo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Small corner badge — never a full-width purple bar (Ronna feedback).
     return SizedBox(
-      width: size + 16,
-      height: size + 16,
+      width: size + 8,
+      height: size + 8,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          Center(
+          Align(
+            alignment: Alignment.center,
             child: Container(
               width: size,
               height: size,
@@ -255,11 +232,11 @@ class _TrophyDemo extends StatelessWidget {
             right: 0,
             top: 0,
             child: Container(
-              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+              width: 28,
+              height: 28,
               decoration: BoxDecoration(
                 color: AppColors.deepPurple,
-                borderRadius: BorderRadius.circular(14),
+                shape: BoxShape.circle,
                 border: Border.all(color: Colors.white, width: 2),
               ),
               alignment: Alignment.center,
@@ -268,7 +245,8 @@ class _TrophyDemo extends StatelessWidget {
                 style: AppText.caption.copyWith(
                   color: Colors.white,
                   fontWeight: FontWeight.w900,
-                  fontSize: 16,
+                  fontSize: 14,
+                  height: 1,
                 ),
               ),
             ),

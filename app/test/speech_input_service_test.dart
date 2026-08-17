@@ -9,6 +9,11 @@ void main() {
       expect(SpeechInputService.cleanWord('snowman!'), 'Snowman');
     });
 
+    test('skips filler words like um / the', () {
+      expect(SpeechInputService.cleanWord('um lemon'), 'Lemon');
+      expect(SpeechInputService.cleanWord('the squirrel please'), 'Squirrel');
+    });
+
     test('returns null for empty / punctuation-only input', () {
       expect(SpeechInputService.cleanWord(''), isNull);
       expect(SpeechInputService.cleanWord('   '), isNull);

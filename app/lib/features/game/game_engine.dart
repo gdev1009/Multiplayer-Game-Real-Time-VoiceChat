@@ -350,7 +350,7 @@ class MatchEngine {
         pendingClue: null,
         feed: feed,
         lastOutcome: WordOutcome.revealed,
-        hostLine: 'Time’s up! The word was “${state.secretWord}”. No points.',
+        hostLine: 'Time’s up! The word was ${state.secretWord}. No points.',
       );
     }
     final nextTeam = state.cluingTeam == 'A' ? 'B' : 'A';
@@ -393,7 +393,7 @@ class MatchEngine {
       final gained = state.wordValue;
       final scoreA = state.scoreA + (state.cluingTeam == 'A' ? gained : 0);
       final scoreB = state.scoreB + (state.cluingTeam == 'B' ? gained : 0);
-      final line = 'Team ${state.cluingTeam} guessed “${state.secretWord}”! '
+      final line = 'Team ${state.cluingTeam} guessed ${state.secretWord}! '
           '+$gained ${gained == 1 ? 'point' : 'points'}.';
       return state.copyWith(
         scoreA: scoreA,
@@ -409,7 +409,7 @@ class MatchEngine {
     // Wrong guess or foul — spend an exchange.
     final used = state.exchangeCount + 1;
     if (used >= state.config.maxExchanges) {
-      final line = 'Time’s up! The word was “${state.secretWord}”. No points.';
+      final line = 'Time’s up! The word was ${state.secretWord}. No points.';
       return state.copyWith(
         exchangeCount: used,
         step: TurnStep.resolved,

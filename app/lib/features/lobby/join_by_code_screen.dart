@@ -8,6 +8,7 @@ import '../../core/theme/app_text.dart';
 import '../../core/widgets/app_page.dart';
 import '../../core/widgets/big_button.dart';
 import '../../core/widgets/host_greeting.dart';
+import '../../core/widgets/outlined_glyph.dart';
 import '../../core/widgets/pin_pad.dart';
 import 'join_preview_screen.dart';
 import 'lobby_controller.dart';
@@ -25,12 +26,11 @@ class _JoinByCodeScreenState extends State<JoinByCodeScreen> {
 
   Future<void> _submit() async {
     final lobby = context.read<LobbyController>();
-    // Peek first so the player can see who's already in the game (and which
-    // team they'll land on) before committing to join.
     final preview = await lobby.peekByCode(_code);
     if (!mounted) return;
     if (preview != null) {
-      Navigator.of(context).push(
+      setState(() => _code = '');
+      await Navigator.of(context).push(
         MaterialPageRoute<void>(
           builder: (_) => JoinPreviewScreen(preview: preview),
         ),
@@ -59,25 +59,13 @@ class _JoinByCodeScreenState extends State<JoinByCodeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SizedBox(
-            height: AppResponsive.isShort(context)
-                ? AppSpacing.sm
-                : AppSpacing.md,
-          ),
+          const SizedBox(height: AppSpacing.sm),
           const HostGreeting(
             message: 'Type the four numbers your friend shared with you.',
           ),
-          SizedBox(
-            height: AppResponsive.isShort(context)
-                ? AppSpacing.md
-                : AppSpacing.xl,
-          ),
+          const SizedBox(height: AppSpacing.md),
           _CodeBoxes(code: _code),
-          SizedBox(
-            height: AppResponsive.isShort(context)
-                ? AppSpacing.md
-                : AppSpacing.xl,
-          ),
+          const SizedBox(height: AppSpacing.md),
           PinPad(
             value: _code,
             onChanged: (v) => setState(() => _code = v),
@@ -87,8 +75,7 @@ class _JoinByCodeScreenState extends State<JoinByCodeScreen> {
             label: 'See the Game',
             icon: Icons.arrow_forward_rounded,
             isLoading: lobby.busy,
-            onPressed:
-                (!complete || lobby.busy) ? null : _submit,
+            onPressed: (!complete || lobby.busy) ? null : _submit,
           ),
           const SizedBox(height: AppSpacing.md),
         ],
@@ -97,7 +84,6 @@ class _JoinByCodeScreenState extends State<JoinByCodeScreen> {
   }
 }
 
-/// Shows the entered digits as four large boxes.
 class _CodeBoxes extends StatelessWidget {
   const _CodeBoxes({required this.code});
 
@@ -105,8 +91,9 @@ class _CodeBoxes extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final boxW = AppResponsive.s(context, 60).clamp(48.0, 60.0);
-    final boxH = AppResponsive.s(context, 76).clamp(56.0, 76.0);
+    final boxW = AppResponsive.s(context, 52).clamp(44.0, 56.0);
+    final boxH = AppResponsive.s(context, 64).clamp(52.0, 68.0);
+    final digitSize = AppResponsive.s(context, 28).clamp(24.0, 30.0);
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: List.generate(4, (i) {
@@ -118,18 +105,18 @@ class _CodeBoxes extends StatelessWidget {
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: AppColors.surface,
-            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+            borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
             border: Border.all(
               color: filled ? AppColors.deepPurple : AppColors.lavender,
-              width: 2.5,
+              width: 2,
             ),
           ),
-          child: Text(
-            filled ? code[i] : '',
-            style: AppText.display.copyWith(
-              fontSize: AppResponsive.displaySize(context),
-            ),
-          ),
+          child: filled
+              ? OutlinedGlyph(
+                  code[i],
+                  style: AppText.display.copyWith(fontSize: digitSize),
+                )
+              : null,
         );
       }),
     );

@@ -10,6 +10,7 @@ import '../../core/theme/app_text.dart';
 import '../../core/widgets/app_page.dart';
 import '../../core/widgets/big_button.dart';
 import '../../core/widgets/host_greeting.dart';
+import '../../core/widgets/outlined_glyph.dart';
 import '../../models/character.dart';
 import '../../models/game.dart';
 import '../../models/game_player.dart';
@@ -58,7 +59,6 @@ class LobbyRoomScreen extends StatelessWidget {
       child: AppPage(
         title: 'Game Room',
         showBack: true,
-        scrollable: false,
         onBack: () async {
           await _confirmLeave(context);
           if (context.mounted) Navigator.of(context).pop();
@@ -160,45 +160,37 @@ class _LobbyBodyState extends State<_LobbyBody> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const SizedBox(height: AppSpacing.md),
+        const SizedBox(height: AppSpacing.sm),
         HostGreeting(
           message: isHost
               ? 'Welcome, $name! Share your code so friends can join.'
               : 'Welcome, $name! Waiting for the game to start.',
         ),
-        const SizedBox(height: AppSpacing.lg),
+        const SizedBox(height: AppSpacing.md),
         _CodeCard(code: game.code),
-        const SizedBox(height: AppSpacing.lg),
+        const SizedBox(height: AppSpacing.md),
         if (lobby.awaitingFill) ...[
           _LookingForPlayers(secondsLeft: lobby.fillSecondsLeft),
-          const SizedBox(height: AppSpacing.lg),
+          const SizedBox(height: AppSpacing.md),
         ],
-        Expanded(
-          child: SingleChildScrollView(
-            child: Column(
-              children: [
-                _TeamCard(
-                  team: 'A',
-                  seats: const [0, 2],
-                  players: lobby.players,
-                  maxPlayers: game.maxPlayers,
-                  characters: _characters,
-                  rosterLooks: rosterLooks,
-                ),
-                const SizedBox(height: AppSpacing.md),
-                _TeamCard(
-                  team: 'B',
-                  seats: const [1, 3],
-                  players: lobby.players,
-                  maxPlayers: game.maxPlayers,
-                  characters: _characters,
-                  rosterLooks: rosterLooks,
-                ),
-              ],
-            ),
-          ),
+        _TeamCard(
+          team: 'A',
+          seats: const [0, 2],
+          players: lobby.players,
+          maxPlayers: game.maxPlayers,
+          characters: _characters,
+          rosterLooks: rosterLooks,
         ),
-        const SizedBox(height: AppSpacing.md),
+        const SizedBox(height: AppSpacing.sm),
+        _TeamCard(
+          team: 'B',
+          seats: const [1, 3],
+          players: lobby.players,
+          maxPlayers: game.maxPlayers,
+          characters: _characters,
+          rosterLooks: rosterLooks,
+        ),
+        const SizedBox(height: AppSpacing.lg),
         if (isHost) ...[
           if (!lobby.isFull)
             BigButton(
@@ -210,7 +202,7 @@ class _LobbyBodyState extends State<_LobbyBody> {
                   ? null
                   : () => _run(context, () => lobby.fillSeats()),
             ),
-          const SizedBox(height: AppSpacing.md),
+          if (!lobby.isFull) const SizedBox(height: AppSpacing.sm),
           BigButton(
             label: 'Start Game',
             icon: Icons.play_arrow_rounded,
@@ -284,71 +276,69 @@ class _CodeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final codeSize = AppResponsive.s(context, 40).clamp(32.0, 44.0);
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.lg),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
       decoration: BoxDecoration(
         gradient: AppColors.brandGradient,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
         boxShadow: AppColors.softShadow,
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           const Text(
             'Your game code',
             style: TextStyle(
-              fontSize: 20,
+              fontSize: 14,
               fontWeight: FontWeight.w600,
               color: Colors.white,
             ),
           ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
+          const SizedBox(height: 4),
+          OutlinedGlyph(
             code,
             style: TextStyle(
-              fontSize: AppResponsive.codeSize(context),
+              fontSize: codeSize,
               fontWeight: FontWeight.w800,
-              color: Colors.white,
-              letterSpacing: AppResponsive.isNarrow(context) ? 8 : 12,
+              letterSpacing: AppResponsive.isNarrow(context) ? 6 : 10,
+              height: 1.05,
             ),
+            fillColor: Colors.white,
+            outlineColor: const Color(0xFF1A1028),
+            outlineWidth: 2,
           ),
-          const SizedBox(height: AppSpacing.sm),
-          Wrap(
-            alignment: WrapAlignment.center,
-            spacing: AppSpacing.sm,
+          const SizedBox(height: 2),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               TextButton.icon(
                 onPressed: () => _shareCode(context),
-                icon: const Icon(Icons.ios_share_rounded,
-                    color: Colors.white, size: 24,),
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  visualDensity: VisualDensity.compact,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                icon: const Icon(Icons.ios_share_rounded, size: 18),
                 label: const Text(
-                  'Share code',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                  ),
+                  'Share',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                 ),
               ),
               TextButton.icon(
-                onPressed: () {
-                  Clipboard.setData(ClipboardData(text: code));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Code copied', style: AppText.body),
-                      behavior: SnackBarBehavior.floating,
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.copy_rounded,
-                    color: Colors.white, size: 24,),
+                onPressed: () => _copyCode(context),
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  visualDensity: VisualDensity.compact,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                icon: const Icon(Icons.copy_rounded, size: 18),
                 label: const Text(
-                  'Copy code',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                  ),
+                  'Copy',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                 ),
               ),
             ],
@@ -358,17 +348,25 @@ class _CodeCard extends StatelessWidget {
     );
   }
 
-  /// Opens the native share sheet so the host can send the code by text,
-  /// email, or any messaging app — "share outside the app" per the spec.
   Future<void> _shareCode(BuildContext context) async {
     final box = context.findRenderObject() as RenderBox?;
     await Share.share(
       'Join my Match Word game! Open Match Word, tap "Join with a Code", '
       'and enter $code.',
       subject: 'Match Word game code: $code',
-      // Anchor the iPad share popover to this card.
       sharePositionOrigin:
           box == null ? null : box.localToGlobal(Offset.zero) & box.size,
+    );
+  }
+
+  void _copyCode(BuildContext context) {
+    Clipboard.setData(ClipboardData(text: code));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Code copied', style: AppText.body),
+        behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: 2),
+      ),
     );
   }
 }
@@ -599,25 +597,41 @@ class _StartingPanelState extends State<_StartingPanel> {
 
   @override
   Widget build(BuildContext context) {
-    return const Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Spacer(),
-        Icon(Icons.celebration_rounded, size: 96, color: AppColors.gold),
-        SizedBox(height: AppSpacing.lg),
-        Text(
-          'The game is starting!',
-          style: AppText.display,
-          textAlign: TextAlign.center,
+    // AppPage is scrollable, so Spacer() collapses — size to the viewport
+    // and truly center the message.
+    final media = MediaQuery.of(context);
+    final minH = (media.size.height -
+            media.padding.top -
+            media.padding.bottom -
+            kToolbarHeight -
+            48)
+        .clamp(280.0, media.size.height);
+
+    return SizedBox(
+      height: minH,
+      child: const Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.celebration_rounded, size: 72, color: AppColors.gold),
+              SizedBox(height: AppSpacing.md),
+              Text(
+                'The game is starting!',
+                style: AppText.display,
+                textAlign: TextAlign.center,
+              ),
+              SizedBox(height: AppSpacing.sm),
+              Text(
+                'Everyone is in. Get ready to play Match Word!',
+                style: AppText.bodyMuted,
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
         ),
-        SizedBox(height: AppSpacing.md),
-        Text(
-          'Everyone is in. Get ready to play Match Word!',
-          style: AppText.bodyMuted,
-          textAlign: TextAlign.center,
-        ),
-        Spacer(),
-      ],
+      ),
     );
   }
 }

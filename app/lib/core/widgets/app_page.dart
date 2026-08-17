@@ -45,6 +45,8 @@ class AppPage extends StatelessWidget {
     return Scaffold(
       // Opaque so a disposed play route can never show through Home.
       backgroundColor: AppColors.deepPurpleDark,
+      // Keep the studio at full height while typing — never shrink seats/Guy.
+      resizeToAvoidBottomInset: !studioFocus,
       appBar: (studioFocus ||
               (title == null && !(actionsOnlyBar && actions != null)))
           ? null
@@ -93,8 +95,9 @@ class AppPage extends StatelessWidget {
               : AppColors.pageGradient,
         ),
         child: SafeArea(
-          // Studio is full-bleed; only keep the home-indicator inset.
-          top: false,
+          // Live play is full-bleed under the status bar; other screens
+          // keep top inset so Skip / titles never sit under the notch.
+          top: !studioFocus,
           bottom: true,
           minimum: EdgeInsets.zero,
           child: studioFocus
@@ -161,12 +164,22 @@ class _PageBody extends StatelessWidget {
         return SingleChildScrollView(
           padding: insets,
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          physics: const AlwaysScrollableScrollPhysics(),
           child: ConstrainedBox(
             constraints: BoxConstraints(
+              minWidth: constraints.maxWidth,
               minHeight: (constraints.maxHeight - insets.vertical)
                   .clamp(0.0, double.infinity),
             ),
-            child: IntrinsicHeight(child: content),
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  maxWidth: AppResponsive.contentMaxWidth,
+                ),
+                child: child,
+              ),
+            ),
           ),
         );
       },

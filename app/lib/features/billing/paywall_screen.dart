@@ -47,35 +47,26 @@ class _PaywallScreenState extends State<PaywallScreen> {
             'whenever you are ready.';
 
     return AppPage(
-      scrollable: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const SizedBox(height: AppSpacing.md),
-                  Text(
-                    'Keep playing Match Word',
-                    style: AppText.display.copyWith(
-                      fontSize: AppResponsive.displaySize(context),
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: AppSpacing.lg),
-                  HostGreeting(message: greeting),
-                  const SizedBox(height: AppSpacing.lg),
-                  const Text(
-                    '${TrialPolicy.monthlyPriceLabel} per month · Cancel anytime in your store account',
-                    style: AppText.bodyMuted,
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            'Keep playing Match Word',
+            style: AppText.display.copyWith(
+              fontSize: AppResponsive.displaySize(context),
             ),
+            textAlign: TextAlign.center,
           ),
+          const SizedBox(height: AppSpacing.lg),
+          HostGreeting(message: greeting),
+          const SizedBox(height: AppSpacing.lg),
+          const Text(
+            '${TrialPolicy.monthlyPriceLabel} per month · Cancel anytime in your store account',
+            style: AppText.bodyMuted,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: AppSpacing.xl),
           if (_message != null) ...[
             Text(
               _message!,

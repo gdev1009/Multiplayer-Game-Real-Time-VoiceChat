@@ -98,57 +98,77 @@ class _CharacterCreationScreenState extends State<CharacterCreationScreen> {
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<CharacterController>();
+    final previewSize = AppResponsive.isShort(context)
+        ? AppResponsive.s(context, 160).clamp(120.0, 170.0)
+        : AppResponsive.s(context, 200).clamp(150.0, 220.0);
 
     return AppPage(
       title: 'Character Studio',
       showBack: true,
       onBack: _back,
-      scrollable: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _StepProgress(current: _index, total: _steps.length),
-          SizedBox(
-            height: AppResponsive.isShort(context)
-                ? AppSpacing.sm
-                : AppSpacing.md,
-          ),
+          const SizedBox(height: AppSpacing.md),
           Center(
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 250),
-              curve: Curves.easeOut,
-              child: CharacterPreview(
-                character: controller.draft,
-                size: AppResponsive.s(context, 240).clamp(160.0, 240.0),
-              ),
-            ),
-          ),
-          SizedBox(
-            height: AppResponsive.isShort(context)
-                ? AppSpacing.md
-                : AppSpacing.lg,
-          ),
-          Expanded(
             child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 220),
-              transitionBuilder: (child, animation) => FadeTransition(
-                opacity: animation,
-                child: SlideTransition(
-                  position: Tween<Offset>(
-                    begin: const Offset(0.06, 0),
-                    end: Offset.zero,
-                  ).animate(animation),
-                  child: child,
+              duration: const Duration(milliseconds: 380),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: (child, animation) {
+                final fade = CurvedAnimation(
+                  parent: animation,
+                  curve: Curves.easeOut,
+                );
+                final slide = Tween<Offset>(
+                  begin: const Offset(0, 0.04),
+                  end: Offset.zero,
+                ).animate(fade);
+                return FadeTransition(
+                  opacity: fade,
+                  child: SlideTransition(position: slide, child: child),
+                );
+              },
+              child: CharacterPreview(
+                key: ValueKey(
+                  '${controller.draft.base}-${controller.draft.hair}-'
+                  '${controller.draft.outfit}-${controller.draft.glasses}-'
+                  '${controller.draft.hat}-${controller.draft.earrings}-'
+                  '${controller.draft.accessory}',
                 ),
-              ),
-              child: KeyedSubtree(
-                key: ValueKey(_index),
-                child: _buildStepBody(controller),
+                character: controller.draft,
+                size: previewSize,
               ),
             ),
           ),
           const SizedBox(height: AppSpacing.md),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 360),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (child, animation) {
+              final fade = CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+              );
+              final slide = Tween<Offset>(
+                begin: const Offset(0.04, 0),
+                end: Offset.zero,
+              ).animate(fade);
+              return FadeTransition(
+                opacity: fade,
+                child: SlideTransition(position: slide, child: child),
+              );
+            },
+            child: KeyedSubtree(
+              key: ValueKey(_index),
+              child: _buildStepBody(controller),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
           _buildActions(controller),
+          const SizedBox(height: AppSpacing.md),
         ],
       ),
     );
@@ -156,13 +176,11 @@ class _CharacterCreationScreenState extends State<CharacterCreationScreen> {
 
   Widget _buildStepBody(CharacterController controller) {
     return switch (_step.kind) {
-      _StepKind.layer => SingleChildScrollView(
-          child: _OptionWrap(
-            layer: _step.layer!,
-            reference: controller.draft,
-            selectedId: controller.selected(_step.layer!),
-            onChoose: (id) => controller.chooseOption(_step.layer!, id),
-          ),
+      _StepKind.layer => _OptionWrap(
+          layer: _step.layer!,
+          reference: controller.draft,
+          selectedId: controller.selected(_step.layer!),
+          onChoose: (id) => controller.chooseOption(_step.layer!, id),
         ),
       _StepKind.accessories => _AccessoriesStep(controller: controller),
       _StepKind.name => _NameStep(
@@ -350,17 +368,15 @@ class _AccessoriesStep extends StatelessWidget {
           onChoose: (id) => controller.chooseOption(layer, id),
         );
 
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          group(CharacterLayer.hat),
-          const SizedBox(height: AppSpacing.lg),
-          group(CharacterLayer.earrings),
-          const SizedBox(height: AppSpacing.lg),
-          group(CharacterLayer.accessory),
-        ],
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        group(CharacterLayer.hat),
+        const SizedBox(height: AppSpacing.lg),
+        group(CharacterLayer.earrings),
+        const SizedBox(height: AppSpacing.lg),
+        group(CharacterLayer.accessory),
+      ],
     );
   }
 }

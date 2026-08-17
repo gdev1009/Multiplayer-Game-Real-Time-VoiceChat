@@ -21,9 +21,13 @@ class AuthController extends ChangeNotifier {
   String? _rememberedName;
   String? get rememberedName => _rememberedName;
 
+  String? _rememberedEmail;
+  String? get rememberedEmail => _rememberedEmail;
+
   /// Decides the first screen on launch.
   Future<void> bootstrap() async {
     _rememberedName = await _auth.rememberedName();
+    _rememberedEmail = await _auth.rememberedEmail();
     final hasAccount = await _auth.hasLocalAccount();
     if (!hasAccount) {
       _set(AuthStatus.needsAccount);
@@ -44,6 +48,7 @@ class AuthController extends ChangeNotifier {
       pin: pin,
     );
     _rememberedName = firstName;
+    _rememberedEmail = email.trim();
     _set(AuthStatus.signedIn);
   }
 
@@ -80,6 +85,7 @@ class AuthController extends ChangeNotifier {
     await _auth.verifyEmailCodeSignIn(email: email, code: code);
     _profile = await _auth.verifyPinSignIn(pin: pin);
     _rememberedName = await _auth.rememberedName();
+    _rememberedEmail = await _auth.rememberedEmail();
     _set(AuthStatus.signedIn);
   }
 
@@ -88,6 +94,7 @@ class AuthController extends ChangeNotifier {
   Future<void> verifyPinSignIn({required String pin}) async {
     _profile = await _auth.verifyPinSignIn(pin: pin);
     _rememberedName = await _auth.rememberedName();
+    _rememberedEmail = await _auth.rememberedEmail();
     _set(AuthStatus.signedIn);
   }
 
@@ -97,12 +104,24 @@ class AuthController extends ChangeNotifier {
     _set(AuthStatus.locked);
   }
 
-  /// Full sign-out from the Opening screen: ends the session and returns the
-  /// player to the Welcome screen (where they can sign in by email or create a
-  /// new account). The device still remembers the account for a quick sign-in.
+  /// Ends the session but keeps this device's account — next screen is Daily
+  /// Login (name + PIN), not a fresh email prompt.
   Future<void> signOut() async {
     await _auth.lock();
     _profile = null;
+    _rememberedName = await _auth.rememberedName();
+    _rememberedEmail = await _auth.rememberedEmail();
+    final hasAccount = await _auth.hasLocalAccount();
+    _set(hasAccount ? AuthStatus.locked : AuthStatus.needsAccount);
+  }
+
+  /// Leave the remembered account on this device and return to Welcome
+  /// (create / sign in with a different email).
+  Future<void> useAnotherAccount() async {
+    await _auth.clearLocalAccount();
+    _profile = null;
+    _rememberedName = null;
+    _rememberedEmail = null;
     _set(AuthStatus.needsAccount);
   }
 
@@ -120,6 +139,7 @@ class AuthController extends ChangeNotifier {
     await _auth.setNewPin(pin: pin);
     _profile = null;
     _rememberedName = await _auth.rememberedName();
+    _rememberedEmail = await _auth.rememberedEmail();
     _set(AuthStatus.locked);
   }
 

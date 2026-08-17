@@ -8,6 +8,7 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text.dart';
 import '../../core/widgets/app_page.dart';
 import '../../core/widgets/big_button.dart';
+import '../../core/widgets/brand_logo.dart';
 import '../../core/widgets/host_greeting.dart';
 import '../../models/prize.dart';
 import '../../services/entitlement_service.dart';
@@ -64,93 +65,77 @@ class _OpeningScreenState extends State<OpeningScreen> {
     final access = entitlement.evaluate(profile: profile);
     final prizes = context.watch<PrizeController>();
 
-    final logoH = AppResponsive.s(context, 88).clamp(68.0, 96.0);
+    final logoH = AppResponsive.s(context, 100).clamp(80.0, 120.0);
     final gap = AppResponsive.isShort(context) ? AppSpacing.sm : AppSpacing.md;
 
     return AppPage(
-      scrollable: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  SizedBox(
-                    height: AppResponsive.isShort(context)
-                        ? AppSpacing.xs
-                        : AppSpacing.sm,
-                  ),
-                  Image.asset(
-                    'assets/images/grandmac-logo.jpg',
-                    height: logoH,
-                    fit: BoxFit.contain,
-                    semanticLabel: 'Grandma Mac logo',
-                  ),
-                  SizedBox(height: gap),
-                  // Name + win trophy (badge updates automatically after games).
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          name,
-                          style: AppText.display.copyWith(
-                            fontSize: AppResponsive.displaySize(context),
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                      PlayerTrophyBadge(
-                        room: prizes.room,
-                        loading: prizes.loading,
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: gap),
-                  const HostGreeting(
-                    message: 'So glad you are here. '
-                        'What would you like to do today?',
-                  ),
-                  if (access == AccessLevel.expired) ...[
-                    SizedBox(height: gap),
-                    const _TrialBanner(
-                      daysLeft: 0,
-                      expired: true,
-                    ),
-                  ] else if (trialDays > 0) ...[
-                    SizedBox(height: gap),
-                    _TrialBanner(
-                      daysLeft: trialDays,
-                      countdown: access == AccessLevel.trialCountdown,
-                    ),
-                  ],
-                  SizedBox(height: gap),
-                  _CharacterCard(
-                    onCreate: () => _openCharacterBuilder(edit: false),
-                    onEdit: () => _openCharacterBuilder(edit: true),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                ],
-              ),
-            ),
+          SizedBox(
+            height: AppResponsive.isShort(context)
+                ? AppSpacing.xs
+                : AppSpacing.sm,
           ),
+          Center(child: BrandLogo(height: logoH, outlineWidth: 2)),
+          SizedBox(height: gap),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Text(
+                  name,
+                  style: AppText.display.copyWith(
+                    fontSize: AppResponsive.displaySize(context),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              PlayerTrophyBadge(
+                room: prizes.room,
+                loading: prizes.loading,
+              ),
+            ],
+          ),
+          SizedBox(height: gap),
+          const HostGreeting(
+            message: 'So glad you are here. '
+                'What would you like to do today?',
+          ),
+          if (access == AccessLevel.expired) ...[
+            SizedBox(height: gap),
+            const _TrialBanner(
+              daysLeft: 0,
+              expired: true,
+            ),
+          ] else if (trialDays > 0) ...[
+            SizedBox(height: gap),
+            _TrialBanner(
+              daysLeft: trialDays,
+              countdown: access == AccessLevel.trialCountdown,
+            ),
+          ],
+          SizedBox(height: gap),
+          _CharacterCard(
+            onCreate: () => _openCharacterBuilder(edit: false),
+            onEdit: () => _openCharacterBuilder(edit: true),
+          ),
+          const SizedBox(height: AppSpacing.lg),
           BigButton(
             label: 'Check Upcoming Games',
             icon: Icons.event_available_rounded,
             onPressed: () => _goPlay(context, access, AppRoutes.upcomingGames),
           ),
-          const SizedBox(height: AppSpacing.md),
+          const SizedBox(height: AppSpacing.sm),
           BigButton(
             label: 'Enter the Studio',
             icon: Icons.theater_comedy_rounded,
             onPressed: () => _goPlay(context, access, AppRoutes.studio),
           ),
           if (PrizeAssets.showPrizeRoomEntry) ...[
-            const SizedBox(height: AppSpacing.md),
+            const SizedBox(height: AppSpacing.sm),
             BigButton(
               label: 'Prize Room',
               icon: Icons.emoji_events_rounded,
@@ -158,21 +143,15 @@ class _OpeningScreenState extends State<OpeningScreen> {
                   Navigator.of(context).pushNamed(AppRoutes.prizeRoom),
             ),
           ],
-          const SizedBox(height: AppSpacing.sm),
-          Center(
-            child: TextButton.icon(
-              onPressed: () => controller.signOut(),
-              icon: const Icon(Icons.lock_outline, size: 24),
-              label: const Text('Sign Out', style: AppText.body),
-              style: TextButton.styleFrom(
-                foregroundColor: AppColors.textSecondary,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.lg,
-                  vertical: AppSpacing.sm,
-                ),
-              ),
+          TextButton.icon(
+            onPressed: () => controller.signOut(),
+            icon: const Icon(Icons.lock_outline, size: 20),
+            label: const Text('Sign Out', style: AppText.caption),
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.textSecondary,
             ),
           ),
+          const SizedBox(height: AppSpacing.sm),
         ],
       ),
     );
@@ -202,66 +181,72 @@ class _CharacterCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final characters = context.watch<CharacterController>();
     final saved = characters.saved;
-    final avatar = AppResponsive.s(context, 88).clamp(72.0, 92.0);
+    final avatar = AppResponsive.s(context, 64).clamp(56.0, 72.0);
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
         border: Border.all(color: Colors.white, width: 2),
         boxShadow: AppColors.softShadow,
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (saved != null)
-            IdleCharacterPreview(
-              character: saved,
-              size: avatar,
-              animatePoses: false,
-            )
-          else
-            Container(
-              width: avatar,
-              height: avatar,
-              decoration: BoxDecoration(
-                gradient: AppColors.stageGradient,
-                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-                boxShadow: AppColors.tileShadow,
+          Row(
+            children: [
+              if (saved != null)
+                IdleCharacterPreview(
+                  character: saved,
+                  size: avatar,
+                  animatePoses: false,
+                )
+              else
+                Container(
+                  width: avatar,
+                  height: avatar,
+                  decoration: BoxDecoration(
+                    gradient: AppColors.stageGradient,
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                  ),
+                  child: Icon(
+                    Icons.face_retouching_natural,
+                    size: avatar * 0.5,
+                    color: AppColors.deepPurple,
+                  ),
+                ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      saved == null ? 'Your character' : saved.displayName,
+                      style: AppText.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      saved == null
+                          ? 'Build a clay look to play with.'
+                          : 'Tap Edit to change your look.',
+                      style: AppText.bodyMuted,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
               ),
-              child: Icon(
-                Icons.face_retouching_natural,
-                size: avatar * 0.5,
-                color: AppColors.deepPurple,
-              ),
-            ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  saved == null ? 'Make your character' : saved.displayName,
-                  style: AppText.title.copyWith(fontSize: 26),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  saved == null
-                      ? 'Build a fun clay character to play with.'
-                      : 'Tap Edit to change your look.',
-                  style: AppText.bodyMuted,
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                BigButton(
-                  label: saved == null ? 'Create' : 'Edit',
-                  icon: saved == null ? Icons.add : Icons.edit,
-                  variant: BigButtonVariant.secondary,
-                  onPressed: saved == null ? onCreate : onEdit,
-                ),
-              ],
-            ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          BigButton(
+            label: saved == null ? 'Create' : 'Edit',
+            icon: saved == null ? Icons.add : Icons.edit,
+            variant: BigButtonVariant.secondary,
+            onPressed: saved == null ? onCreate : onEdit,
           ),
         ],
       ),

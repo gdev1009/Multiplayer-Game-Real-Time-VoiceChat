@@ -3,9 +3,9 @@ import '../theme/app_colors.dart';
 import '../theme/app_responsive.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_text.dart';
+import 'outlined_glyph.dart';
 
-/// A large, senior-friendly 4-digit PIN entry control with its own on-screen
-/// number pad. Familiar to anyone who uses a bank card.
+/// A senior-friendly 4-digit PIN / code pad with its own on-screen keys.
 class PinPad extends StatelessWidget {
   const PinPad({
     super.key,
@@ -14,7 +14,7 @@ class PinPad extends StatelessWidget {
     this.length = 4,
   });
 
-  /// The current PIN digits entered so far.
+  /// The current digits entered so far.
   final String value;
 
   /// Called whenever the value changes (digit added or removed).
@@ -34,9 +34,7 @@ class PinPad extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final gap = AppResponsive.isShort(context)
-        ? AppResponsive.s(context, AppSpacing.sm)
-        : AppSpacing.md;
+    final gap = AppResponsive.isShort(context) ? AppSpacing.sm : AppSpacing.md;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -44,8 +42,8 @@ class PinPad extends StatelessWidget {
         _Dots(filled: value.length, total: length),
         SizedBox(
           height: AppResponsive.isShort(context)
-              ? AppSpacing.md
-              : AppSpacing.xl,
+              ? AppSpacing.sm
+              : AppSpacing.md,
         ),
         _padRow(context, ['1', '2', '3'], gap),
         SizedBox(height: gap),
@@ -86,21 +84,21 @@ class _Dots extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dot = AppResponsive.s(context, 24);
+    final dot = AppResponsive.s(context, 18).clamp(14.0, 20.0);
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         for (int i = 0; i < total; i++)
           Container(
             margin: EdgeInsets.symmetric(
-              horizontal: AppResponsive.s(context, AppSpacing.sm),
+              horizontal: AppResponsive.s(context, 6),
             ),
             width: dot,
             height: dot,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: i < filled ? AppColors.deepPurple : Colors.transparent,
-              border: Border.all(color: AppColors.deepPurple, width: 3),
+              border: Border.all(color: AppColors.deepPurple, width: 2.5),
             ),
           ),
       ],
@@ -116,9 +114,8 @@ class _PadKey extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Keep >= 48 tap target; shrink a bit on narrow/short phones so the pad
-    // fits above the keyboard / next button without scrolling off.
-    final keySize = AppResponsive.s(context, 84).clamp(56.0, 84.0);
+    // Keep ≥ 48 tap target; stay compact so the pad fits on real phones.
+    final keySize = AppResponsive.s(context, 64).clamp(48.0, 68.0);
     if (label.isEmpty) {
       return SizedBox(width: keySize, height: keySize);
     }
@@ -142,13 +139,14 @@ class _PadKey extends StatelessWidget {
               child: isBackspace
                   ? Icon(
                       Icons.backspace_outlined,
-                      size: keySize * 0.36,
+                      size: keySize * 0.34,
                       color: AppColors.deepPurple,
                     )
-                  : Text(
+                  : OutlinedGlyph(
                       label,
                       style: AppText.title.copyWith(
-                        fontSize: keySize * 0.36,
+                        fontSize: keySize * 0.38,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
             ),

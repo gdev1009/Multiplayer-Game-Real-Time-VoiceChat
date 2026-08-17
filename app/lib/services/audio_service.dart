@@ -60,6 +60,9 @@ abstract class SoundOutput {
   /// Stop everything immediately.
   Future<void> stopAll();
 
+  /// Drop exclusive media focus so device speech recognition can use the mic.
+  Future<void> releaseForSpeechInput();
+
   /// Re-apply the audio session after speech recognition releases the mic.
   Future<void> reconfigureAudioSession();
 
@@ -267,6 +270,33 @@ class AudioService implements SoundOutput {
     final wait = _voiceWait;
     if (wait != null && !wait.isCompleted) {
       wait.complete();
+    }
+  }
+
+  @override
+  Future<void> releaseForSpeechInput() async {
+    await stopAll();
+    try {
+      await AudioPlayer.global.setAudioContext(
+        AudioContext(
+          iOS: AudioContextIOS(
+            category: AVAudioSessionCategory.playAndRecord,
+            options: const {
+              AVAudioSessionOptions.defaultToSpeaker,
+              AVAudioSessionOptions.duckOthers,
+            },
+          ),
+          android: const AudioContextAndroid(
+            isSpeakerphoneOn: false,
+            stayAwake: false,
+            contentType: AndroidContentType.speech,
+            usageType: AndroidUsageType.voiceCommunication,
+            audioFocus: AndroidAudioFocus.none,
+          ),
+        ),
+      );
+    } catch (err) {
+      debugPrint('AudioService.releaseForSpeechInput failed (ignored): $err');
     }
   }
 

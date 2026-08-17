@@ -102,7 +102,6 @@ class _JoinPreviewScreenState extends State<JoinPreviewScreen> {
     return AppPage(
       title: 'Join Game',
       showBack: true,
-      scrollable: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -116,30 +115,22 @@ class _JoinPreviewScreenState extends State<JoinPreviewScreen> {
                         "You'll join Team $myTeam!",
           ),
           const SizedBox(height: AppSpacing.lg),
-          Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                children: [
-                  _TeamPreview(
-                    team: 'A',
-                    seats: const [0, 2],
-                    preview: preview,
-                    mySeat: mySeat,
-                    onPick: preview.alreadyMember ? null : _pickSeat,
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  _TeamPreview(
-                    team: 'B',
-                    seats: const [1, 3],
-                    preview: preview,
-                    mySeat: mySeat,
-                    onPick: preview.alreadyMember ? null : _pickSeat,
-                  ),
-                ],
-              ),
-            ),
+          _TeamPreview(
+            team: 'A',
+            seats: const [0, 2],
+            preview: preview,
+            mySeat: mySeat,
+            onPick: preview.alreadyMember ? null : _pickSeat,
           ),
           const SizedBox(height: AppSpacing.md),
+          _TeamPreview(
+            team: 'B',
+            seats: const [1, 3],
+            preview: preview,
+            mySeat: mySeat,
+            onPick: preview.alreadyMember ? null : _pickSeat,
+          ),
+          const SizedBox(height: AppSpacing.lg),
           if (isFull)
             Container(
               padding: const EdgeInsets.all(AppSpacing.md),

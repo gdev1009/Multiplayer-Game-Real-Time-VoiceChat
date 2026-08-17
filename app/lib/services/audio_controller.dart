@@ -154,10 +154,11 @@ class AudioController extends ChangeNotifier {
   Future<void> beginSpeechInputDuck() async {
     _voiceDuck = 0;
     notifyListeners();
-    if (!_muted) {
-      await _out.setLoopVolume((_musicVolume * 0.08).clamp(0.0, 1.0));
-    }
     await stopHostSpeech();
+    await _out.stopAll();
+    await _out.releaseForSpeechInput();
+    // Let the OS actually release the playback session before STT starts.
+    await Future<void>.delayed(const Duration(milliseconds: 350));
   }
 
   /// Restore levels and re-claim the audio session after speech recognition

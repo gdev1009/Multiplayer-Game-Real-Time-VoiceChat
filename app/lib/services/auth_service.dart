@@ -71,6 +71,17 @@ class AuthService {
   /// The remembered first name, shown to greet the returning player.
   Future<String?> rememberedName() => _storage.read(key: _kName);
 
+  /// The remembered account email (recovery / silent sign-in).
+  Future<String?> rememberedEmail() => _storage.read(key: _kEmail);
+
+  /// Clears local credentials so Welcome / Create / Email Sign-In is shown.
+  Future<void> clearLocalAccount() async {
+    await _client.auth.signOut();
+    await _storage.delete(key: _kName);
+    await _storage.delete(key: _kEmail);
+    await _storage.delete(key: _kPassword);
+  }
+
   // ---------------------------------------------------------------------------
   // Account creation
   // ---------------------------------------------------------------------------

@@ -12,12 +12,13 @@ import '../../../core/widgets/pin_pad.dart';
 import '../../../services/auth_failure.dart';
 import '../auth_controller.dart';
 
-/// PIN recovery: enter email → receive a one-time code → set a new PIN.
+/// PIN recovery: email (once) → one-time code → new PIN.
+///
+/// If this device already knows the account email, the email step is skipped.
 class ForgotPinScreen extends StatefulWidget {
   const ForgotPinScreen({super.key, this.initialEmail});
 
-  /// Pre-fills the email field (e.g. when arriving from a "that email already
-  /// has an account" prompt), so the player doesn't retype it.
+  /// Prefill / skip email when known (create-account conflict, daily login).
   final String? initialEmail;
 
   @override
@@ -32,17 +33,63 @@ class _ForgotPinScreenState extends State<ForgotPinScreen> {
   final _emailController = TextEditingController();
   final _codeController = TextEditingController();
   String _newPin = '';
+  String? _lockedEmail;
 
   String? _error;
   bool _busy = false;
+  bool _booting = true;
 
   @override
   void initState() {
     super.initState();
-    final email = widget.initialEmail?.trim();
-    if (email != null && email.isNotEmpty) {
+    WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrapEmail());
+  }
+
+  Future<void> _bootstrapEmail() async {
+    final auth = context.read<AuthController>();
+    final fromArg = widget.initialEmail?.trim();
+    final remembered = auth.rememberedEmail?.trim();
+    final email = (fromArg != null && fromArg.isNotEmpty)
+        ? fromArg
+        : (remembered != null && remembered.isNotEmpty ? remembered : null);
+
+    if (email != null) {
       _emailController.text = email;
+      _lockedEmail = email;
+      // Skip the email form — send code to the saved address.
+      setState(() {
+        _booting = false;
+        _busy = true;
+        _error = null;
+      });
+      try {
+        await auth.sendRecoveryCode(email: email);
+        if (!mounted) return;
+        setState(() {
+          _busy = false;
+          _step = _Step.code;
+        });
+      } on AuthFailure catch (e) {
+        if (!mounted) return;
+        setState(() {
+          _booting = false;
+          _busy = false;
+          _step = _Step.email;
+          _error = e.message;
+        });
+      } catch (_) {
+        if (!mounted) return;
+        setState(() {
+          _booting = false;
+          _busy = false;
+          _step = _Step.email;
+          _error = 'We could not send the code. Please try again.';
+        });
+      }
+      return;
     }
+
+    if (mounted) setState(() => _booting = false);
   }
 
   @override
@@ -69,6 +116,7 @@ class _ForgotPinScreenState extends State<ForgotPinScreen> {
       if (!mounted) return;
       setState(() {
         _busy = false;
+        _lockedEmail = _emailController.text.trim();
         _step = _Step.code;
       });
     } on AuthFailure catch (e) {
@@ -115,11 +163,8 @@ class _ForgotPinScreenState extends State<ForgotPinScreen> {
       _error = null;
     });
     try {
-      await context
-          .read<AuthController>()
-          .setNewPinAndSignIn(pin: _newPin);
+      await context.read<AuthController>().setNewPinAndSignIn(pin: _newPin);
       if (!mounted) return;
-      // Back to the login screen; AuthGate now shows Daily Login.
       Navigator.of(context).popUntil((route) => route.isFirst);
     } on AuthFailure catch (e) {
       _fail(e.message);
@@ -138,6 +183,14 @@ class _ForgotPinScreenState extends State<ForgotPinScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_booting) {
+      return const AppPage(
+        title: 'Forgot My PIN',
+        showBack: true,
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return AppPage(
       title: 'Forgot My PIN',
       showBack: true,
@@ -149,17 +202,21 @@ class _ForgotPinScreenState extends State<ForgotPinScreen> {
     );
   }
 
-  Widget _wrap({required String heading, String? subtitle, required List<Widget> children}) {
+  Widget _wrap({
+    required String heading,
+    String? subtitle,
+    required List<Widget> children,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const SizedBox(height: AppSpacing.lg),
+        const SizedBox(height: AppSpacing.md),
         Text(heading, style: AppText.title),
         if (subtitle != null) ...[
           const SizedBox(height: AppSpacing.xs),
           Text(subtitle, style: AppText.bodyMuted),
         ],
-        const SizedBox(height: AppSpacing.xl),
+        const SizedBox(height: AppSpacing.lg),
         ...children,
         if (_error != null) ...[
           const SizedBox(height: AppSpacing.md),
@@ -172,7 +229,8 @@ class _ForgotPinScreenState extends State<ForgotPinScreen> {
   Widget _emailStep() {
     return _wrap(
       heading: 'What is your email?',
-      subtitle: 'We will send you a one-time code to reset your PIN.',
+      subtitle: 'We will send you a one-time code to reset your PIN. '
+          'You only need to enter this once on this device.',
       children: [
         BigTextField(
           label: 'Email address',
@@ -183,7 +241,7 @@ class _ForgotPinScreenState extends State<ForgotPinScreen> {
           textInputAction: TextInputAction.done,
           onSubmitted: (_) => _sendCode(),
         ),
-        const SizedBox(height: AppSpacing.xl),
+        const SizedBox(height: AppSpacing.lg),
         BigButton(
           label: 'Send Code',
           icon: Icons.mail_outline,
@@ -195,9 +253,12 @@ class _ForgotPinScreenState extends State<ForgotPinScreen> {
   }
 
   Widget _codeStep() {
+    final to = _lockedEmail ?? _emailController.text.trim();
     return _wrap(
       heading: 'Enter your code',
-      subtitle: 'Check your email and type the 6-number code here.',
+      subtitle: to.isEmpty
+          ? 'Check your email and type the 6-number code here.'
+          : 'We sent a code to $to. Type the 6-number code here.',
       children: [
         BigTextField(
           label: 'Code',
@@ -208,7 +269,7 @@ class _ForgotPinScreenState extends State<ForgotPinScreen> {
           textInputAction: TextInputAction.done,
           onSubmitted: (_) => _verifyCode(),
         ),
-        const SizedBox(height: AppSpacing.xl),
+        const SizedBox(height: AppSpacing.lg),
         BigButton(
           label: 'Continue',
           icon: Icons.arrow_forward,

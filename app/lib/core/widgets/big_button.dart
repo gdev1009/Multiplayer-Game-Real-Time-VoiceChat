@@ -30,7 +30,7 @@ class BigButton extends StatelessWidget {
     final bool enabled = onPressed != null && !isLoading;
     final height = AppResponsive.buttonHeight(context);
     final labelStyle = AppText.action.copyWith(color: foreground);
-    const iconSize = 28.0;
+    final iconSize = AppResponsive.isShort(context) ? 22.0 : 24.0;
 
     final Widget content = isLoading
         ? const SizedBox(
@@ -69,7 +69,7 @@ class BigButton extends StatelessWidget {
         child: DecoratedBox(
           decoration: BoxDecoration(
             gradient: isPrimary && enabled ? AppColors.brandGradient : null,
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(16),
             boxShadow: isPrimary && enabled ? AppColors.softShadow : null,
           ),
           child: ElevatedButton(
@@ -81,11 +81,12 @@ class BigButton extends StatelessWidget {
               disabledBackgroundColor:
                   isPrimary ? AppColors.divider : Colors.transparent,
               elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(16),
                 side: isPrimary
                     ? BorderSide.none
-                    : const BorderSide(color: AppColors.deepPurple, width: 3),
+                    : const BorderSide(color: AppColors.deepPurple, width: 2.5),
               ),
             ).copyWith(
               backgroundColor: WidgetStateProperty.resolveWith((states) {

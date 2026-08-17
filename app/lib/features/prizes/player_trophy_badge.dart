@@ -124,73 +124,91 @@ Future<void> showTrophyPointsPopup(
   return showDialog<void>(
     context: context,
     barrierDismissible: true,
+    barrierColor: const Color(0xE6000000),
     builder: (context) {
-      return AlertDialog(
-        backgroundColor: AppColors.surface,
+      return Dialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        elevation: 12,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
           side: const BorderSide(color: AppColors.gold, width: 2),
         ),
-        titlePadding: const EdgeInsets.fromLTRB(24, 20, 12, 0),
-        contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 8),
-        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-        title: Row(
-          children: [
-            Expanded(
-              child: Text(
-                'Your points',
-                style: AppText.title.copyWith(color: AppColors.deepPurple),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 12, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Your points',
+                      style: AppText.title.copyWith(
+                        color: AppColors.deepPurple,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Close',
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close_rounded, size: 28),
+                    color: AppColors.textSecondary,
+                  ),
+                ],
               ),
-            ),
-            IconButton(
-              tooltip: 'Close',
-              onPressed: () => Navigator.of(context).pop(),
-              icon: const Icon(Icons.close_rounded, size: 28),
-              color: AppColors.textSecondary,
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text(
-              'Updated automatically after each game.',
-              style: AppText.caption,
-            ),
-            const SizedBox(height: AppSpacing.md),
-            _PointsRow(
-              label: 'Wins',
-              hint: 'Trophies earned',
-              value: room.gamesWon,
-              highlight: true,
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            _PointsRow(
-              label: 'Ties',
-              hint: 'Shared finishes',
-              value: room.gamesTied,
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            _PointsRow(
-              label: 'Games played',
-              hint: 'Participation',
-              value: room.gamesPlayed,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(
-              'Close',
-              style: AppText.body.copyWith(
-                fontWeight: FontWeight.w800,
-                color: AppColors.deepPurple,
+              const Padding(
+                padding: EdgeInsets.only(right: 8),
+                child: Text(
+                  'Updated automatically after each game.',
+                  style: AppText.caption,
+                ),
               ),
-            ),
+              const SizedBox(height: AppSpacing.md),
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: Column(
+                  children: [
+                    _PointsRow(
+                      label: 'Wins',
+                      hint: 'Trophies earned',
+                      value: room.gamesWon,
+                      highlight: true,
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    _PointsRow(
+                      label: 'Ties',
+                      hint: 'Shared finishes',
+                      value: room.gamesTied,
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    _PointsRow(
+                      label: 'Games played',
+                      hint: 'Participation',
+                      value: room.gamesPlayed,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: Text(
+                    'Close',
+                    style: AppText.body.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.deepPurple,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       );
     },
   );

@@ -21,7 +21,7 @@ class HostGreeting extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final avatar = AppResponsive.s(context, 76).clamp(64.0, 80.0);
+    final avatar = AppResponsive.s(context, 60).clamp(52.0, 68.0);
 
     return Semantics(
       label: '$hostName says: $message',

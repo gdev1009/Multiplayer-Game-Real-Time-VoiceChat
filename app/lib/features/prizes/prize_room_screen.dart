@@ -36,7 +36,6 @@ class _PrizeRoomScreenState extends State<PrizeRoomScreen> {
     final extraWins = room.winTrophyCount - winCups.length;
 
     return AppPage(
-      scrollable: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -63,49 +62,44 @@ class _PrizeRoomScreenState extends State<PrizeRoomScreen> {
           const _TournamentTeaser(),
           const SizedBox(height: AppSpacing.lg),
           if (controller.loading && room.items.isEmpty)
-            const Expanded(child: Center(child: CircularProgressIndicator()))
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: AppSpacing.xl),
+              child: Center(child: CircularProgressIndicator()),
+            )
           else if (controller.error != null && room.items.isEmpty)
-            Expanded(
-              child: Center(
-                child: Text(
-                  controller.error!,
-                  style: AppText.body,
-                  textAlign: TextAlign.center,
-                ),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
+              child: Text(
+                controller.error!,
+                style: AppText.body,
+                textAlign: TextAlign.center,
               ),
             )
-          else
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.only(bottom: 8),
-                children: [
-                  _ShelfSection(
-                    title: room.winTrophyCount <= 1
-                        ? 'Trophies'
-                        : 'Trophies (${room.winTrophyCount})',
-                    items: winCups,
-                    emptyHint: 'Win a game to earn your first trophy.',
-                    overflowLabel: extraWins > 0 ? '+$extraWins more' : null,
-                  ),
-                  const SizedBox(height: AppSpacing.lg),
-                  _ShelfSection(
-                    title: 'Milestone trophies',
-                    items: room.milestoneTrophies,
-                    emptyHint: 'Keep playing — special trophies unlock along the way.',
-                  ),
-                  if (PrizeAssets.showNoveltyPrizes) ...[
-                    const SizedBox(height: AppSpacing.lg),
-                    _ShelfSection(
-                      title: 'Prizes',
-                      items: room.prizes,
-                      emptyHint:
-                          'Keep playing — novelty prizes appear as you go.',
-                    ),
-                  ],
-                ],
-              ),
+          else ...[
+            _ShelfSection(
+              title: room.winTrophyCount <= 1
+                  ? 'Trophies'
+                  : 'Trophies (${room.winTrophyCount})',
+              items: winCups,
+              emptyHint: 'Win a game to earn your first trophy.',
+              overflowLabel: extraWins > 0 ? '+$extraWins more' : null,
             ),
-          const SizedBox(height: AppSpacing.md),
+            const SizedBox(height: AppSpacing.lg),
+            _ShelfSection(
+              title: 'Milestone trophies',
+              items: room.milestoneTrophies,
+              emptyHint: 'Keep playing — special trophies unlock along the way.',
+            ),
+            if (PrizeAssets.showNoveltyPrizes) ...[
+              const SizedBox(height: AppSpacing.lg),
+              _ShelfSection(
+                title: 'Prizes',
+                items: room.prizes,
+                emptyHint: 'Keep playing — novelty prizes appear as you go.',
+              ),
+            ],
+          ],
+          const SizedBox(height: AppSpacing.lg),
           BigButton(
             label: 'Back',
             icon: Icons.arrow_back_rounded,
@@ -115,6 +109,7 @@ class _PrizeRoomScreenState extends State<PrizeRoomScreen> {
               }
             },
           ),
+          const SizedBox(height: AppSpacing.md),
         ],
       ),
     );

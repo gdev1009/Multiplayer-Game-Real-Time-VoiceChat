@@ -56,7 +56,9 @@ class _DailyLoginScreenState extends State<DailyLoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final name = context.watch<AuthController>().rememberedName ?? 'friend';
+    final auth = context.watch<AuthController>();
+    final name = auth.rememberedName ?? 'friend';
+    final email = auth.rememberedEmail;
 
     return AppPage(
       child: Column(
@@ -64,15 +66,15 @@ class _DailyLoginScreenState extends State<DailyLoginScreen> {
         children: [
           SizedBox(
             height: AppResponsive.isShort(context)
-                ? AppSpacing.md
-                : AppSpacing.xl,
+                ? AppSpacing.sm
+                : AppSpacing.md,
           ),
           Icon(
             Icons.waving_hand_rounded,
-            size: AppResponsive.s(context, 72).clamp(56.0, 72.0),
+            size: AppResponsive.s(context, 56).clamp(48.0, 64.0),
             color: AppColors.gold,
           ),
-          const SizedBox(height: AppSpacing.md),
+          const SizedBox(height: AppSpacing.sm),
           const Text(
             'Welcome back,',
             style: AppText.title,
@@ -85,24 +87,24 @@ class _DailyLoginScreenState extends State<DailyLoginScreen> {
             ),
             textAlign: TextAlign.center,
           ),
-          SizedBox(
-            height: AppResponsive.isShort(context)
-                ? AppSpacing.md
-                : AppSpacing.lg,
-          ),
+          if (email != null && email.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              email,
+              style: AppText.caption,
+              textAlign: TextAlign.center,
+            ),
+          ],
+          const SizedBox(height: AppSpacing.md),
           const Text(
             'Enter your 4-number PIN',
             style: AppText.body,
             textAlign: TextAlign.center,
           ),
-          SizedBox(
-            height: AppResponsive.isShort(context)
-                ? AppSpacing.md
-                : AppSpacing.lg,
-          ),
+          const SizedBox(height: AppSpacing.md),
           if (_busy)
             const Padding(
-              padding: EdgeInsets.symmetric(vertical: AppSpacing.xxl),
+              padding: EdgeInsets.symmetric(vertical: AppSpacing.xl),
               child: Center(child: CircularProgressIndicator()),
             )
           else
@@ -122,8 +124,12 @@ class _DailyLoginScreenState extends State<DailyLoginScreen> {
               ),
             ),
           if (_error != null) ...[
-            const SizedBox(height: AppSpacing.md),
-            Text(_error!, style: AppText.error, textAlign: TextAlign.center),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              _error!,
+              style: AppText.error,
+              textAlign: TextAlign.center,
+            ),
           ],
           const SizedBox(height: AppSpacing.lg),
           BigButton(
@@ -132,12 +138,20 @@ class _DailyLoginScreenState extends State<DailyLoginScreen> {
             onPressed: () {
               Navigator.of(context).push(
                 MaterialPageRoute<void>(
-                  builder: (_) => const ForgotPinScreen(),
+                  builder: (_) => ForgotPinScreen(initialEmail: email),
                 ),
               );
             },
           ),
-          const SizedBox(height: AppSpacing.xl),
+          const SizedBox(height: AppSpacing.sm),
+          TextButton(
+            onPressed: () => context.read<AuthController>().useAnotherAccount(),
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.textSecondary,
+            ),
+            child: const Text('Use a different account', style: AppText.caption),
+          ),
+          const SizedBox(height: AppSpacing.md),
         ],
       ),
     );

@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 
 import '../../core/navigation/app_routes.dart';
 import '../../core/theme/app_colors.dart';
-import '../../core/theme/app_responsive.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text.dart';
 import '../../core/widgets/app_page.dart';
@@ -13,9 +12,6 @@ import '../../models/game.dart';
 import 'lobby_controller.dart';
 
 /// "Check Upcoming Games" lobby hub.
-///
-/// From here a player can quick-match with strangers, start their own game,
-/// join with a 4-digit code, or pick from the list of open games.
 class UpcomingGamesScreen extends StatefulWidget {
   const UpcomingGamesScreen({super.key});
 
@@ -60,19 +56,20 @@ class _UpcomingGamesScreenState extends State<UpcomingGamesScreen> {
   Widget build(BuildContext context) {
     final lobby = context.watch<LobbyController>();
 
+    // Full-page scroll so greeting + actions + open games never overlap or
+    // strand CTAs below the fold on real phones.
     return AppPage(
       title: 'Play a Game',
       showBack: true,
-      scrollable: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const SizedBox(height: AppSpacing.md),
+          const SizedBox(height: AppSpacing.sm),
           const HostGreeting(
             message: 'Ready to play? Find a game, start your own, '
                 'or type a friend\'s code.',
           ),
-          const SizedBox(height: AppSpacing.lg),
+          const SizedBox(height: AppSpacing.md),
           BigButton(
             label: 'Find a Game',
             icon: Icons.search_rounded,
@@ -80,7 +77,7 @@ class _UpcomingGamesScreenState extends State<UpcomingGamesScreen> {
             onPressed:
                 lobby.busy ? null : () => _enterRoom(() => lobby.quickMatch()),
           ),
-          const SizedBox(height: AppSpacing.md),
+          const SizedBox(height: AppSpacing.sm),
           BigButton(
             label: 'Start a New Game',
             icon: Icons.add_circle_outline_rounded,
@@ -88,7 +85,7 @@ class _UpcomingGamesScreenState extends State<UpcomingGamesScreen> {
                 ? null
                 : () => _enterRoom(() => lobby.createGame(isPublic: true)),
           ),
-          const SizedBox(height: AppSpacing.md),
+          const SizedBox(height: AppSpacing.sm),
           BigButton(
             label: 'Join with a Code',
             icon: Icons.dialpad_rounded,
@@ -97,21 +94,22 @@ class _UpcomingGamesScreenState extends State<UpcomingGamesScreen> {
                 ? null
                 : () => Navigator.of(context).pushNamed(AppRoutes.joinByCode),
           ),
-          const SizedBox(height: AppSpacing.xl),
+          const SizedBox(height: AppSpacing.lg),
           Row(
             children: [
               const Text('Open games', style: AppText.title),
               const Spacer(),
               IconButton(
                 onPressed: lobby.busy ? null : () => lobby.refreshOpenGames(),
-                icon: const Icon(Icons.refresh_rounded, size: 30),
+                icon: const Icon(Icons.refresh_rounded, size: 26),
                 tooltip: 'Refresh',
                 color: AppColors.deepPurple,
               ),
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
-          Expanded(child: _OpenGamesList(onJoin: _enterRoom)),
+          _OpenGamesList(onJoin: _enterRoom),
+          const SizedBox(height: AppSpacing.md),
         ],
       ),
     );
@@ -129,25 +127,18 @@ class _OpenGamesList extends StatelessWidget {
     final games = lobby.openGames;
 
     if (games.isEmpty) {
-      return const SingleChildScrollView(
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
         child: Column(
           children: [
-            SizedBox(height: AppSpacing.xl),
             Icon(
               Icons.event_available_rounded,
-              size: 72,
+              size: 56,
               color: AppColors.deepPurple,
-            ),
-            SizedBox(height: AppSpacing.md),
-            Text(
-              'No open games right now',
-              style: AppText.title,
-              textAlign: TextAlign.center,
             ),
             SizedBox(height: AppSpacing.sm),
             Text(
-              'Tap "Start a New Game" to open one, and friends can join with '
-              'your code.',
+              'No open games right now. Start one or join with a code!',
               style: AppText.bodyMuted,
               textAlign: TextAlign.center,
             ),
@@ -156,15 +147,18 @@ class _OpenGamesList extends StatelessWidget {
       );
     }
 
-    return ListView.separated(
-      itemCount: games.length,
-      separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sm),
-      itemBuilder: (context, i) => _OpenGameTile(
-        game: games[i],
-        onJoin: () => onJoin(
-          () => context.read<LobbyController>().joinByCode(games[i].code),
-        ),
-      ),
+    return Column(
+      children: [
+        for (final game in games) ...[
+          _OpenGameTile(
+            game: game,
+            onJoin: () => onJoin(
+              () => context.read<LobbyController>().joinByCode(game.code),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+        ],
+      ],
     );
   }
 }
@@ -175,8 +169,6 @@ class _OpenGameTile extends StatelessWidget {
   final Game game;
   final VoidCallback onJoin;
 
-  /// Live occupancy for the tile, e.g. "2 / 4 players". Falls back to a simple
-  /// capacity label if the count is unknown for any reason.
   static String _playersLabel(Game game) {
     final count = game.playerCount;
     if (count == null) return 'Up to ${game.maxPlayers} players';
@@ -196,24 +188,16 @@ class _OpenGameTile extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: AppResponsive.s(context, 56).clamp(48.0, 56.0),
-            height: AppResponsive.s(context, 56).clamp(48.0, 56.0),
+            width: 48,
+            height: 48,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               gradient: AppColors.brandGradient,
               borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
             ),
-            child: Icon(
-              Icons.groups_rounded,
-              color: Colors.white,
-              size: AppResponsive.isNarrow(context) ? 26 : 30,
-            ),
+            child: const Icon(Icons.groups_rounded, color: Colors.white, size: 26),
           ),
-          SizedBox(
-            width: AppResponsive.isNarrow(context)
-                ? AppSpacing.sm
-                : AppSpacing.md,
-          ),
+          const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -236,7 +220,7 @@ class _OpenGameTile extends StatelessWidget {
           ),
           const SizedBox(width: AppSpacing.sm),
           SizedBox(
-            width: AppResponsive.isNarrow(context) ? 96 : 112,
+            width: 100,
             child: BigButton(
               label: 'Join',
               variant: BigButtonVariant.secondary,

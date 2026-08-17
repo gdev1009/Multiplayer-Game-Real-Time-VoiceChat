@@ -15,6 +15,10 @@ class SpeechInputService {
   bool _initAttempted = false;
   String? _localeId;
 
+  Completer<String?>? _session;
+  String _latest = '';
+  bool _heardListening = false;
+
   bool get isAvailable => _ready;
   bool get isListening => _speech.isListening;
 
@@ -28,10 +32,26 @@ class SpeechInputService {
     _initAttempted = true;
     try {
       _ready = await _speech.initialize(
-        onError: (e) => debugPrint('SpeechInput error: ${e.errorMsg}'),
-        onStatus: (s) => debugPrint('SpeechInput status: $s'),
-        // Short finalTimeout so a one-word utterance finishes promptly.
-        finalTimeout: const Duration(milliseconds: 1200),
+        onError: (e) {
+          debugPrint('SpeechInput error: ${e.errorMsg}');
+          final msg = e.errorMsg.toLowerCase();
+          if (msg.contains('no_match') ||
+              msg.contains('speech_timeout') ||
+              msg.contains('client')) {
+            _finishSession();
+          }
+        },
+        onStatus: (s) {
+          debugPrint('SpeechInput status: $s');
+          if (s == SpeechToText.listeningStatus) {
+            _heardListening = true;
+          }
+          if (s == SpeechToText.doneStatus ||
+              (_heardListening && s == SpeechToText.notListeningStatus)) {
+            _finishSession();
+          }
+        },
+        finalTimeout: const Duration(milliseconds: 900),
       );
       if (_ready) {
         _localeId = await _pickLocale();
@@ -41,6 +61,12 @@ class SpeechInputService {
       _ready = false;
     }
     return _ready;
+  }
+
+  void _finishSession() {
+    final session = _session;
+    if (session == null || session.isCompleted) return;
+    session.complete(cleanWord(_latest));
   }
 
   /// Prefer an English voice pack when present; otherwise OS default.
@@ -67,36 +93,36 @@ class SpeechInputService {
 
   /// Listen for a short phrase and return a cleaned single word, or null.
   Future<String?> listenForWord({
-    Duration listenFor = const Duration(seconds: 12),
-    Duration pauseFor = const Duration(milliseconds: 2200),
+    Duration listenFor = const Duration(seconds: 10),
+    Duration pauseFor = const Duration(milliseconds: 1600),
   }) async {
     if (!await ensureReady()) return null;
 
     if (_speech.isListening) {
       await _speech.stop();
-      await Future<void>.delayed(const Duration(milliseconds: 200));
+      await Future<void>.delayed(const Duration(milliseconds: 250));
     }
 
-    final done = Completer<String?>();
-    var latest = '';
+    _latest = '';
+    _heardListening = false;
+    final session = Completer<String?>();
+    _session = session;
 
     try {
       await _speech.listen(
         onResult: (result) {
-          latest = result.recognizedWords;
-          if (result.finalResult && !done.isCompleted) {
-            done.complete(cleanWord(latest));
+          _latest = result.recognizedWords;
+          if (result.finalResult) {
+            _finishSession();
           }
         },
         listenOptions: SpeechListenOptions(
           listenFor: listenFor,
           pauseFor: pauseFor,
           partialResults: true,
-          // Keep going through brief noise; our timeout still finishes.
           cancelOnError: false,
-          // Dictation catches single words more reliably on phones than
-          // confirmation mode (Ronna / mobile: Speak missed words).
-          listenMode: ListenMode.dictation,
+          // One-word clue / guess — confirmation, not long dictation.
+          listenMode: ListenMode.confirmation,
           autoPunctuation: false,
           enableHapticFeedback: false,
           localeId: _localeId,
@@ -104,27 +130,30 @@ class SpeechInputService {
       );
     } catch (e) {
       debugPrint('SpeechInput listen failed: $e');
+      _session = null;
       return null;
     }
 
     try {
-      final heard = await done.future.timeout(
+      final heard = await session.future.timeout(
         listenFor + const Duration(seconds: 2),
-        onTimeout: () => cleanWord(latest),
+        onTimeout: () => cleanWord(_latest),
       );
-      return heard ?? cleanWord(latest);
+      return heard ?? cleanWord(_latest);
     } finally {
+      _session = null;
       try {
         if (_speech.isListening) {
           await _speech.stop();
         }
       } catch (_) {}
       // Give Android a beat to release the mic before game audio resumes.
-      await Future<void>.delayed(const Duration(milliseconds: 350));
+      await Future<void>.delayed(const Duration(milliseconds: 400));
     }
   }
 
   Future<void> cancel() async {
+    _finishSession();
     if (_speech.isListening) {
       await _speech.cancel();
     }
@@ -134,6 +163,18 @@ class SpeechInputService {
     unawaited(cancel());
   }
 
+  static const _fillers = {
+    'um',
+    'uh',
+    'ah',
+    'er',
+    'the',
+    'a',
+    'an',
+    'like',
+    'please',
+  };
+
   /// First spoken token, title-cased, punctuation stripped.
   static String? cleanWord(String raw) {
     final t = raw.trim();
@@ -142,8 +183,11 @@ class SpeechInputService {
     final parts =
         cleaned.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
     if (parts.isEmpty) return null;
-    final word = parts.first;
-    if (word.isEmpty) return null;
-    return word[0].toUpperCase() + word.substring(1).toLowerCase();
+    final chosen = parts.firstWhere(
+      (p) => !_fillers.contains(p.toLowerCase()),
+      orElse: () => parts.first,
+    );
+    if (chosen.isEmpty) return null;
+    return chosen[0].toUpperCase() + chosen.substring(1).toLowerCase();
   }
 }

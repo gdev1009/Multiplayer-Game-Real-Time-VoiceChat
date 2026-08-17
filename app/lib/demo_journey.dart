@@ -181,6 +181,8 @@ class _SilentOutput implements SoundOutput {
   @override
   Future<void> stopAll() async {}
   @override
+  Future<void> releaseForSpeechInput() async {}
+  @override
   void dispose() {}
 }
 

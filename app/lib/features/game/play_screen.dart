@@ -318,14 +318,16 @@ class _MatchBody extends StatelessWidget {
         state.secretWord.trim().isNotEmpty;
 
     // Bottom dock hugs content — shorter on narrow/short phones.
+    // Stage stays full-screen (Android adjustPan + Scaffold
+    // resizeToAvoidBottomInset: false). Dock lifts with viewInsets when set.
     final narrowPhone = size.width < 400;
     final shortPhone = size.height < 700;
     final panelH = narrowPhone
         ? (shortPhone ? 104.0 : 112.0)
         : (shortPhone ? 118.0 : 128.0);
-    final panelBottom =
-        MediaQuery.paddingOf(context).bottom + 6 + viewInsets.bottom * 0.1;
-    final dockReserve = panelH + 14 + viewInsets.bottom * 0.12;
+    final keyboard = viewInsets.bottom;
+    final panelBottom = MediaQuery.paddingOf(context).bottom + 10 + keyboard;
+    final dockReserve = panelH + 18 + MediaQuery.paddingOf(context).bottom;
 
     final margin = narrowPhone ? 6.0 : 10.0;
 
@@ -338,29 +340,27 @@ class _MatchBody extends StatelessWidget {
           child: StudioStage(
             state: state,
             viewerRole: viewerRole,
-            // Prefer the local saved look for my seat so lobby + stage match
-            // even if mw_game_characters is slow or stale.
             charactersByRole: _stageCharacters(context, controller),
             bottomInset: dockReserve,
             showScoreboards: true,
             spotlightHoldRole: controller.spotlightHoldRole,
           ),
         ),
-        // Mystery word sits on the marquee — above the upper seat heads
-        // (video21: LEMON banner was covering Greg / Rosie).
+        // Expected word for the clue-giver — sits in the gap under MATCH WORD
+        // and above the upper seats (not on the logo, not on Guy's head).
         if (showSecretWord)
           Positioned(
-            left: size.width * 0.20,
-            right: size.width * 0.20,
-            top: size.height * 0.205,
-            height: (size.height * 0.052).clamp(42.0, 56.0),
+            left: size.width * 0.18,
+            right: size.width * 0.18,
+            top: size.height * 0.238,
+            height: (size.height * 0.048).clamp(40.0, 52.0),
             child: _StageMysteryWord(word: state.secretWord),
           ),
         if (state.isOver)
           Positioned(
             left: 12,
             right: 12,
-            bottom: 10,
+            bottom: 10 + keyboard,
             child: SafeArea(
               top: false,
               child: _GameOverPanel(state: state),
@@ -370,7 +370,7 @@ class _MatchBody extends StatelessWidget {
           Positioned(
             left: 12,
             right: 12,
-            bottom: 10,
+            bottom: 10 + keyboard,
             child: SafeArea(
               top: false,
               child: _HalftimePanel(state: state, controller: controller),
@@ -380,7 +380,7 @@ class _MatchBody extends StatelessWidget {
           Positioned(
             left: 12,
             right: 12,
-            bottom: 10,
+            bottom: 10 + keyboard,
             child: SafeArea(
               top: false,
               child: _ResolvedPanel(state: state, controller: controller),
@@ -482,18 +482,25 @@ class _DockPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
+    return Container(
       decoration: BoxDecoration(
         color: const Color(0xEE160C30),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: const Color(0xFFF1B159).withValues(alpha: 0.75),
-          width: 1.5,
+          color: const Color(0xFFF1B159),
+          width: 2,
         ),
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        child: child,
+      padding: const EdgeInsets.all(2),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: ColoredBox(
+          color: const Color(0xEE160C30),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            child: child,
+          ),
+        ),
       ),
     );
   }
@@ -632,7 +639,7 @@ class _ResolvedPanel extends StatelessWidget {
     final headline = guessed
         ? (secret.isEmpty
             ? 'Nice work! On to the next word.'
-            : 'Yes — it was')
+            : 'Yes it was')
         : (secret.isEmpty
             ? 'Time’s up — on to the next word.'
             : 'Time’s up! The word was');
@@ -647,10 +654,10 @@ class _ResolvedPanel extends StatelessWidget {
           ),
           decoration: BoxDecoration(
             color: guessed ? AppColors.lavenderSoft : AppColors.warmBeige,
-            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: guessed ? AppColors.success : AppColors.gold,
-              width: 1.5,
+              width: 2,
             ),
           ),
           child: secret.isEmpty
@@ -669,6 +676,8 @@ class _ResolvedPanel extends StatelessWidget {
                       child: Text(
                         headline,
                         textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: AppText.body.copyWith(
                           fontSize: 22,
                           fontWeight: FontWeight.w900,
@@ -677,48 +686,34 @@ class _ResolvedPanel extends StatelessWidget {
                     ),
                   ],
                 )
-              : Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          guessed
-                              ? Icons.stars_rounded
-                              : Icons.visibility_rounded,
-                          color:
-                              guessed ? AppColors.success : AppColors.gold,
-                          size: 26,
-                        ),
-                        const SizedBox(width: 8),
-                        Flexible(
-                          child: Text(
-                            headline,
-                            textAlign: TextAlign.center,
-                            style: AppText.body.copyWith(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        '“$secret”',
+              : FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        guessed
+                            ? Icons.stars_rounded
+                            : Icons.visibility_rounded,
+                        color: guessed ? AppColors.success : AppColors.gold,
+                        size: 26,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '$headline $secret',
                         maxLines: 1,
+                        softWrap: false,
                         textAlign: TextAlign.center,
                         style: AppText.body.copyWith(
-                          fontSize: 36,
+                          fontSize: 28,
                           fontWeight: FontWeight.w900,
                           height: 1.05,
-                          letterSpacing: 0.4,
+                          letterSpacing: 0.2,
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
         ),
         const SizedBox(height: AppSpacing.sm),

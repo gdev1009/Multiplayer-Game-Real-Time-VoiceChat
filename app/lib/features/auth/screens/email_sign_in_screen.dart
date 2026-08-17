@@ -207,7 +207,13 @@ class _EmailSignInScreenState extends State<EmailSignInScreen> {
 
   void _openForgotPin() {
     Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => const ForgotPinScreen()),
+      MaterialPageRoute<void>(
+        builder: (_) => ForgotPinScreen(
+          initialEmail: _emailController.text.trim().isEmpty
+              ? null
+              : _emailController.text.trim(),
+        ),
+      ),
     );
   }
 

@@ -222,7 +222,6 @@ class _WordInputState extends State<WordInput> {
   /// Compact studio dock — Ronna: clear Type **or** Speak choice.
   /// Narrow phones: mic icon only so the type field stays usable.
   Widget _buildDock(bool enabled) {
-    final action = widget.label.toLowerCase();
     return LayoutBuilder(
       builder: (context, constraints) {
         final narrow = constraints.maxWidth < 380;
@@ -234,182 +233,183 @@ class _WordInputState extends State<WordInput> {
         final fieldSize = narrow ? 22.0 : 24.0;
         final hintSize = narrow ? 20.0 : 22.0;
         final sendW = narrow ? 52.0 : 58.0;
+        const gold = Color(0xFFE8B84A);
+        const goldOuter = Color(0xFFF1B159);
+        const fieldFill = Color(0xFF3A2468);
 
         return Semantics(
           label: '${widget.label}. Type or speak your word.',
-          child: DecoratedBox(
+          child: Container(
             decoration: BoxDecoration(
               color: const Color(0xFF24154A),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: const Color(0xFFF1B159).withValues(alpha: 0.75),
-                width: 1.5,
-              ),
+              border: Border.all(color: goldOuter, width: 2),
             ),
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(padH, padV, padH, padV),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    enabled
-                        ? 'Type or Speak — your $action'
-                        : widget.label,
-                    textAlign: TextAlign.center,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: const Color(0xFFE8B84A),
-                      fontWeight: FontWeight.w900,
-                      fontSize: titleSize,
-                      height: 1.15,
-                      letterSpacing: 0.2,
-                    ),
-                  ),
-                  SizedBox(height: narrow ? 8 : 10),
-                  SizedBox(
-                    height: rowH,
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _DockSpeakButton(
-                          enabled: enabled,
-                          listening: _listening,
-                          iconOnly: narrow,
-                          onTap: enabled ? _speak : null,
-                        ),
-                        SizedBox(width: narrow ? 6 : 8),
-                        Expanded(
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF3A2468),
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(
-                                color: const Color(0xFFE8B84A),
-                                width: 1.5,
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                if (!narrow)
-                                  Padding(
-                                    padding: const EdgeInsets.only(
-                                      left: 12,
-                                      right: 8,
-                                    ),
-                                    child: Text(
-                                      'TYPE',
-                                      style: TextStyle(
-                                        color: const Color(0xFFE8B84A)
-                                            .withValues(
-                                          alpha: enabled ? 1 : 0.45,
-                                        ),
-                                        fontWeight: FontWeight.w900,
-                                        fontSize: 18,
-                                        height: 1,
-                                        letterSpacing: 0.8,
-                                      ),
-                                    ),
-                                  ),
-                                if (!narrow)
-                                  Container(
-                                    width: 1.5,
-                                    height: 24,
-                                    color: const Color(0xFFE8B84A)
-                                        .withValues(alpha: 0.45),
-                                  ),
-                                Expanded(
-                                  child: Theme(
-                                    data: Theme.of(context).copyWith(
-                                      inputDecorationTheme:
-                                          const InputDecorationTheme(
-                                        filled: true,
-                                        fillColor: Color(0xFF3A2468),
-                                        border: InputBorder.none,
-                                        enabledBorder: InputBorder.none,
-                                        focusedBorder: InputBorder.none,
-                                        disabledBorder: InputBorder.none,
-                                      ),
-                                    ),
-                                    child: TextField(
-                                      controller: _controller,
-                                      enabled: enabled,
-                                      textAlign: TextAlign.left,
-                                      textAlignVertical:
-                                          TextAlignVertical.center,
-                                      textInputAction: TextInputAction.send,
-                                      onTap: widget.onInteract,
-                                      onSubmitted: (_) => _send(),
-                                      style: AppText.body.copyWith(
-                                        fontSize: fieldSize,
-                                        color: Colors.white,
-                                        height: 1.0,
-                                        fontWeight: FontWeight.w900,
-                                      ),
-                                      cursorColor: const Color(0xFFE8B84A),
-                                      keyboardAppearance: Brightness.dark,
-                                      decoration: InputDecoration(
-                                        isCollapsed: true,
-                                        filled: true,
-                                        fillColor: const Color(0xFF3A2468),
-                                        hintText:
-                                            enabled ? 'Type here…' : '…',
-                                        hintStyle:
-                                            AppText.bodyMuted.copyWith(
-                                          fontSize: hintSize,
-                                          color: Colors.white70,
-                                          height: 1.0,
-                                          fontWeight: FontWeight.w800,
-                                        ),
-                                        border: InputBorder.none,
-                                        enabledBorder: InputBorder.none,
-                                        focusedBorder: InputBorder.none,
-                                        disabledBorder: InputBorder.none,
-                                        contentPadding:
-                                            EdgeInsets.symmetric(
-                                          horizontal: narrow ? 10 : 12,
-                                          vertical: narrow ? 12 : 14,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
+            // Inset fill so the gold stroke stays fully closed (child paint
+            // cannot cover the border).
+            padding: const EdgeInsets.all(2),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: ColoredBox(
+                color: const Color(0xFF24154A),
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(padH, padV, padH, padV),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          enabled
+                              ? 'Type or Speak — your ${widget.label.toLowerCase()}'
+                              : widget.label,
+                          maxLines: 1,
+                          softWrap: false,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: gold,
+                            fontWeight: FontWeight.w900,
+                            fontSize: titleSize,
+                            height: 1.15,
+                            letterSpacing: 0.2,
                           ),
                         ),
-                        SizedBox(width: narrow ? 6 : 8),
-                        Semantics(
-                          button: true,
-                          label: 'Send',
-                          child: SizedBox(
-                            width: sendW,
-                            child: FilledButton(
-                              onPressed: enabled ? _send : null,
-                              style: FilledButton.styleFrom(
-                                backgroundColor: AppColors.deepPurple,
-                                foregroundColor: Colors.white,
-                                padding: EdgeInsets.zero,
-                                side: const BorderSide(
-                                  color: Color(0xFFE8B84A),
-                                  width: 1.5,
-                                ),
-                                shape: RoundedRectangleBorder(
+                      ),
+                      SizedBox(height: narrow ? 8 : 10),
+                      SizedBox(
+                        height: rowH,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _DockSpeakButton(
+                              enabled: enabled,
+                              listening: _listening,
+                              iconOnly: narrow,
+                              onTap: enabled ? _speak : null,
+                            ),
+                            SizedBox(width: narrow ? 6 : 8),
+                            Expanded(
+                              child: Container(
+                                decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(color: gold, width: 1.5),
+                                ),
+                                padding: const EdgeInsets.all(1.5),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(12.5),
+                                  child: ColoredBox(
+                                    color: fieldFill,
+                                    child: Row(
+                                      children: [
+                                        if (!narrow)
+                                          Padding(
+                                            padding: const EdgeInsets.only(
+                                              left: 12,
+                                              right: 8,
+                                            ),
+                                            child: Text(
+                                              'TYPE',
+                                              style: TextStyle(
+                                                color: gold.withValues(
+                                                  alpha: enabled ? 1 : 0.45,
+                                                ),
+                                                fontWeight: FontWeight.w900,
+                                                fontSize: 18,
+                                                height: 1,
+                                                letterSpacing: 0.8,
+                                              ),
+                                            ),
+                                          ),
+                                        if (!narrow)
+                                          Container(
+                                            width: 1.5,
+                                            height: 24,
+                                            color: gold.withValues(alpha: 0.45),
+                                          ),
+                                        Expanded(
+                                          child: TextField(
+                                            controller: _controller,
+                                            enabled: enabled,
+                                            textAlign: TextAlign.left,
+                                            textAlignVertical:
+                                                TextAlignVertical.center,
+                                            textInputAction:
+                                                TextInputAction.send,
+                                            onTap: widget.onInteract,
+                                            onSubmitted: (_) => _send(),
+                                            style: AppText.body.copyWith(
+                                              fontSize: fieldSize,
+                                              color: Colors.white,
+                                              height: 1.0,
+                                              fontWeight: FontWeight.w900,
+                                            ),
+                                            cursorColor: gold,
+                                            keyboardAppearance: Brightness.dark,
+                                            decoration: InputDecoration(
+                                              isCollapsed: true,
+                                              filled: true,
+                                              fillColor: fieldFill,
+                                              hintText:
+                                                  enabled ? 'Type here…' : '…',
+                                              hintStyle:
+                                                  AppText.bodyMuted.copyWith(
+                                                fontSize: hintSize,
+                                                color: Colors.white70,
+                                                height: 1.0,
+                                                fontWeight: FontWeight.w800,
+                                              ),
+                                              border: InputBorder.none,
+                                              enabledBorder: InputBorder.none,
+                                              focusedBorder: InputBorder.none,
+                                              disabledBorder: InputBorder.none,
+                                              contentPadding:
+                                                  EdgeInsets.symmetric(
+                                                horizontal: narrow ? 10 : 12,
+                                                vertical: narrow ? 12 : 14,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
                                 ),
                               ),
-                              child: Icon(
-                                Icons.arrow_upward_rounded,
-                                size: narrow ? 26 : 30,
+                            ),
+                            SizedBox(width: narrow ? 6 : 8),
+                            Semantics(
+                              button: true,
+                              label: 'Send',
+                              child: SizedBox(
+                                width: sendW,
+                                child: FilledButton(
+                                  onPressed: enabled ? _send : null,
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor: AppColors.deepPurple,
+                                    foregroundColor: Colors.white,
+                                    padding: EdgeInsets.zero,
+                                    side: const BorderSide(
+                                      color: gold,
+                                      width: 1.5,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                  ),
+                                  child: Icon(
+                                    Icons.arrow_upward_rounded,
+                                    size: narrow ? 26 : 30,
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
           ),
