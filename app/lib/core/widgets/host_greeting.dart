@@ -21,7 +21,9 @@ class HostGreeting extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final avatar = AppResponsive.s(context, 60).clamp(52.0, 68.0);
+    final short = AppResponsive.isShort(context);
+    final avatar = AppResponsive.s(context, short ? 48.0 : 56.0)
+        .clamp(44.0, 60.0);
 
     return Semantics(
       label: '$hostName says: $message',
@@ -30,17 +32,17 @@ class HostGreeting extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _HostAvatar(size: avatar),
-          const SizedBox(width: AppSpacing.md),
+          const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Container(
-              padding: const EdgeInsets.symmetric(
+              padding: EdgeInsets.symmetric(
                 horizontal: AppSpacing.md,
-                vertical: AppSpacing.md,
+                vertical: short ? AppSpacing.sm : 12,
               ),
               decoration: BoxDecoration(
                 color: AppColors.lavender,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: AppColors.divider, width: 2),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.divider, width: 1.5),
                 boxShadow: AppColors.tileShadow,
               ),
               child: Column(
@@ -48,13 +50,21 @@ class HostGreeting extends StatelessWidget {
                 children: [
                   Text(
                     hostName,
-                    style: AppText.body.copyWith(
+                    style: AppText.caption.copyWith(
                       fontWeight: FontWeight.w800,
                       color: AppColors.deepPurple,
+                      fontSize: 14,
                     ),
                   ),
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(message, style: AppText.body),
+                  const SizedBox(height: 4),
+                  Text(
+                    message,
+                    style: AppText.body.copyWith(
+                      fontSize: short ? 14 : 15,
+                      height: 1.3,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -78,7 +88,7 @@ class _HostAvatar extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.surface,
         shape: BoxShape.circle,
-        border: Border.all(color: Colors.white, width: 3),
+        border: Border.all(color: Colors.white, width: 2.5),
         boxShadow: AppColors.tileShadow,
       ),
       clipBehavior: Clip.antiAlias,

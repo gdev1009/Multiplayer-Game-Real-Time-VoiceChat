@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/navigation/app_routes.dart';
-import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_responsive.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text.dart';
@@ -46,8 +45,7 @@ class StudioScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final lobby = context.watch<LobbyController>();
-
-    final iconSize = AppResponsive.s(context, 88).clamp(64.0, 88.0);
+    final short = AppResponsive.isShort(context);
 
     return AppPage(
       title: 'The Studio',
@@ -55,43 +53,29 @@ class StudioScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SizedBox(
-            height: AppResponsive.isShort(context)
-                ? AppSpacing.md
-                : AppSpacing.lg,
-          ),
+          SizedBox(height: short ? AppSpacing.sm : AppSpacing.md),
           const HostGreeting(
             message:
-                'Welcome to the studio! Start your own game and share the '
-                'code with friends, or join a game with a friend\'s code.',
+                'Start a new game and share the code with friends, '
+                'or join with a friend’s code.',
           ),
-          SizedBox(
-            height: AppResponsive.isShort(context)
-                ? AppSpacing.lg
-                : AppSpacing.xxl,
-          ),
-          Icon(
-            Icons.theater_comedy_rounded,
-            size: iconSize,
-            color: AppColors.gold,
-          ),
-          const SizedBox(height: AppSpacing.xl),
+          SizedBox(height: short ? AppSpacing.md : AppSpacing.lg),
           BigButton(
-            label: 'Start a New Game',
+            label: 'Start New Game',
             icon: Icons.add_circle_outline_rounded,
             isLoading: lobby.busy,
             onPressed: lobby.busy ? null : () => _startGame(context),
           ),
           const SizedBox(height: AppSpacing.md),
           BigButton(
-            label: 'Join with a Code',
+            label: 'Join with Code',
             icon: Icons.dialpad_rounded,
             variant: BigButtonVariant.secondary,
             onPressed: lobby.busy
                 ? null
                 : () => Navigator.of(context).pushNamed(AppRoutes.joinByCode),
           ),
-          const SizedBox(height: AppSpacing.md),
+          SizedBox(height: short ? AppSpacing.md : AppSpacing.lg),
         ],
       ),
     );

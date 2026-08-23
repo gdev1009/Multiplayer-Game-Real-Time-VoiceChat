@@ -23,7 +23,7 @@ class PlayerTrophyBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final wins = room.winTrophyCount;
-    final size = AppResponsive.s(context, 56).clamp(48.0, 60.0);
+    final size = AppResponsive.s(context, 72).clamp(64.0, 84.0);
 
     return Semantics(
       button: true,
@@ -37,47 +37,39 @@ class PlayerTrophyBadge extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           child: Padding(
             padding: const EdgeInsets.all(4),
-            child: SizedBox(
-              width: size + 8,
-              height: size + 8,
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Center(
-                    child: Container(
-                      width: size,
-                      height: size,
-                      decoration: BoxDecoration(
-                        color: AppColors.lavenderSoft,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: AppColors.gold, width: 2),
-                        boxShadow: AppColors.tileShadow,
-                      ),
-                      padding: const EdgeInsets.all(6),
-                      child: loading && wins == 0
-                          ? const Padding(
-                              padding: EdgeInsets.all(10),
-                              child: CircularProgressIndicator(strokeWidth: 2.5),
-                            )
-                          : Image.asset(
-                              PrizeAssets.winCup,
-                              fit: BoxFit.contain,
-                              filterQuality: FilterQuality.high,
-                              errorBuilder: (_, __, ___) => Icon(
-                                Icons.emoji_events_rounded,
-                                size: size * 0.55,
-                                color: AppColors.gold,
-                              ),
-                            ),
-                    ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Container(
+                  width: size,
+                  height: size,
+                  decoration: BoxDecoration(
+                    color: AppColors.lavenderSoft,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.gold, width: 2),
+                    boxShadow: AppColors.tileShadow,
                   ),
-                  Positioned(
-                    right: 0,
-                    top: 0,
-                    child: _WinCountChip(count: wins),
-                  ),
-                ],
-              ),
+                  padding: const EdgeInsets.all(8),
+                  child: loading && wins == 0
+                      ? const Padding(
+                          padding: EdgeInsets.all(10),
+                          child: CircularProgressIndicator(strokeWidth: 2.5),
+                        )
+                      : Image.asset(
+                          PrizeAssets.winCup,
+                          fit: BoxFit.contain,
+                          filterQuality: FilterQuality.high,
+                          errorBuilder: (_, __, ___) => Icon(
+                            Icons.emoji_events_rounded,
+                            size: size * 0.55,
+                            color: AppColors.gold,
+                          ),
+                        ),
+                ),
+                const SizedBox(width: 6),
+                _WinCountChip(count: wins),
+              ],
             ),
           ),
         ),

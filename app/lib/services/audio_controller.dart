@@ -37,11 +37,11 @@ class AudioController extends ChangeNotifier {
   static const _kMusic = 'audio.musicVolume';
   static const _kSfx = 'audio.sfxVolume';
   static const _kVoice = 'audio.voiceVolume';
-  static const _kVolumeBoostV2 = 'audio.volumeBoostV2';
+  static const _kVolumeBoostV3 = 'audio.volumeBoostV3';
 
   bool _muted = false;
   // Music sits under the show so voice / SFX can stay at full media volume.
-  double _musicVolume = 0.48;
+  double _musicVolume = 0.62;
   double _sfxVolume = 1.0;
   double _voiceVolume = 1.0;
   /// Temporary duck while the mic is open — never written to prefs.
@@ -80,7 +80,7 @@ class AudioController extends ChangeNotifier {
     try {
       _prefs ??= await SharedPreferences.getInstance();
       _muted = _prefs?.getBool(_kMuted) ?? false;
-      _musicVolume = _prefs?.getDouble(_kMusic) ?? 0.48;
+      _musicVolume = _prefs?.getDouble(_kMusic) ?? 0.62;
       _sfxVolume = _prefs?.getDouble(_kSfx) ?? 1.0;
       _voiceVolume = _prefs?.getDouble(_kVoice) ?? 1.0;
       // Older Speak-duck bug persisted 0 — treat as "use default" (mute is separate).
@@ -88,11 +88,11 @@ class AudioController extends ChangeNotifier {
         _voiceVolume = 1.0;
         await _prefs?.setDouble(_kVoice, _voiceVolume);
       }
-      // One-time lift for installs that still have the quieter defaults saved.
-      final boosted = _prefs?.getBool(_kVolumeBoostV2) ?? false;
+      // Lift quieter saved defaults so Guy / buzzer sit on the media slider.
+      final boosted = _prefs?.getBool(_kVolumeBoostV3) ?? false;
       if (!boosted) {
-        if (_musicVolume >= 0.65 && _musicVolume <= 0.75) {
-          _musicVolume = 0.48;
+        if (_musicVolume < 0.62) {
+          _musicVolume = 0.62;
           await _prefs?.setDouble(_kMusic, _musicVolume);
         }
         if (_sfxVolume < 1.0) {
@@ -103,7 +103,7 @@ class AudioController extends ChangeNotifier {
           _voiceVolume = 1.0;
           await _prefs?.setDouble(_kVoice, _voiceVolume);
         }
-        await _prefs?.setBool(_kVolumeBoostV2, true);
+        await _prefs?.setBool(_kVolumeBoostV3, true);
       }
       notifyListeners();
     } catch (err) {

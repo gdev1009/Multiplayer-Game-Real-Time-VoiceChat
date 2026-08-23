@@ -104,7 +104,10 @@ class AudioService implements SoundOutput {
         AudioContext(
           iOS: AudioContextIOS(
             category: AVAudioSessionCategory.playback,
-            options: const {AVAudioSessionOptions.duckOthers},
+            options: const {
+              AVAudioSessionOptions.duckOthers,
+              AVAudioSessionOptions.defaultToSpeaker,
+            },
           ),
           android: const AudioContextAndroid(
             isSpeakerphoneOn: true,

@@ -9,23 +9,37 @@ class OnboardingService {
 
   final ProfileService _profiles;
 
-  static const seenKey = 'mw_onboarding_seen';
+  /// Bump when walkthrough copy/layout must be shown again to existing testers.
+  static const contentVersion = 2;
+  static const seenKey = 'mw_onboarding_seen_v2';
+  static const _versionKey = 'mw_onboarding_version';
 
-  /// True if this install already finished or skipped onboarding.
+  /// True if this install already finished or skipped the current walkthrough.
   Future<bool> localSeen() async {
     final prefs = await SharedPreferences.getInstance();
+    final version = prefs.getInt(_versionKey) ?? 0;
+    if (version < contentVersion) return false;
     return prefs.getBool(seenKey) ?? false;
   }
 
-  /// Show walkthrough only if neither this device nor this account has seen it.
+  /// Show walkthrough if this device has not completed the current version.
+  ///
+  /// A content-version bump re-shows onboarding even when an older walkthrough
+  /// was skipped (Ronna never saw the new pages on TestFlight).
   Future<bool> shouldShow({Profile? profile}) async {
+    final prefs = await SharedPreferences.getInstance();
+    final version = prefs.getInt(_versionKey) ?? 0;
+    if (version < contentVersion) return true;
+    if (prefs.getBool(seenKey) ?? false) return false;
+    // Only trust the profile flag once this install has the current version.
     if (profile?.onboardingSeen == true) return false;
-    return !(await localSeen());
+    return true;
   }
 
   /// Persist locally, and on the profile when signed in.
   Future<void> markSeen({bool syncProfile = true}) async {
     final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_versionKey, contentVersion);
     await prefs.setBool(seenKey, true);
     if (syncProfile) {
       try {
@@ -36,10 +50,13 @@ class OnboardingService {
     }
   }
 
-  /// After sign-in: if the account already saw onboarding, remember it locally.
+  /// After sign-in: if the account already saw the *current* walkthrough,
+  /// remember it locally. Older profile flags alone do not skip a new version.
   Future<void> syncFromProfile(Profile? profile) async {
     if (profile?.onboardingSeen != true) return;
     final prefs = await SharedPreferences.getInstance();
+    final version = prefs.getInt(_versionKey) ?? 0;
+    if (version < contentVersion) return;
     await prefs.setBool(seenKey, true);
   }
 }

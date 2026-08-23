@@ -9,6 +9,7 @@ import '../../core/widgets/app_page.dart';
 import '../../core/widgets/big_button.dart';
 import '../../core/widgets/host_greeting.dart';
 import '../../services/billing_service.dart';
+import '../../services/entitlement_service.dart';
 import 'trial_policy.dart';
 
 /// Free-trial ended / subscribe prompt.
@@ -34,6 +35,11 @@ class _PaywallScreenState extends State<PaywallScreen> {
       _busy = false;
       _message = result.message;
     });
+    if (result.ok) {
+      await context.read<EntitlementService>().refresh();
+      if (!mounted) return;
+      Navigator.of(context).pop();
+    }
   }
 
   @override
@@ -43,8 +49,8 @@ class _PaywallScreenState extends State<PaywallScreen> {
     final greeting = args is String && args.trim().isNotEmpty
         ? args.trim()
         : 'Your free trial has been a joy. For ${TrialPolicy.monthlyPriceLabel} '
-            'a month you can keep the studio lights on — no rush, just '
-            'whenever you are ready.';
+            'a month you keep Match Word ad-free — no rush, just whenever '
+            'you are ready.';
 
     return AppPage(
       child: Column(
@@ -66,7 +72,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
             style: AppText.bodyMuted,
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: AppSpacing.xl),
+          const SizedBox(height: AppSpacing.lg),
           if (_message != null) ...[
             Text(
               _message!,
@@ -76,9 +82,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
             const SizedBox(height: AppSpacing.md),
           ],
           BigButton(
-            label: _busy
-                ? 'Please wait…'
-                : 'Subscribe — ${TrialPolicy.monthlyPriceLabel} / month',
+            label: _busy ? 'Please wait…' : 'Subscribe',
             icon: Icons.favorite_rounded,
             onPressed: _busy ? null : () => _run(billing.purchaseMonthly),
           ),
@@ -88,10 +92,19 @@ class _PaywallScreenState extends State<PaywallScreen> {
             icon: Icons.restore_rounded,
             onPressed: _busy ? null : () => _run(billing.restorePurchases),
           ),
-          const SizedBox(height: AppSpacing.md),
+          const SizedBox(height: AppSpacing.lg),
           TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            style: TextButton.styleFrom(foregroundColor: AppColors.textSecondary),
+            onPressed: _busy
+                ? null
+                : () async {
+                    await context.read<EntitlementService>().refresh();
+                    if (!context.mounted) return;
+                    Navigator.of(context).pop();
+                  },
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.textSecondary,
+              minimumSize: const Size.fromHeight(48),
+            ),
             child: const Text('Not now', style: AppText.body),
           ),
           const SizedBox(height: AppSpacing.md),

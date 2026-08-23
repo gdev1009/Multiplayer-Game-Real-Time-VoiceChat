@@ -47,9 +47,9 @@ class AppResponsive {
     return EdgeInsets.symmetric(horizontal: h, vertical: v);
   }
 
-  /// Primary buttons — easy to tap without eating the viewport.
+  /// Primary buttons — minimum height; labels may grow the control.
   static double buttonHeight(BuildContext context) =>
-      isShort(context) ? 48.0 : 52.0;
+      isShort(context) ? 52.0 : 56.0;
 
   /// Soft-clamp OS font scaling so accessibility bumps don't blow layouts.
   static TextScaler textScalerOf(BuildContext context) {
@@ -59,9 +59,9 @@ class AppResponsive {
 
   /// Hero / screen titles.
   static double displaySize(BuildContext context) =>
-      widthOf(context) < 350 ? 26.0 : 30.0;
+      widthOf(context) < 350 ? 22.0 : 26.0;
 
   /// Lobby share-code digits (FittedBox still protects overflow).
   static double codeSize(BuildContext context) =>
-      widthOf(context) < 350 ? 36.0 : 42.0;
+      widthOf(context) < 350 ? 28.0 : 34.0;
 }

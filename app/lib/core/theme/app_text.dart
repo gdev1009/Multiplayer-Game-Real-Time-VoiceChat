@@ -3,8 +3,8 @@ import 'app_colors.dart';
 
 /// Senior-first typography — calm, high-contrast, phone-fit.
 ///
-/// Sized for real devices (~75% of the earlier oversized pass) so screens
-/// fit without cut-off while staying above senior readability floors.
+/// Sized for real iPhones so screens stay professional and fit without
+/// cut-off, while staying readable for seniors.
 class AppText {
   AppText._();
 
@@ -12,7 +12,7 @@ class AppText {
 
   static const TextStyle display = TextStyle(
     fontFamily: _family,
-    fontSize: 30,
+    fontSize: 26,
     height: 1.2,
     fontWeight: FontWeight.w800,
     letterSpacing: -0.2,
@@ -21,8 +21,8 @@ class AppText {
 
   static const TextStyle title = TextStyle(
     fontFamily: _family,
-    fontSize: 22,
-    height: 1.28,
+    fontSize: 20,
+    height: 1.25,
     fontWeight: FontWeight.w700,
     letterSpacing: -0.1,
     color: AppColors.textPrimary,
@@ -30,7 +30,7 @@ class AppText {
 
   static const TextStyle body = TextStyle(
     fontFamily: _family,
-    fontSize: 18,
+    fontSize: 16,
     height: 1.4,
     fontWeight: FontWeight.w500,
     color: AppColors.textPrimary,
@@ -38,7 +38,7 @@ class AppText {
 
   static const TextStyle bodyMuted = TextStyle(
     fontFamily: _family,
-    fontSize: 18,
+    fontSize: 16,
     height: 1.4,
     fontWeight: FontWeight.w500,
     color: AppColors.textSecondary,
@@ -47,7 +47,7 @@ class AppText {
   /// Primary on-screen actions (buttons).
   static const TextStyle action = TextStyle(
     fontFamily: _family,
-    fontSize: 20,
+    fontSize: 17,
     height: 1.15,
     fontWeight: FontWeight.w700,
     letterSpacing: 0.1,
@@ -55,7 +55,7 @@ class AppText {
 
   static const TextStyle error = TextStyle(
     fontFamily: _family,
-    fontSize: 16,
+    fontSize: 15,
     height: 1.35,
     fontWeight: FontWeight.w600,
     color: AppColors.error,
@@ -63,7 +63,7 @@ class AppText {
 
   static const TextStyle caption = TextStyle(
     fontFamily: _family,
-    fontSize: 15,
+    fontSize: 14,
     height: 1.35,
     fontWeight: FontWeight.w600,
     color: AppColors.textSecondary,

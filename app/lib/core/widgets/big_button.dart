@@ -29,7 +29,7 @@ class BigButton extends StatelessWidget {
         isPrimary ? AppColors.onPrimary : AppColors.deepPurple;
     final bool enabled = onPressed != null && !isLoading;
     final height = AppResponsive.buttonHeight(context);
-    final labelStyle = AppText.action.copyWith(color: foreground);
+    final labelStyle = AppText.action.copyWith(color: foreground, height: 1.15);
     final iconSize = AppResponsive.isShort(context) ? 22.0 : 24.0;
 
     final Widget content = isLoading
@@ -43,60 +43,67 @@ class BigButton extends StatelessWidget {
           )
         : Row(
             mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
             children: [
               if (icon != null) ...[
                 Icon(icon, size: iconSize, color: foreground),
                 const SizedBox(width: AppSpacing.sm),
               ],
               Flexible(
-                child: Text(
-                  label,
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: labelStyle,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    label,
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    softWrap: false,
+                    style: labelStyle,
+                  ),
                 ),
               ),
             ],
           );
 
-    return SizedBox(
-      width: double.infinity,
-      height: height,
-      child: Semantics(
-        button: true,
-        label: label,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: isPrimary && enabled ? AppColors.brandGradient : null,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: isPrimary && enabled ? AppColors.softShadow : null,
-          ),
-          child: ElevatedButton(
-            onPressed: enabled ? onPressed : null,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.transparent,
-              foregroundColor: foreground,
-              shadowColor: Colors.transparent,
-              disabledBackgroundColor:
-                  isPrimary ? AppColors.divider : Colors.transparent,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-                side: isPrimary
-                    ? BorderSide.none
-                    : const BorderSide(color: AppColors.deepPurple, width: 2.5),
-              ),
-            ).copyWith(
-              backgroundColor: WidgetStateProperty.resolveWith((states) {
-                if (states.contains(WidgetState.disabled)) {
-                  return isPrimary ? AppColors.divider : Colors.transparent;
-                }
-                return Colors.transparent;
-              }),
+    // Grow with the label — a fixed 52px box made two-line titles paint
+    // over the next button (Ronna: Home + Subscribe overlap).
+    return Semantics(
+      button: true,
+      label: label,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: isPrimary && enabled ? AppColors.softShadow : null,
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: isPrimary && enabled ? AppColors.brandGradient : null,
+              color: isPrimary && !enabled ? AppColors.divider : null,
             ),
-            child: content,
+            child: ElevatedButton(
+              onPressed: enabled ? onPressed : null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.transparent,
+                foregroundColor: foreground,
+                shadowColor: Colors.transparent,
+                disabledBackgroundColor: Colors.transparent,
+                elevation: 0,
+                minimumSize: Size(double.infinity, height),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                tapTargetSize: MaterialTapTargetSize.padded,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: isPrimary
+                      ? BorderSide.none
+                      : const BorderSide(
+                          color: AppColors.deepPurple,
+                          width: 2.5,
+                        ),
+                ),
+              ),
+              child: content,
+            ),
           ),
         ),
       ),

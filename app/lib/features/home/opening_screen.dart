@@ -30,15 +30,37 @@ class OpeningScreen extends StatefulWidget {
   State<OpeningScreen> createState() => _OpeningScreenState();
 }
 
-class _OpeningScreenState extends State<OpeningScreen> {
+class _OpeningScreenState extends State<OpeningScreen> with WidgetsBindingObserver {
+  AccessLevel? _access;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       context.read<CharacterController>().load();
       context.read<PrizeController>().load();
+      _refreshAccess();
     });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _refreshAccess();
+  }
+
+  Future<void> _refreshAccess() async {
+    if (!mounted) return;
+    final level = await context.read<EntitlementService>().refresh();
+    if (!mounted) return;
+    setState(() => _access = level);
   }
 
   Future<void> _openCharacterBuilder({required bool edit}) async {
@@ -62,10 +84,11 @@ class _OpeningScreenState extends State<OpeningScreen> {
         : (profile?.firstName ?? controller.rememberedName ?? 'friend');
     final trialDays = profile?.trialDaysRemaining ?? 0;
     final entitlement = context.read<EntitlementService>();
-    final access = entitlement.evaluate(profile: profile);
+    final access = _access ?? entitlement.evaluate(profile: profile);
     final prizes = context.watch<PrizeController>();
 
-    final logoH = AppResponsive.s(context, 100).clamp(80.0, 120.0);
+    final logoH = AppResponsive.s(context, AppResponsive.isShort(context) ? 72 : 92)
+        .clamp(64.0, 110.0);
     final gap = AppResponsive.isShort(context) ? AppSpacing.sm : AppSpacing.md;
 
     return AppPage(
@@ -106,9 +129,13 @@ class _OpeningScreenState extends State<OpeningScreen> {
           ),
           if (access == AccessLevel.expired) ...[
             SizedBox(height: gap),
-            const _TrialBanner(
+            _TrialBanner(
               daysLeft: 0,
               expired: true,
+              onSubscribe: () async {
+                await Navigator.of(context).pushNamed(AppRoutes.paywall);
+                await _refreshAccess();
+              },
             ),
           ] else if (trialDays > 0) ...[
             SizedBox(height: gap),
@@ -122,17 +149,17 @@ class _OpeningScreenState extends State<OpeningScreen> {
             onCreate: () => _openCharacterBuilder(edit: false),
             onEdit: () => _openCharacterBuilder(edit: true),
           ),
-          const SizedBox(height: AppSpacing.lg),
+          const SizedBox(height: AppSpacing.md),
           BigButton(
-            label: 'Check Upcoming Games',
+            label: 'Upcoming Games',
             icon: Icons.event_available_rounded,
-            onPressed: () => _goPlay(context, access, AppRoutes.upcomingGames),
+            onPressed: () => _goPlay(AppRoutes.upcomingGames),
           ),
-          const SizedBox(height: AppSpacing.sm),
+          const SizedBox(height: AppSpacing.md),
           BigButton(
             label: 'Enter the Studio',
             icon: Icons.theater_comedy_rounded,
-            onPressed: () => _goPlay(context, access, AppRoutes.studio),
+            onPressed: () => _goPlay(AppRoutes.studio),
           ),
           if (PrizeAssets.showPrizeRoomEntry) ...[
             const SizedBox(height: AppSpacing.sm),
@@ -157,14 +184,15 @@ class _OpeningScreenState extends State<OpeningScreen> {
     );
   }
 
-  Future<void> _goPlay(
-    BuildContext context,
-    AccessLevel access,
-    String route,
-  ) async {
+  Future<void> _goPlay(String route) async {
     final entitlement = context.read<EntitlementService>();
+    final access = await entitlement.refresh();
+    if (!mounted) return;
+    setState(() => _access = access);
     if (!entitlement.canPlay(access)) {
       await Navigator.of(context).pushNamed(AppRoutes.paywall);
+      if (!mounted) return;
+      await _refreshAccess();
       return;
     }
     await Navigator.of(context).pushNamed(route);
@@ -259,11 +287,13 @@ class _TrialBanner extends StatelessWidget {
     required this.daysLeft,
     this.countdown = false,
     this.expired = false,
+    this.onSubscribe,
   });
 
   final int daysLeft;
   final bool countdown;
   final bool expired;
+  final VoidCallback? onSubscribe;
 
   @override
   Widget build(BuildContext context) {
@@ -284,9 +314,7 @@ class _TrialBanner extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        onTap: expired
-            ? () => Navigator.of(context).pushNamed(AppRoutes.paywall)
-            : null,
+        onTap: expired ? onSubscribe : null,
         child: Container(
           padding: const EdgeInsets.all(AppSpacing.md),
           decoration: BoxDecoration(

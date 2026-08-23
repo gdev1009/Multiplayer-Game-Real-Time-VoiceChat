@@ -17,12 +17,14 @@ class _Page {
     required this.body,
     required this.icon,
     this.showTrophy = false,
+    this.showHost = false,
   });
 
   final String title;
   final String body;
   final IconData icon;
   final bool showTrophy;
+  final bool showHost;
 }
 
 /// Skippable first-launch screens. Copy lives in [OnboardingCopy] for Ronna.
@@ -46,20 +48,36 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       icon: Icons.sports_esports_rounded,
     ),
     _Page(
+      title: OnboardingCopy.friendsTitle,
+      body: OnboardingCopy.friendsBody,
+      icon: Icons.home_rounded,
+    ),
+    _Page(
+      title: OnboardingCopy.soloTitle,
+      body: OnboardingCopy.soloBody,
+      icon: Icons.emoji_people_rounded,
+    ),
+    _Page(
+      title: OnboardingCopy.stayTitle,
+      body: OnboardingCopy.stayBody,
+      icon: Icons.phonelink_lock_rounded,
+    ),
+    _Page(
       title: OnboardingCopy.trophiesTitle,
       body: OnboardingCopy.trophiesBody,
       icon: Icons.emoji_events_rounded,
       showTrophy: true,
     ),
     _Page(
-      title: OnboardingCopy.tournamentsTitle,
-      body: OnboardingCopy.tournamentsBody,
-      icon: Icons.military_tech_rounded,
+      title: OnboardingCopy.membershipTitle,
+      body: OnboardingCopy.membershipBody,
+      icon: Icons.favorite_rounded,
     ),
     _Page(
-      title: OnboardingCopy.friendsTitle,
-      body: OnboardingCopy.friendsBody,
-      icon: Icons.groups_rounded,
+      title: OnboardingCopy.guyTitle,
+      body: OnboardingCopy.guyBody,
+      icon: Icons.mic_rounded,
+      showHost: true,
     ),
   ];
 
@@ -81,7 +99,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final iconSize = AppResponsive.s(context, 88).clamp(64.0, 96.0);
+    final short = AppResponsive.isShort(context);
+    final iconSize = AppResponsive.s(context, short ? 64 : 80).clamp(56.0, 88.0);
     final p = _pages[_index];
 
     return AppPage(
@@ -103,13 +122,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
             ),
           ),
-          SizedBox(
-            height: AppResponsive.isShort(context)
-                ? AppSpacing.sm
-                : AppSpacing.lg,
-          ),
+          SizedBox(height: short ? AppSpacing.xs : AppSpacing.md),
           if (p.showTrophy)
-            Center(child: _TrophyDemo(size: iconSize))
+            const Center(child: _TrophyDemo())
+          else if (p.showHost)
+            Center(child: _HostDemo(size: iconSize))
           else
             Center(
               child: Container(
@@ -130,11 +147,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 ),
               ),
             ),
-          SizedBox(
-            height: AppResponsive.isShort(context)
-                ? AppSpacing.md
-                : AppSpacing.xl,
-          ),
+          SizedBox(height: short ? AppSpacing.sm : AppSpacing.md),
           Text(
             p.title,
             style: AppText.display.copyWith(
@@ -146,9 +159,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           Text(
             p.body,
             style: AppText.body,
-            textAlign: TextAlign.center,
+            textAlign: TextAlign.start,
           ),
-          const SizedBox(height: AppSpacing.xl),
+          const SizedBox(height: AppSpacing.lg),
           Text(
             '${_index + 1} ${OnboardingCopy.pageOf} ${_pages.length}',
             style: AppText.caption,
@@ -160,9 +173,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             children: [
               for (var i = 0; i < _pages.length; i++)
                 Container(
-                  width: i == _index ? 18 : 10,
-                  height: 10,
-                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                  width: i == _index ? 16 : 8,
+                  height: 8,
+                  margin: const EdgeInsets.symmetric(horizontal: 3),
                   decoration: BoxDecoration(
                     color: i == _index
                         ? AppColors.deepPurple
@@ -180,79 +193,94 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 : Icons.arrow_forward_rounded,
             onPressed: _next,
           ),
-          SizedBox(
-            height: AppResponsive.isShort(context)
-                ? AppSpacing.sm
-                : AppSpacing.md,
-          ),
+          SizedBox(height: short ? AppSpacing.sm : AppSpacing.md),
         ],
       ),
     );
   }
 }
 
-class _TrophyDemo extends StatelessWidget {
-  const _TrophyDemo({required this.size});
+class _HostDemo extends StatelessWidget {
+  const _HostDemo({required this.size});
 
   final double size;
 
   @override
   Widget build(BuildContext context) {
-    // Small corner badge — never a full-width purple bar (Ronna feedback).
-    return SizedBox(
+    return Container(
       width: size + 8,
       height: size + 8,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Align(
-            alignment: Alignment.center,
-            child: Container(
-              width: size,
-              height: size,
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: AppColors.lavenderSoft,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.gold, width: 2),
-                boxShadow: AppColors.tileShadow,
-              ),
-              child: Image.asset(
-                PrizeAssets.winCup,
-                fit: BoxFit.contain,
-                errorBuilder: (_, __, ___) => Icon(
-                  Icons.emoji_events_rounded,
-                  size: size * 0.5,
-                  color: AppColors.gold,
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            right: 0,
-            top: 0,
-            child: Container(
-              width: 28,
-              height: 28,
-              decoration: BoxDecoration(
-                color: AppColors.deepPurple,
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 2),
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                '3',
-                style: AppText.caption.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 14,
-                  height: 1,
-                ),
-              ),
-            ),
-          ),
-        ],
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white, width: 3),
+        boxShadow: AppColors.tileShadow,
       ),
+      clipBehavior: Clip.antiAlias,
+      child: Image.asset(
+        'assets/images/host/host-avatar.png',
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => Icon(
+          Icons.mic_rounded,
+          size: size * 0.5,
+          color: AppColors.gold,
+        ),
+      ),
+    );
+  }
+}
+
+class _TrophyDemo extends StatelessWidget {
+  const _TrophyDemo();
+
+  @override
+  Widget build(BuildContext context) {
+    final size = AppResponsive.s(context, 72).clamp(64.0, 84.0);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Container(
+          width: size,
+          height: size,
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: AppColors.lavenderSoft,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.gold, width: 2),
+            boxShadow: AppColors.tileShadow,
+          ),
+          child: Image.asset(
+            PrizeAssets.winCup,
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => Icon(
+              Icons.emoji_events_rounded,
+              size: size * 0.5,
+              color: AppColors.gold,
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Container(
+          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+          decoration: BoxDecoration(
+            color: AppColors.deepPurple,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.white, width: 2),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            '3',
+            style: AppText.caption.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w900,
+              fontSize: 16,
+              height: 1.1,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

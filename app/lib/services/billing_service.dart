@@ -63,13 +63,13 @@ class BillingService {
     );
   }
 
-  /// Placeholder restore — syncs nothing until store APIs are wired.
+  /// Placeholder restore — checks the server entitlement (including tester grants).
   Future<BillingActionResult> restorePurchases() async {
     final sub = await fetchEntitlement();
     if (sub.isPaidActive) {
       return const BillingActionResult(
         ok: true,
-        message: 'Your subscription is already active. Enjoy Match Word!',
+        message: 'Your membership is active. Enjoy Match Word!',
       );
     }
     return const BillingActionResult(

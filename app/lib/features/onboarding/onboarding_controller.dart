@@ -24,8 +24,12 @@ class OnboardingController extends ChangeNotifier {
 
   Future<void> syncFromProfile(Profile? profile) async {
     await _service.syncFromProfile(profile);
-    if (profile?.onboardingSeen == true && !_seen) {
-      _seen = true;
+    // Re-evaluate — never force-skip solely from profiles.onboarding_seen
+    // (contentVersion bumps must re-show the walkthrough).
+    final show = await _service.shouldShow(profile: profile);
+    final seen = !show;
+    if (seen != _seen) {
+      _seen = seen;
       notifyListeners();
     }
   }
