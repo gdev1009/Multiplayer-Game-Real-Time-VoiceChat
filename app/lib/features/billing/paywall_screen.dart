@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_responsive.dart';
-import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text.dart';
 import '../../core/widgets/app_page.dart';
 import '../../core/widgets/big_button.dart';
@@ -46,17 +45,22 @@ class _PaywallScreenState extends State<PaywallScreen> {
   Widget build(BuildContext context) {
     final billing = context.read<BillingService>();
     final args = ModalRoute.of(context)?.settings.arguments;
+    final compact = AppResponsive.isCompactPhone(context);
+    final gap = AppResponsive.sectionGap(context);
     final greeting = args is String && args.trim().isNotEmpty
         ? args.trim()
-        : 'Your free trial has been a joy. For ${TrialPolicy.monthlyPriceLabel} '
-            'a month you keep Match Word ad-free — no rush, just whenever '
-            'you are ready.';
+        : compact
+            ? 'Your free trial ended. Keep Match Word ad-free for '
+                '${TrialPolicy.monthlyPriceLabel}/month — whenever you are ready.'
+            : 'Your free trial has been a joy. For ${TrialPolicy.monthlyPriceLabel} '
+                'a month you keep Match Word ad-free — no rush, just whenever '
+                'you are ready.';
 
     return AppPage(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const SizedBox(height: AppSpacing.md),
+          SizedBox(height: gap),
           Text(
             'Keep playing Match Word',
             style: AppText.display.copyWith(
@@ -64,35 +68,39 @@ class _PaywallScreenState extends State<PaywallScreen> {
             ),
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: AppSpacing.lg),
+          SizedBox(height: gap),
           HostGreeting(message: greeting),
-          const SizedBox(height: AppSpacing.lg),
-          const Text(
-            '${TrialPolicy.monthlyPriceLabel} per month · Cancel anytime in your store account',
-            style: AppText.bodyMuted,
+          SizedBox(height: gap),
+          Text(
+            '${TrialPolicy.monthlyPriceLabel}/mo · Cancel anytime',
+            style: AppText.bodyMuted.copyWith(
+              fontSize: AppResponsive.bodySize(context),
+            ),
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: AppSpacing.lg),
+          SizedBox(height: gap),
           if (_message != null) ...[
             Text(
               _message!,
-              style: AppText.body,
+              style: AppText.body.copyWith(
+                fontSize: AppResponsive.bodySize(context),
+              ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: AppSpacing.md),
+            SizedBox(height: gap),
           ],
           BigButton(
             label: _busy ? 'Please wait…' : 'Subscribe',
             icon: Icons.favorite_rounded,
             onPressed: _busy ? null : () => _run(billing.purchaseMonthly),
           ),
-          const SizedBox(height: AppSpacing.md),
+          SizedBox(height: gap),
           BigButton(
             label: 'Restore Purchases',
             icon: Icons.restore_rounded,
             onPressed: _busy ? null : () => _run(billing.restorePurchases),
           ),
-          const SizedBox(height: AppSpacing.lg),
+          SizedBox(height: gap),
           TextButton(
             onPressed: _busy
                 ? null
@@ -103,11 +111,11 @@ class _PaywallScreenState extends State<PaywallScreen> {
                   },
             style: TextButton.styleFrom(
               foregroundColor: AppColors.textSecondary,
-              minimumSize: const Size.fromHeight(48),
+              minimumSize: const Size.fromHeight(44),
             ),
             child: const Text('Not now', style: AppText.body),
           ),
-          const SizedBox(height: AppSpacing.md),
+          SizedBox(height: gap),
         ],
       ),
     );

@@ -29,8 +29,14 @@ class BigButton extends StatelessWidget {
         isPrimary ? AppColors.onPrimary : AppColors.deepPurple;
     final bool enabled = onPressed != null && !isLoading;
     final height = AppResponsive.buttonHeight(context);
-    final labelStyle = AppText.action.copyWith(color: foreground, height: 1.15);
-    final iconSize = AppResponsive.isShort(context) ? 22.0 : 24.0;
+    final compact = AppResponsive.isCompactPhone(context) ||
+        AppResponsive.isShort(context);
+    final labelStyle = AppText.action.copyWith(
+      color: foreground,
+      height: 1.1,
+      fontSize: compact ? 16 : 17,
+    );
+    final iconSize = compact ? 20.0 : 24.0;
 
     final Widget content = isLoading
         ? const SizedBox(
@@ -90,7 +96,10 @@ class BigButton extends StatelessWidget {
                 disabledBackgroundColor: Colors.transparent,
                 elevation: 0,
                 minimumSize: Size(double.infinity, height),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                padding: EdgeInsets.symmetric(
+                  horizontal: compact ? 12 : 16,
+                  vertical: compact ? 10 : 14,
+                ),
                 tapTargetSize: MaterialTapTargetSize.padded,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),

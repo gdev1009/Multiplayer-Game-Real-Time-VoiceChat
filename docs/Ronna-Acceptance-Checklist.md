@@ -1,6 +1,6 @@
 # Match Word — Acceptance checklist (for Ronna)
 
-**Build to test:** iPhone TestFlight **1.0.0 (84)** (and Android **84** if Gregory sends an APK). Fully close Match Word, reopen from TestFlight, and confirm the build number in TestFlight before testing.
+**Build to test:** iPhone TestFlight **1.0.0 (85)** — sized for **iPhone 12** (and similar). Fully close Match Word, reopen from TestFlight, and confirm build **85** before testing.
 
 Please tick each item. If something fails, a screenshot of that screen is enough.
 

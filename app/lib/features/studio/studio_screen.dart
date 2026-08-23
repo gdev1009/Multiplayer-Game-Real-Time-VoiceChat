@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 
 import '../../core/navigation/app_routes.dart';
 import '../../core/theme/app_responsive.dart';
-import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text.dart';
 import '../../core/widgets/app_page.dart';
 import '../../core/widgets/big_button.dart';
@@ -45,28 +44,29 @@ class StudioScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final lobby = context.watch<LobbyController>();
-    final short = AppResponsive.isShort(context);
+    final gap = AppResponsive.sectionGap(context);
 
     return AppPage(
       title: 'The Studio',
       showBack: true,
+      compactAppBar: true,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SizedBox(height: short ? AppSpacing.sm : AppSpacing.md),
+          SizedBox(height: gap),
           const HostGreeting(
             message:
-                'Start a new game and share the code with friends, '
+                'Start a new game and share the code, '
                 'or join with a friend’s code.',
           ),
-          SizedBox(height: short ? AppSpacing.md : AppSpacing.lg),
+          SizedBox(height: gap + 4),
           BigButton(
             label: 'Start New Game',
             icon: Icons.add_circle_outline_rounded,
             isLoading: lobby.busy,
             onPressed: lobby.busy ? null : () => _startGame(context),
           ),
-          const SizedBox(height: AppSpacing.md),
+          SizedBox(height: gap),
           BigButton(
             label: 'Join with Code',
             icon: Icons.dialpad_rounded,
@@ -75,7 +75,7 @@ class StudioScreen extends StatelessWidget {
                 ? null
                 : () => Navigator.of(context).pushNamed(AppRoutes.joinByCode),
           ),
-          SizedBox(height: short ? AppSpacing.md : AppSpacing.lg),
+          SizedBox(height: gap),
         ],
       ),
     );

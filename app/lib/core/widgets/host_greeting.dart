@@ -6,6 +6,9 @@ import '../theme/app_spacing.dart';
 import '../theme/app_text.dart';
 
 /// Guy Smiley greeting banner — avatar beside a warm speech-bubble message.
+///
+/// Sized for iPhone 12: smaller avatar + tighter type so it doesn't shove
+/// the primary actions below the fold.
 class HostGreeting extends StatelessWidget {
   const HostGreeting({
     super.key,
@@ -21,9 +24,11 @@ class HostGreeting extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final short = AppResponsive.isShort(context);
-    final avatar = AppResponsive.s(context, short ? 48.0 : 56.0)
-        .clamp(44.0, 60.0);
+    final compact = AppResponsive.isCompactPhone(context) ||
+        AppResponsive.isShort(context);
+    final avatar = AppResponsive.s(context, compact ? 40.0 : 56.0)
+        .clamp(36.0, 56.0);
+    final bodySize = AppResponsive.bodySize(context);
 
     return Semantics(
       label: '$hostName says: $message',
@@ -36,12 +41,12 @@ class HostGreeting extends StatelessWidget {
           Expanded(
             child: Container(
               padding: EdgeInsets.symmetric(
-                horizontal: AppSpacing.md,
-                vertical: short ? AppSpacing.sm : 12,
+                horizontal: compact ? 12 : AppSpacing.md,
+                vertical: compact ? 8 : 12,
               ),
               decoration: BoxDecoration(
                 color: AppColors.lavender,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(14),
                 border: Border.all(color: AppColors.divider, width: 1.5),
                 boxShadow: AppColors.tileShadow,
               ),
@@ -53,15 +58,15 @@ class HostGreeting extends StatelessWidget {
                     style: AppText.caption.copyWith(
                       fontWeight: FontWeight.w800,
                       color: AppColors.deepPurple,
-                      fontSize: 14,
+                      fontSize: compact ? 12 : 14,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  SizedBox(height: compact ? 2 : 4),
                   Text(
                     message,
                     style: AppText.body.copyWith(
-                      fontSize: short ? 14 : 15,
-                      height: 1.3,
+                      fontSize: bodySize,
+                      height: 1.25,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -88,7 +93,7 @@ class _HostAvatar extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.surface,
         shape: BoxShape.circle,
-        border: Border.all(color: Colors.white, width: 2.5),
+        border: Border.all(color: Colors.white, width: 2),
         boxShadow: AppColors.tileShadow,
       ),
       clipBehavior: Clip.antiAlias,

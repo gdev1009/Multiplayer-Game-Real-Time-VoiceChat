@@ -59,6 +59,7 @@ class LobbyRoomScreen extends StatelessWidget {
       child: AppPage(
         title: 'Game Room',
         showBack: true,
+        compactAppBar: true,
         onBack: () async {
           await _confirmLeave(context);
           if (context.mounted) Navigator.of(context).pop();
@@ -149,41 +150,52 @@ class _LobbyBodyState extends State<_LobbyBody> {
     );
     // Prefer the character display name over the account first name.
     final isHost = lobby.isHost;
+    final gap = AppResponsive.sectionGap(context);
+    final compact = AppResponsive.isCompactPhone(context);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const SizedBox(height: AppSpacing.xs),
         HostGreeting(
           message: isHost
               ? 'Share your code so friends can join.'
               : 'Waiting for the host to start the game.',
         ),
-        const SizedBox(height: AppSpacing.sm),
+        SizedBox(height: gap),
         _CodeCard(code: game.code),
-        const SizedBox(height: AppSpacing.sm),
+        SizedBox(height: gap),
         if (lobby.awaitingFill) ...[
           _LookingForPlayers(secondsLeft: lobby.fillSecondsLeft),
-          const SizedBox(height: AppSpacing.sm),
+          SizedBox(height: gap),
         ],
-        _TeamCard(
-          team: 'A',
-          seats: const [0, 2],
-          players: lobby.players,
-          maxPlayers: game.maxPlayers,
-          characters: _characters,
-          rosterLooks: rosterLooks,
+        // Side-by-side teams save vertical space on iPhone 12.
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: _TeamCard(
+                team: 'A',
+                seats: const [0, 2],
+                players: lobby.players,
+                maxPlayers: game.maxPlayers,
+                characters: _characters,
+                rosterLooks: rosterLooks,
+              ),
+            ),
+            SizedBox(width: compact ? 8 : 12),
+            Expanded(
+              child: _TeamCard(
+                team: 'B',
+                seats: const [1, 3],
+                players: lobby.players,
+                maxPlayers: game.maxPlayers,
+                characters: _characters,
+                rosterLooks: rosterLooks,
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: AppSpacing.sm),
-        _TeamCard(
-          team: 'B',
-          seats: const [1, 3],
-          players: lobby.players,
-          maxPlayers: game.maxPlayers,
-          characters: _characters,
-          rosterLooks: rosterLooks,
-        ),
-        const SizedBox(height: AppSpacing.md),
+        SizedBox(height: gap + 4),
         if (isHost) ...[
           if (!lobby.isFull)
             BigButton(
@@ -195,7 +207,7 @@ class _LobbyBodyState extends State<_LobbyBody> {
                   ? null
                   : () => _run(context, () => lobby.fillSeats()),
             ),
-          if (!lobby.isFull) const SizedBox(height: AppSpacing.sm),
+          if (!lobby.isFull) SizedBox(height: gap),
           BigButton(
             label: 'Start Game',
             icon: Icons.play_arrow_rounded,
@@ -206,18 +218,20 @@ class _LobbyBodyState extends State<_LobbyBody> {
           ),
         ] else
           Container(
-            padding: const EdgeInsets.all(AppSpacing.md),
+            padding: EdgeInsets.all(compact ? 12 : AppSpacing.md),
             decoration: BoxDecoration(
               color: AppColors.warmBeige,
               borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
             ),
-            child: const Text(
+            child: Text(
               'Waiting for the host to start the game…',
-              style: AppText.body,
+              style: AppText.body.copyWith(
+                fontSize: AppResponsive.bodySize(context),
+              ),
               textAlign: TextAlign.center,
             ),
           ),
-        const SizedBox(height: AppSpacing.md),
+        SizedBox(height: gap),
       ],
     );
   }
@@ -232,8 +246,9 @@ class _LookingForPlayers extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final compact = AppResponsive.isCompactPhone(context);
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
+      padding: EdgeInsets.all(compact ? 10 : AppSpacing.md),
       decoration: BoxDecoration(
         color: AppColors.lavenderSoft,
         borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
@@ -241,19 +256,21 @@ class _LookingForPlayers extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const SizedBox(
-            width: 28,
-            height: 28,
-            child: CircularProgressIndicator(strokeWidth: 3),
+          SizedBox(
+            width: compact ? 22 : 28,
+            height: compact ? 22 : 28,
+            child: const CircularProgressIndicator(strokeWidth: 3),
           ),
-          const SizedBox(width: AppSpacing.md),
+          SizedBox(width: compact ? 10 : AppSpacing.md),
           Expanded(
             child: Text(
               secondsLeft > 0
                   ? 'Looking for players… studio players join in '
                       '$secondsLeft second${secondsLeft == 1 ? '' : 's'}.'
                   : 'Bringing in studio players…',
-              style: AppText.body,
+              style: AppText.body.copyWith(
+                fontSize: AppResponsive.bodySize(context),
+              ),
             ),
           ),
         ],
@@ -270,9 +287,10 @@ class _CodeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final codeSize = AppResponsive.codeSize(context);
+    final compact = AppResponsive.isCompactPhone(context);
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      padding: EdgeInsets.fromLTRB(12, compact ? 8 : 12, 12, compact ? 4 : 8),
       decoration: BoxDecoration(
         gradient: AppColors.brandGradient,
         borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
@@ -284,12 +302,12 @@ class _CodeCard extends StatelessWidget {
           const Text(
             'Your game code',
             style: TextStyle(
-              fontSize: 13,
+              fontSize: 12,
               fontWeight: FontWeight.w600,
               color: Colors.white,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 2),
           FittedBox(
             fit: BoxFit.scaleDown,
             child: OutlinedGlyph(
@@ -297,7 +315,7 @@ class _CodeCard extends StatelessWidget {
               style: TextStyle(
                 fontSize: codeSize,
                 fontWeight: FontWeight.w800,
-                letterSpacing: AppResponsive.isNarrow(context) ? 4 : 8,
+                letterSpacing: compact ? 4 : 8,
                 height: 1.05,
               ),
               fillColor: Colors.white,
@@ -315,10 +333,10 @@ class _CodeCard extends StatelessWidget {
                   visualDensity: VisualDensity.compact,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
-                icon: const Icon(Icons.ios_share_rounded, size: 18),
+                icon: const Icon(Icons.ios_share_rounded, size: 16),
                 label: const Text(
                   'Share',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                 ),
               ),
               TextButton.icon(
@@ -328,10 +346,10 @@ class _CodeCard extends StatelessWidget {
                   visualDensity: VisualDensity.compact,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
-                icon: const Icon(Icons.copy_rounded, size: 18),
+                icon: const Icon(Icons.copy_rounded, size: 16),
                 label: const Text(
                   'Copy',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                 ),
               ),
             ],
@@ -477,7 +495,9 @@ class _SeatTile extends StatelessWidget {
           Expanded(
             child: Text(
               filled ? player!.displayName : 'Open seat',
-              style: filled ? AppText.body : AppText.bodyMuted,
+              style: (filled ? AppText.body : AppText.bodyMuted).copyWith(
+                fontSize: AppResponsive.isCompactPhone(context) ? 13 : 16,
+              ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -496,7 +516,7 @@ class _SeatAvatar extends StatelessWidget {
   final bool filled;
   final Character? character;
 
-  static const double _size = 40;
+  static const double _size = 36;
 
   @override
   Widget build(BuildContext context) {

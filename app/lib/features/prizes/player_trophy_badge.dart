@@ -23,7 +23,9 @@ class PlayerTrophyBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final wins = room.winTrophyCount;
-    final size = AppResponsive.s(context, 72).clamp(64.0, 84.0);
+    final compact = AppResponsive.isCompactPhone(context);
+    final size = AppResponsive.s(context, compact ? 56.0 : 72.0)
+        .clamp(52.0, 84.0);
 
     return Semantics(
       button: true,

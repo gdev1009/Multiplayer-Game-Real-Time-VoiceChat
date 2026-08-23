@@ -87,19 +87,17 @@ class _OpeningScreenState extends State<OpeningScreen> with WidgetsBindingObserv
     final access = _access ?? entitlement.evaluate(profile: profile);
     final prizes = context.watch<PrizeController>();
 
-    final logoH = AppResponsive.s(context, AppResponsive.isShort(context) ? 72 : 92)
-        .clamp(64.0, 110.0);
-    final gap = AppResponsive.isShort(context) ? AppSpacing.sm : AppSpacing.md;
+    final logoH = AppResponsive.s(
+      context,
+      AppResponsive.isCompactPhone(context) ? 56 : 92,
+    ).clamp(52.0, 110.0);
+    final gap = AppResponsive.sectionGap(context);
 
     return AppPage(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SizedBox(
-            height: AppResponsive.isShort(context)
-                ? AppSpacing.xs
-                : AppSpacing.sm,
-          ),
+          SizedBox(height: gap > 8 ? AppSpacing.sm : 4),
           Center(child: BrandLogo(height: logoH, outlineWidth: 2)),
           SizedBox(height: gap),
           Row(
@@ -149,20 +147,20 @@ class _OpeningScreenState extends State<OpeningScreen> with WidgetsBindingObserv
             onCreate: () => _openCharacterBuilder(edit: false),
             onEdit: () => _openCharacterBuilder(edit: true),
           ),
-          const SizedBox(height: AppSpacing.md),
+          SizedBox(height: gap),
           BigButton(
             label: 'Upcoming Games',
             icon: Icons.event_available_rounded,
             onPressed: () => _goPlay(AppRoutes.upcomingGames),
           ),
-          const SizedBox(height: AppSpacing.md),
+          SizedBox(height: gap),
           BigButton(
             label: 'Enter the Studio',
             icon: Icons.theater_comedy_rounded,
             onPressed: () => _goPlay(AppRoutes.studio),
           ),
           if (PrizeAssets.showPrizeRoomEntry) ...[
-            const SizedBox(height: AppSpacing.sm),
+            SizedBox(height: gap),
             BigButton(
               label: 'Prize Room',
               icon: Icons.emoji_events_rounded,
@@ -176,9 +174,10 @@ class _OpeningScreenState extends State<OpeningScreen> with WidgetsBindingObserv
             label: const Text('Sign Out', style: AppText.caption),
             style: TextButton.styleFrom(
               foregroundColor: AppColors.textSecondary,
+              visualDensity: VisualDensity.compact,
             ),
           ),
-          const SizedBox(height: AppSpacing.sm),
+          SizedBox(height: gap),
         ],
       ),
     );
@@ -209,10 +208,12 @@ class _CharacterCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final characters = context.watch<CharacterController>();
     final saved = characters.saved;
-    final avatar = AppResponsive.s(context, 64).clamp(56.0, 72.0);
+    final compact = AppResponsive.isCompactPhone(context);
+    final avatar = AppResponsive.s(context, compact ? 48.0 : 64.0)
+        .clamp(44.0, 72.0);
 
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
+      padding: EdgeInsets.all(compact ? 10 : AppSpacing.md),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
@@ -244,15 +245,17 @@ class _CharacterCard extends StatelessWidget {
                     color: AppColors.deepPurple,
                   ),
                 ),
-              const SizedBox(width: AppSpacing.md),
+              SizedBox(width: compact ? 10 : AppSpacing.md),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       saved == null ? 'Your character' : saved.displayName,
-                      style: AppText.title,
-                      maxLines: 2,
+                      style: AppText.title.copyWith(
+                        fontSize: compact ? 17 : 20,
+                      ),
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 2),
@@ -260,7 +263,9 @@ class _CharacterCard extends StatelessWidget {
                       saved == null
                           ? 'Build a clay look to play with.'
                           : 'Tap Edit to change your look.',
-                      style: AppText.bodyMuted,
+                      style: AppText.bodyMuted.copyWith(
+                        fontSize: AppResponsive.bodySize(context),
+                      ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -269,7 +274,7 @@ class _CharacterCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.sm),
+          SizedBox(height: compact ? 8 : AppSpacing.sm),
           BigButton(
             label: saved == null ? 'Create' : 'Edit',
             icon: saved == null ? Icons.add : Icons.edit,
@@ -316,7 +321,9 @@ class _TrialBanner extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         onTap: expired ? onSubscribe : null,
         child: Container(
-          padding: const EdgeInsets.all(AppSpacing.md),
+          padding: EdgeInsets.all(
+            AppResponsive.isCompactPhone(context) ? 10 : AppSpacing.md,
+          ),
           decoration: BoxDecoration(
             color: AppColors.warmBeige,
             borderRadius: BorderRadius.circular(16),
@@ -324,7 +331,9 @@ class _TrialBanner extends StatelessWidget {
           ),
           child: Text(
             text,
-            style: AppText.body,
+            style: AppText.body.copyWith(
+              fontSize: AppResponsive.bodySize(context),
+            ),
             textAlign: TextAlign.center,
           ),
         ),
