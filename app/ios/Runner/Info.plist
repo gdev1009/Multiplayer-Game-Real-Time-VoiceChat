@@ -65,6 +65,12 @@
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
+	<!-- Match Word only uses the OS's standard HTTPS/TLS, which is exempt.
+	     Without this key every upload sits in App Store Connect as "Missing
+	     Compliance" and Apple never releases it to TestFlight testers — that
+	     is why Ronna stayed on build 6 for 79 days while builds "succeeded". -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Match Word uses the microphone so you can speak your clue or guess instead of typing.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>

@@ -1,6 +1,6 @@
 # Match Word — Acceptance checklist (for Ronna)
 
-**Build to test:** iPhone TestFlight **1.0.0 (86)** — sized for **iPhone 12**.
+**Build to test:** iPhone TestFlight **1.0.0 (86) or newer** — sized for **iPhone 12**. Use the exact number Gregory quotes in his message.
 
 Please tick each item. If something fails, a screenshot of that screen is enough.
 

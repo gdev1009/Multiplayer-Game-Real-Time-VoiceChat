@@ -171,6 +171,14 @@ workflows:
         issuer_id: $APP_STORE_CONNECT_ISSUER_ID
         submit_to_testflight: true
         submit_to_app_store: false
+        # Hand each build straight to the tester group. Without this, an
+        # external group has to be added by hand in App Store Connect and
+        # testers keep whatever build they already had.
+        #
+        # Uncomment and set the EXACT group name from App Store Connect →
+        # TestFlight → Testers and Groups (a wrong name fails this step):
+        # beta_groups:
+        #   - Match Word Testers
 
   android-apk:
     name: Android APK (CI)

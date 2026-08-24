@@ -7,7 +7,7 @@
 class AppBuildInfo {
   const AppBuildInfo._();
 
-  static const String _fallback = '86';
+  static const String _fallback = '87';
 
   static const String versionName = '1.0.0';
 
