@@ -1,8 +1,21 @@
 # Match Word — Acceptance checklist (for Ronna)
 
-**Build to test:** iPhone TestFlight **1.0.0 (85)** — sized for **iPhone 12** (and similar). Fully close Match Word, reopen from TestFlight, and confirm build **85** before testing.
+**Build to test:** iPhone TestFlight **1.0.0 (86)** — sized for **iPhone 12**.
 
 Please tick each item. If something fails, a screenshot of that screen is enough.
+
+---
+
+## 0. Confirm you have the right build (please do this first)
+
+Earlier builds were uploaded with the wrong number, so TestFlight showed a low number like **Build 6** even when newer work had shipped. That is fixed: the number in TestFlight now matches the number we quote, and the app prints its own version on screen.
+
+- [ ] In **TestFlight**, Match Word shows **1.0.0 (86)** — tap **Update** if it offers one.
+- [ ] Fully close Match Word (swipe it away), then open it again.
+- [ ] At the bottom of the **PIN / sign-in** screen you can read **“Match Word 1.0.0 (86)”**.
+- [ ] At the bottom of the **Home** screen (under Sign Out) you can read the same **1.0.0 (86)**.
+
+If those two lines do not say **86**, please stop and send a screenshot — you are on an older install and nothing below will be a fair test.
 
 ---
 
@@ -11,9 +24,9 @@ Please tick each item. If something fails, a screenshot of that screen is enough
 - [ ] After I fully close Match Word and open it again, I am **not** stuck on Subscribe.
 - [ ] I can read and tap **Upcoming Games** without it sitting on top of **Enter the Studio**.
 - [ ] I can read and tap **Enter the Studio**.
-- [ ] If Subscribe still appears: **Subscribe**, **Restore Purchases**, and **Not now** are each fully visible, not overlapping, and easy to tap.
-- [ ] **Not now** takes me back to Home (it does not bounce me onto Subscribe in a loop).
+- [ ] The Subscribe screen no longer appears at all while testing — an expired trial cannot lock me out of the game.
 - [ ] From Home I can open Upcoming Games **or** the Studio and see the game stage (seats + Guy).
+- [ ] **My name** (the one I signed up with) is what I see on Home and on my seat in the game — not a single letter.
 
 ---
 
@@ -70,7 +83,7 @@ Please play **one full match** (or as far as you can). Empty seats can fill auto
 
 ## F. Not in this build (please don’t treat as a fail)
 
-- Apple/Google **Subscribe** checkout is not live yet. Tester access is granted so you can play without paying.
+- Apple/Google **Subscribe** checkout is not live yet. Because of that, payment is switched **off** for testing — the trial can expire and you can still play. Nothing can lock you out.
 - The **annual tournament / cash prizes** are **Coming Soon** (onboarding only). There is no entry fee to pay in this build.
 - Prize Room shelf (full room of prizes) is still a later phase; Home trophy + tap-for-points is the current version.
 

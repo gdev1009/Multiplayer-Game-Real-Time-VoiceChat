@@ -11,4 +11,12 @@ class TrialPolicy {
 
   /// Paid membership price shown in the paywall and store copy.
   static const String monthlyPriceLabel = r'$6.99 CAD';
+
+  /// Whether an expired trial blocks play.
+  ///
+  /// False while App Store / Play checkout is still a placeholder: a tester
+  /// whose trial lapsed could not subscribe *or* play, which locked Ronna out
+  /// of every screen past Subscribe. Flip to true only after real purchases
+  /// work end to end.
+  static const bool enforcePaywall = false;
 }

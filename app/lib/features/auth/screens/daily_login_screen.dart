@@ -8,6 +8,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text.dart';
 import '../../../core/widgets/app_page.dart';
 import '../../../core/widgets/big_button.dart';
+import '../../../core/widgets/build_stamp.dart';
 import '../../../core/widgets/pin_pad.dart';
 import '../../../services/auth_failure.dart';
 import '../auth_controller.dart';
@@ -151,6 +152,7 @@ class _DailyLoginScreenState extends State<DailyLoginScreen> {
             ),
             child: const Text('Use a different account', style: AppText.caption),
           ),
+          const BuildStamp(onLight: true),
           const SizedBox(height: AppSpacing.md),
         ],
       ),

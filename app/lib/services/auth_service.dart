@@ -71,6 +71,9 @@ class AuthService {
   /// The remembered first name, shown to greet the returning player.
   Future<String?> rememberedName() => _storage.read(key: _kName);
 
+  /// The signed-in player's profile row, or null when signed out / offline.
+  Future<Profile?> currentProfile() => _profiles.currentProfile();
+
   /// The remembered account email (recovery / silent sign-in).
   Future<String?> rememberedEmail() => _storage.read(key: _kEmail);
 

@@ -9,9 +9,11 @@ import '../../core/theme/app_text.dart';
 import '../../core/widgets/app_page.dart';
 import '../../core/widgets/big_button.dart';
 import '../../core/widgets/brand_logo.dart';
+import '../../core/widgets/build_stamp.dart';
 import '../../core/widgets/host_greeting.dart';
 import '../../models/prize.dart';
 import '../../services/entitlement_service.dart';
+import '../billing/trial_policy.dart';
 import '../auth/auth_controller.dart';
 import '../character/character_controller.dart';
 import '../character/idle_character_preview.dart';
@@ -39,6 +41,7 @@ class _OpeningScreenState extends State<OpeningScreen> with WidgetsBindingObserv
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      context.read<AuthController>().refreshProfile();
       context.read<CharacterController>().load();
       context.read<PrizeController>().load();
       _refreshAccess();
@@ -53,7 +56,9 @@ class _OpeningScreenState extends State<OpeningScreen> with WidgetsBindingObserv
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _refreshAccess();
+    if (state != AppLifecycleState.resumed) return;
+    context.read<AuthController>().refreshProfile();
+    _refreshAccess();
   }
 
   Future<void> _refreshAccess() async {
@@ -77,11 +82,20 @@ class _OpeningScreenState extends State<OpeningScreen> with WidgetsBindingObserv
   Widget build(BuildContext context) {
     final controller = context.watch<AuthController>();
     final profile = controller.profile;
+    // Greet by the name on the account — that is also the name shown on the
+    // seat in a game. A character nickname is only a fallback, so signing in
+    // as "Ronna" never gets replaced by a one-letter character name.
+    final accountName = (profile?.firstName ?? '').trim();
+    final rememberedName = (controller.rememberedName ?? '').trim();
     final characterName =
         context.watch<CharacterController>().saved?.displayName.trim() ?? '';
-    final name = characterName.isNotEmpty
-        ? characterName
-        : (profile?.firstName ?? controller.rememberedName ?? 'friend');
+    final name = accountName.isNotEmpty
+        ? accountName
+        : rememberedName.isNotEmpty
+            ? rememberedName
+            : characterName.isNotEmpty
+                ? characterName
+                : 'friend';
     final trialDays = profile?.trialDaysRemaining ?? 0;
     final entitlement = context.read<EntitlementService>();
     final access = _access ?? entitlement.evaluate(profile: profile);
@@ -125,7 +139,7 @@ class _OpeningScreenState extends State<OpeningScreen> with WidgetsBindingObserv
             message: 'So glad you are here. '
                 'What would you like to do today?',
           ),
-          if (access == AccessLevel.expired) ...[
+          if (access == AccessLevel.expired && TrialPolicy.enforcePaywall) ...[
             SizedBox(height: gap),
             _TrialBanner(
               daysLeft: 0,
@@ -177,6 +191,7 @@ class _OpeningScreenState extends State<OpeningScreen> with WidgetsBindingObserv
               visualDensity: VisualDensity.compact,
             ),
           ),
+          const BuildStamp(onLight: true),
           SizedBox(height: gap),
         ],
       ),

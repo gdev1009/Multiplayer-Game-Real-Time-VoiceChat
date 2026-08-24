@@ -98,6 +98,22 @@ class AuthController extends ChangeNotifier {
     _set(AuthStatus.signedIn);
   }
 
+  /// Re-reads the profile so the greeting name and trial days stay current.
+  ///
+  /// Keeps the previous profile on failure — a network blip must not drop the
+  /// player's name back to "friend".
+  Future<void> refreshProfile() async {
+    if (_status != AuthStatus.signedIn) return;
+    try {
+      final fresh = await _auth.currentProfile();
+      if (fresh == null) return;
+      _profile = fresh;
+      notifyListeners();
+    } catch (_) {
+      // Keep the name we already have.
+    }
+  }
+
   Future<void> lock() async {
     await _auth.lock();
     _profile = null;

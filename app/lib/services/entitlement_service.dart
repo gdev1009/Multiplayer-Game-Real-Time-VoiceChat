@@ -60,5 +60,12 @@ class EntitlementService {
   }
 
   /// Play / studio require an active trial or paid membership.
-  bool canPlay(AccessLevel level) => level != AccessLevel.expired;
+  ///
+  /// While [TrialPolicy.enforcePaywall] is false the answer is always yes —
+  /// store checkout is a placeholder, so blocking play would leave a tester
+  /// with no way forward at all.
+  bool canPlay(AccessLevel level) {
+    if (!TrialPolicy.enforcePaywall) return true;
+    return level != AccessLevel.expired;
+  }
 }

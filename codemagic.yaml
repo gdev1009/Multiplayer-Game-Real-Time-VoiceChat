@@ -95,23 +95,67 @@ workflows:
       - name: Apply provisioning profiles to Xcode project
         script: xcode-project use-profiles
 
+      - name: Resolve TestFlight build number
+        script: |
+          set -euo pipefail
+          cd "$CM_BUILD_DIR/app"
+
+          # pubspec is the source of truth for what testers are told to install.
+          # PROJECT_BUILD_NUMBER (Codemagic's own counter) must never be used:
+          # it restarts low and made TestFlight show "Build 6" for build 84.
+          PUBSPEC_BUILD="$(grep -E '^version:' pubspec.yaml | head -1 | sed 's/.*+//' | tr -d '[:space:]')"
+          case "$PUBSPEC_BUILD" in
+            ''|*[!0-9]*)
+              echo "ERROR: could not read build number from pubspec.yaml version:"
+              exit 1
+              ;;
+          esac
+          BUILD_NUMBER="$PUBSPEC_BUILD"
+
+          # Apple rejects a build number that is not higher than the last
+          # upload, so raise (never lower) to stay above TestFlight.
+          APP_ID="${APP_STORE_APPLE_ID:-}"
+          if [ -z "$APP_ID" ]; then
+            APP_ID="$(app-store-connect apps list \
+              --bundle-id-identifier "com.matchword.matchWord" \
+              --json 2>/dev/null \
+              | python3 -c 'import json,sys;d=json.load(sys.stdin);print(d[0]["id"] if d else "")' 2>/dev/null || true)"
+          fi
+
+          LATEST=""
+          if [ -n "$APP_ID" ]; then
+            LATEST="$(app-store-connect get-latest-testflight-build-number "$APP_ID" 2>/dev/null || true)"
+          fi
+          case "${LATEST:-}" in
+            ''|*[!0-9]*) LATEST="" ;;
+          esac
+
+          if [ -n "$LATEST" ] && [ "$LATEST" -ge "$BUILD_NUMBER" ]; then
+            BUILD_NUMBER=$((LATEST + 1))
+          fi
+
+          echo "$BUILD_NUMBER" > "$CM_BUILD_DIR/build_number.txt"
+          echo "=================================================="
+          echo " pubspec build      : $PUBSPEC_BUILD"
+          echo " latest on TestFlight: ${LATEST:-unknown}"
+          echo " UPLOADING AS BUILD : $BUILD_NUMBER"
+          echo "=================================================="
+
       - name: Flutter build IPA
         script: |
+          set -euo pipefail
           cd "$CM_BUILD_DIR/app"
-          BUILD_NUMBER="${PROJECT_BUILD_NUMBER:-$(date +%Y%m%d%H%M)}"
-          if [ -n "${APP_STORE_APPLE_ID:-}" ]; then
-            LATEST="$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID" || true)"
-            if [ -n "${LATEST:-}" ] && [ "$LATEST" != "None" ]; then
-              BUILD_NUMBER=$((LATEST + 1))
-            fi
-          fi
+          BUILD_NUMBER="$(cat "$CM_BUILD_DIR/build_number.txt")"
           flutter build ipa --release \
             --build-name=1.0.0 \
             --build-number="$BUILD_NUMBER" \
+            --dart-define=MW_BUILD="$BUILD_NUMBER" \
             --export-options-plist=/Users/builder/export_options.plist
+          echo "Built Match Word 1.0.0 ($BUILD_NUMBER) — testers must see this number."
 
     artifacts:
       - app/build/ios/ipa/*.ipa
+      - build_number.txt
       - /tmp/xcodebuild_logs/*.log
 
     publishing:
@@ -164,8 +208,8 @@ workflows:
           # Fat APK (all ABIs). Do not add --target-platform or --split-per-abi.
           set -euo pipefail
           cd "$CM_BUILD_DIR/app"
-          flutter build apk --release
-          BUILD_NUM="$(grep -E '^version:' pubspec.yaml | head -1 | sed 's/.*+//')"
+          BUILD_NUM="$(grep -E '^version:' pubspec.yaml | head -1 | sed 's/.*+//' | tr -d '[:space:]')"
+          flutter build apk --release --dart-define=MW_BUILD="$BUILD_NUM"
           STAMP="$(date +%Y%m%d)"
           mkdir -p "$CM_BUILD_DIR/apks"
           cp -f build/app/outputs/flutter-apk/app-release.apk \
