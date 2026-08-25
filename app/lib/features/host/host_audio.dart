@@ -149,7 +149,9 @@ class HostAudio {
             '$_sfx/applause.mp3',
           ],
           voice: '$_vox/winner.mp3',
-          stopMusic: true,
+          // Ronna (Aug 2026): the theme and the crowd should send the show off,
+          // so the music keeps running under the wrap-up instead of cutting.
+          music: themeMusic,
         );
       case SoundCue.disconnect:
         return const CueSounds(

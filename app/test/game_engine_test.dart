@@ -54,6 +54,123 @@ void main() {
     });
   });
 
+  // Ronna (Aug 2026): "about 3/4 of the way through it gives the team that's
+  // opposite to me two or three turns in a row."
+  group('no team gets two turns in a row', () {
+    test('the word after a steal opens with the team that did not steal', () {
+      var s = _startGame(
+        config: const MatchConfig(wordsPerHalf: 4, maxExchanges: 3),
+      );
+      expect(s.cluingTeam, 'A');
+      // A clues, A's guesser misses -> B steals and wins the word.
+      s = MatchEngine.submitClue(s, 'first');
+      s = MatchEngine.submitGuess(s, 'wrong');
+      expect(s.cluingTeam, 'B', reason: 'steal moves control to B');
+      s = MatchEngine.submitClue(s, 'second');
+      s = MatchEngine.submitGuess(s, s.secretWord);
+      s = MatchEngine.nextWord(s);
+      // B held the floor last, so A must open the next word.
+      expect(s.cluingTeam, 'A');
+    });
+
+    test('a full game never gives one team two clue turns running', () {
+      var s = _startGame(
+        config: const MatchConfig(wordsPerHalf: 8, maxExchanges: 4),
+      );
+      // Every team that is handed the floor, in order, across a whole game.
+      final turns = <String>[];
+      var clue = 0;
+      while (!s.isOver) {
+        if (s.isHalftime) {
+          s = MatchEngine.beginSecondHalf(s);
+          continue;
+        }
+        turns.add(s.cluingTeam);
+        s = MatchEngine.submitClue(s, 'clue${clue++}');
+        // Miss every third word so steals are sprinkled through the game —
+        // the pattern that produced Ronna's "two or three turns in a row".
+        final miss = s.wordIndex % 3 == 0 && s.exchangeCount == 0;
+        s = MatchEngine.submitGuess(s, miss ? 'nope' : s.secretWord);
+        if (s.isResolved) s = MatchEngine.nextWord(s);
+      }
+      expect(turns.length, greaterThan(16), reason: 'played a full game');
+      for (var i = 1; i < turns.length; i++) {
+        expect(
+          turns[i],
+          isNot(turns[i - 1]),
+          reason: 'team ${turns[i]} clued twice running at turn $i: $turns',
+        );
+      }
+    });
+
+    test('the second half opens with the team that did not close the first', () {
+      var s = _startGame();
+      s = _guessCorrect(s); // A wins word 0
+      s = _guessCorrect(s); // B wins word 1 -> halftime
+      expect(s.phase, GamePhase.halftime);
+      expect(s.cluingTeam, 'B');
+      s = MatchEngine.beginSecondHalf(s);
+      expect(s.cluingTeam, 'A');
+    });
+  });
+
+  // Ronna (Aug 2026): "the opposition is getting the same clue that we gave and
+  // then we give that same clue again. They have to give a new clue every time."
+  group('a clue may only be used once per word', () {
+    test('re-using a clue on the same word is refused', () {
+      var s = _startGame();
+      s = MatchEngine.submitClue(s, 'Teapot');
+      s = MatchEngine.submitGuess(s, 'wrong'); // steal to B
+      expect(s.step, TurnStep.awaitingClue);
+      final before = s;
+      s = MatchEngine.submitClue(s, 'teapot'); // same clue, different case
+      expect(s.step, TurnStep.awaitingClue, reason: 'still needs a new clue');
+      expect(s.pendingClue, isNull);
+      expect(s.feed.length, before.feed.length);
+      expect(s.hostLine, contains('already been used'));
+    });
+
+    test('a different clue is accepted after a steal', () {
+      var s = _startGame();
+      s = MatchEngine.submitClue(s, 'Teapot');
+      s = MatchEngine.submitGuess(s, 'wrong');
+      s = MatchEngine.submitClue(s, 'Kettle');
+      expect(s.step, TurnStep.awaitingGuess);
+      expect(s.pendingClue, 'Kettle');
+    });
+
+    test('the same clue is fine again on a later word', () {
+      var s = _startGame();
+      s = _guessCorrect(s); // word 0 used the clue 'hint'
+      expect(s.usedClues, isEmpty, reason: 'feed resets per word');
+      s = MatchEngine.submitClue(s, 'hint');
+      expect(s.step, TurnStep.awaitingGuess);
+    });
+  });
+
+  // Ronna (Aug 2026): "the clue word needs to be visible to BOTH clue givers".
+  group('both clue-givers see the word', () {
+    test('either team\'s clue-giver counts, guessers never do', () {
+      final s = _startGame();
+      expect(s.isClueGiverRole('A1'), isTrue);
+      expect(s.isClueGiverRole('B1'), isTrue);
+      expect(s.isClueGiverRole('A2'), isFalse);
+      expect(s.isClueGiverRole('B2'), isFalse);
+      expect(s.isClueGiverRole(null), isFalse);
+    });
+
+    test('the halftime role switch moves who may see it', () {
+      var s = _startGame();
+      s = _guessCorrect(s);
+      s = _guessCorrect(s);
+      s = MatchEngine.beginSecondHalf(s);
+      expect(s.isClueGiverRole('A2'), isTrue);
+      expect(s.isClueGiverRole('B2'), isTrue);
+      expect(s.isClueGiverRole('A1'), isFalse);
+      expect(s.isClueGiverRole('B1'), isFalse);
+    });
+  });
+
   group('start', () {
     test('opens on Team A, first half, awaiting a clue', () {
       final s = _startGame();
@@ -196,7 +313,8 @@ void main() {
       // Word 1 (Team B): B fails, A steals -> A scores again
       s = MatchEngine.submitClue(s, 'hint');
       s = MatchEngine.submitGuess(s, 'wrong'); // B wrong -> steal to A
-      s = MatchEngine.submitClue(s, 'hint');
+      // A must offer a *new* clue — 'hint' is already spent on this word.
+      s = MatchEngine.submitClue(s, 'another');
       s = MatchEngine.submitGuess(s, s.secretWord); // A right (value 4)
       s = MatchEngine.nextWord(s); // off the resolved beat -> halftime
       expect(s.phase, GamePhase.halftime);

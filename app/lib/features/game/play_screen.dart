@@ -309,7 +309,9 @@ class _MatchBody extends StatelessWidget {
     final viewerRole = controller.isLocal ? null : controller.myRole;
     final showTurnDock =
         !state.isOver && !state.isHalftime && !state.isResolved;
-    final amClueGiver = viewerRole == null || viewerRole == state.clueGiverRole;
+    // Both teams' clue-givers see the word, so whoever is handed a steal
+    // already knows it. The local (single-device) view always sees it.
+    final amClueGiver = viewerRole == null || state.isClueGiverRole(viewerRole);
     final showSecretWord = !introPlaying &&
         showTurnDock &&
         state.isTurnActive &&

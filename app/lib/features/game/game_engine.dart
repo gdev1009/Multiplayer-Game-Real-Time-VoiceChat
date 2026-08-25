@@ -181,6 +181,32 @@ class MatchState {
   String get clueGiverName => names[clueGiverRole] ?? 'Player $clueGiverRole';
   String get guesserName => names[guesserRole] ?? 'Player $guesserRole';
 
+  /// True when [role] gives clues for *either* team this half.
+  ///
+  /// Ronna (Aug 2026): "the clue word needs to be visible to BOTH clue givers,
+  /// not just one" — the opposing giver has to be ready the moment a steal puts
+  /// them on the clock. Guessers are still never shown the word.
+  bool isClueGiverRole(String? role) =>
+      role != null &&
+      (role == MatchEngine.clueGiverRole('A', phase) ||
+          role == MatchEngine.clueGiverRole('B', phase));
+
+  /// Every clue already given on the word in play. [feed] is cleared per word,
+  /// so this is exactly the current word's clues.
+  List<String> get usedClues => [
+        for (final e in feed)
+          if (e.kind == PlayKind.clue && e.wordIndex == wordIndex) e.text,
+      ];
+
+  /// True when [clue] has already been given on this word. Ronna (Aug 2026):
+  /// after a steal the other team was handed back the same clue, so nobody had
+  /// anything new to work with — a clue may only be used once per word.
+  bool isClueRepeat(String clue) {
+    final c = MatchEngine.normalize(clue);
+    if (c.isEmpty) return false;
+    return usedClues.any((u) => MatchEngine.normalize(u) == c);
+  }
+
   /// 'A', 'B', or null for a tie — valid once [isOver].
   String? get winningTeam {
     if (scoreA == scoreB) return null;
@@ -233,9 +259,22 @@ class MatchState {
 class MatchEngine {
   const MatchEngine._();
 
-  /// The team that opens a given word — teams alternate who starts.
+  /// The team that opens the *first* word of a match.
   static String startingTeamForWord(int wordIndex) =>
       wordIndex.isEven ? 'A' : 'B';
+
+  /// The opposing team of [team].
+  static String otherTeam(String team) => team == 'A' ? 'B' : 'A';
+
+  /// The team that opens the word after [lastCluingTeam] held the floor.
+  ///
+  /// Ronna (Aug 2026) saw one team open two or three words in a row late in a
+  /// game. Keying the opener to the word number alone did that: a steal moves
+  /// control mid-word, so the team that stole word N also opened word N+1 when
+  /// N+1's parity happened to name them. Alternating on *who actually last gave
+  /// a clue* keeps the back-and-forth she asked for however many steals happen.
+  static String nextOpeningTeam(String lastCluingTeam) =>
+      otherTeam(lastCluingTeam);
 
   /// The clue-giver role for [team] in [phase] (role switch at halftime).
   static String clueGiverRole(String team, GamePhase phase) =>
@@ -299,6 +338,14 @@ class MatchEngine {
     }
     final text = clue.trim();
     if (text.isEmpty) return state;
+
+    // A clue already spent on this word gives the next team nothing to solve.
+    if (state.isClueRepeat(text)) {
+      return state.copyWith(
+        hostLine: 'That clue has already been used. '
+            '${state.clueGiverName}, give a different one-word clue.',
+      );
+    }
 
     final entry = PlayEntry(
       kind: PlayKind.clue,
@@ -495,9 +542,10 @@ class MatchEngine {
   }
 
   /// Deals the word at [index] for [phase]: resets the turn, picks the opening
-  /// team, and sets the host's clue prompt.
+  /// team, and sets the host's clue prompt. The opener is whichever team did
+  /// *not* give the last clue, so control always changes hands between words.
   static MatchState _loadWord(MatchState state, int index, GamePhase phase) {
-    final team = startingTeamForWord(index);
+    final team = nextOpeningTeam(state.cluingTeam);
     return state.copyWith(
       phase: phase,
       wordIndex: index,

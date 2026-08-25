@@ -26,6 +26,12 @@ class LobbyFailure implements Exception {
           'Only the person who made the game can do that.',
           code: 'not_host',
         );
+      case 'clue_already_used':
+        return const LobbyFailure(
+          'That clue has already been used for this word. '
+          'Please give a different one-word clue.',
+          code: 'clue_already_used',
+        );
       case 'not_in_lobby':
         return const LobbyFailure(
           'That game has already started.',

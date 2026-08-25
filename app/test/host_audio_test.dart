@@ -38,10 +38,23 @@ void main() {
       expect(HostAudio.openingBedDuration.inSeconds, inInclusiveRange(10, 15));
     });
 
-    test('winner stops the music and plays applause', () {
+    test('winner keeps the theme running under the applause', () {
+      // Ronna (Aug 2026): the theme and the audience should send the show off,
+      // so the finale no longer cuts the music.
       final s = HostAudio.soundsFor(SoundCue.winner);
-      expect(s.stopMusic, isTrue);
+      expect(s.stopMusic, isFalse);
+      expect(s.music, HostAudio.themeMusic);
       expect(s.effects, contains('audio/applause.mp3'));
+    });
+
+    test('only the disconnect alarm stops the music', () {
+      for (final cue in SoundCue.values) {
+        expect(
+          HostAudio.soundsFor(cue).stopMusic,
+          cue == SoundCue.disconnect,
+          reason: '$cue',
+        );
+      }
     });
 
     test('correct plays ding + cheer and keeps Guy voice asset', () {

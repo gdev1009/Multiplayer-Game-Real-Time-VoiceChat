@@ -34,6 +34,30 @@ void main() {
       expect(clue.toLowerCase(), isNot(equals('zzxq')));
     });
 
+    // Ronna (Aug 2026): a stand-in echoed the clue the other team just gave.
+    test('never repeats a clue already spent on the word', () {
+      for (final word in ['garden', 'coffee', 'teapot', 'zzxq']) {
+        final used = <String>[];
+        // A word can need one clue per exchange before it is revealed.
+        for (var i = 0; i < 5; i++) {
+          final clue = AiPlayer.clueFor(word, variant: i, avoid: used);
+          expect(
+            used.map((u) => u.toLowerCase()),
+            isNot(contains(clue.toLowerCase())),
+            reason: 'repeat on $word after $used',
+          );
+          expect(clue.trim(), isNotEmpty);
+          used.add(clue);
+        }
+      }
+    });
+
+    test('avoid is case-insensitive', () {
+      final first = AiPlayer.clueFor('garden');
+      final next = AiPlayer.clueFor('garden', avoid: [first.toUpperCase()]);
+      expect(next.toLowerCase(), isNot(first.toLowerCase()));
+    });
+
     test('never uses Starts*/Ends*/LetterCount clues', () {
       for (final word in WordBank.words.take(80).followedBy(const [
         'Pink',
@@ -78,6 +102,25 @@ void main() {
           expect(guess.toLowerCase(), isNot(equals('apple')));
         }
       }
+    });
+
+    // Ronna (Aug 2026): "the clues and answers didn't make sense when
+    // stand-in's played" — a miss used to be an unrelated word from a fixed
+    // pool, so the clue "Teapot" could be answered "Bicycle".
+    test('a wrong guess relates to the word it is answering', () {
+      // 'garden' has a known clue family; a miss must come from it.
+      final family = {
+        for (var v = 0; v < 8; v++)
+          AiPlayer.clueFor('garden', variant: v).toLowerCase(),
+      };
+      var misses = 0;
+      for (var seed = 0; seed < 200; seed++) {
+        final guess = AiPlayer.guessFor('garden', seed: seed).toLowerCase();
+        if (guess == 'garden') continue;
+        misses++;
+        expect(family, contains(guess), reason: 'unrelated miss "$guess"');
+      }
+      expect(misses, greaterThan(0), reason: 'expected some misses to check');
     });
 
     test('lands the word most of the time but not always (moderate skill)', () {

@@ -26,21 +26,50 @@ class AiPlayer {
   /// the studio bank; falls back to a friendly generic nudge otherwise. The
   /// clue is never the word itself, so a human guesser still has to think. A
   /// bank word offers a few alternatives so repeat games don't feel scripted.
-  static String clueFor(String secretWord, {int variant = 0}) {
+  /// Clues already spent on this word are passed as [avoid] so a stand-in never
+  /// echoes the clue the other team just gave (Ronna, Aug 2026). Both clue
+  /// tables are pooled to widen the choice, since a word can now need up to
+  /// [MatchConfig.maxExchanges] different clues in a single round.
+  static String clueFor(
+    String secretWord, {
+    int variant = 0,
+    Iterable<String> avoid = const [],
+  }) {
     final key = secretWord.trim().toLowerCase();
-    final options = _hints[key];
-    String clue;
-    if (options == null || options.isEmpty) {
-      clue = _fallbackFor(key, variant: variant);
-    } else {
-      clue = options[variant.abs() % options.length];
+    final used = {for (final a in avoid) a.trim().toLowerCase()};
+    final pool = <String>[
+      ...?_hints[key],
+      ...?_semanticClues[key],
+    ];
+    final options = <String>[];
+    for (final c in pool) {
+      if (_isBannedClue(c, key)) continue;
+      final lower = c.trim().toLowerCase();
+      if (options.any((o) => o.trim().toLowerCase() == lower)) continue;
+      options.add(c);
     }
-    if (_isBannedClue(clue, key)) {
-      clue = _fallbackFor(key, variant: variant + 1);
+    // A word with no entry in either table still needs a clue per exchange.
+    if (options.isEmpty) options.addAll(_genericNudges);
+    // Rotate by variant so repeat games differ, then take the first clue this
+    // word has not already used.
+    final start = variant.abs() % options.length;
+    for (var i = 0; i < options.length; i++) {
+      final clue = options[(start + i) % options.length];
+      if (!used.contains(clue.trim().toLowerCase())) return clue;
     }
-    if (_isBannedClue(clue, key)) return 'Familiar';
-    return clue;
+    // Every known clue is spent — fall back to a generic nudge that is still new.
+    for (final safe in _genericNudges) {
+      if (!used.contains(safe.toLowerCase())) return safe;
+    }
+    return options[start];
   }
+
+  /// Neutral nudges for a word with no curated clues, and for the rare word
+  /// whose clues are all spent. Needs at least [MatchConfig.maxExchanges]
+  /// entries so every exchange on one word can still offer something new.
+  static const List<String> _genericNudges = [
+    'Everyday', 'Familiar', 'Common', 'Ordinary', 'Household', 'Simple',
+  ];
 
   /// A moderate-skill guess for [secretWord]. About [_guessAccuracy] of the
   /// time (deterministic per turn via [seed]) the studio player says the word;
@@ -62,9 +91,19 @@ class AiPlayer {
     return _plausibleMiss(key, h); // an honest wrong answer
   }
 
-  /// A believable wrong guess: another everyday word (never the answer), picked
-  /// deterministically from [h] so the same turn always yields the same miss.
+  /// A believable wrong guess, picked deterministically from [h] so the same
+  /// turn always yields the same miss.
+  ///
+  /// Ronna (Aug 2026): "the clues and answers didn't make sense when stand-ins
+  /// played". A miss used to come from [_missPool] regardless of the word, so
+  /// the clue "Teapot" could be answered "Bicycle". Preferring a word from the
+  /// answer's own clue family keeps a miss related to what was actually said.
   static String _plausibleMiss(String key, int h) {
+    final related = <String>[
+      ...?_semanticClues[key],
+      ...?_hints[key],
+    ].where((w) => w.trim().toLowerCase() != key).toList();
+    if (related.isNotEmpty) return related[h % related.length];
     final pool = _missPool.where((w) => w.toLowerCase() != key).toList();
     if (pool.isEmpty) return 'Hmm';
     return pool[h % pool.length];
@@ -263,17 +302,6 @@ class AiPlayer {
     if (male.contains(n)) return false;
     if (n.endsWith('ette') || n.endsWith('elle')) return true;
     return null;
-  }
-
-  static String _fallbackFor(String key, {int variant = 0}) {
-    if (key.isEmpty) return 'Hmm';
-    final options = _semanticClues[key];
-    if (options != null && options.isNotEmpty) {
-      return options[variant.abs() % options.length];
-    }
-    // Last resort: meaningful words only — never Starts*/Ends*/LetterCount.
-    const safe = ['Everyday', 'Familiar', 'Common'];
-    return safe[variant.abs() % safe.length];
   }
 
   static bool _isBannedClue(String clue, String secret) {

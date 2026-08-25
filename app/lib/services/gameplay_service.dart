@@ -155,6 +155,32 @@ class GameplayService {
   Future<void> beginPlay(String gameId) =>
       _callOk('mw_begin_play', {'p_game': gameId});
 
+  /// Copy each human seat's name from their profile onto the seat, and return
+  /// the live role → name roster.
+  ///
+  /// Seat names are written when a player sits down, so a name set or corrected
+  /// afterwards never reached the stage (Ronna: "my name isn't showing up when
+  /// I'm the player"). Best-effort: on failure the caller keeps the names it
+  /// already has rather than blocking the start of the game.
+  Future<Map<String, String>> refreshSeatNames(String gameId) async {
+    try {
+      final res = _asMap(
+        await _client.rpc('mw_refresh_seat_names', params: {'p_game': gameId}),
+      );
+      final names = res['names'];
+      if (names is Map) {
+        return {
+          for (final e in names.entries)
+            if (e.value is String && (e.value as String).trim().isNotEmpty)
+              e.key.toString(): (e.value as String).trim(),
+        };
+      }
+    } catch (err) {
+      debugPrint('[GameplayService] refreshSeatNames skipped: $err');
+    }
+    return const {};
+  }
+
   /// The on-the-clock clue-giver submits a one-word clue.
   Future<void> submitClue(String gameId, String text) =>
       _callOk('mw_submit_clue', {'p_game': gameId, 'p_text': text});

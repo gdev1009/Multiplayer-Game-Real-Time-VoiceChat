@@ -1,6 +1,10 @@
 # Match Word — Acceptance checklist (for Ronna)
 
-**Build to test:** iPhone TestFlight **1.0.0 (86) or newer** — sized for **iPhone 12**. Use the exact number Gregory quotes in his message.
+**Build to test:** iPhone TestFlight **1.0.0 (88) or newer**. Use the exact number Gregory quotes in his message.
+
+This round is about the things you found once you were **inside** the game. The
+entry problems (overlapping buttons, the Subscribe lock-out) are covered again at
+the end so we know they stayed fixed.
 
 Please tick each item. If something fails, a screenshot of that screen is enough.
 
@@ -8,84 +12,117 @@ Please tick each item. If something fails, a screenshot of that screen is enough
 
 ## 0. Confirm you have the right build (please do this first)
 
-Earlier builds were uploaded with the wrong number, so TestFlight showed a low number like **Build 6** even when newer work had shipped. That is fixed: the number in TestFlight now matches the number we quote, and the app prints its own version on screen.
-
-- [ ] In **TestFlight**, Match Word shows **1.0.0 (86)** — tap **Update** if it offers one.
+- [ ] In **TestFlight**, Match Word shows **1.0.0 (88)** — tap **Update** if it offers one.
 - [ ] Fully close Match Word (swipe it away), then open it again.
-- [ ] At the bottom of the **PIN / sign-in** screen you can read **“Match Word 1.0.0 (86)”**.
-- [ ] At the bottom of the **Home** screen (under Sign Out) you can read the same **1.0.0 (86)**.
+- [ ] At the bottom of the **PIN / sign-in** screen you can read **“Match Word 1.0.0 (88)”**.
+- [ ] At the bottom of the **Home** screen (under Sign Out) you can read the same **1.0.0 (88)**.
 
-If those two lines do not say **86**, please stop and send a screenshot — you are on an older install and nothing below will be a fair test.
-
----
-
-## A. I can get in (this was blocking everything)
-
-- [ ] After I fully close Match Word and open it again, I am **not** stuck on Subscribe.
-- [ ] I can read and tap **Upcoming Games** without it sitting on top of **Enter the Studio**.
-- [ ] I can read and tap **Enter the Studio**.
-- [ ] The Subscribe screen no longer appears at all while testing — an expired trial cannot lock me out of the game.
-- [ ] From Home I can open Upcoming Games **or** the Studio and see the game stage (seats + Guy).
-- [ ] **My name** (the one I signed up with) is what I see on Home and on my seat in the game — not a single letter.
+If those lines do not say **88**, please stop and send a screenshot — you are on an
+older install and nothing below is a fair test.
 
 ---
 
-## B. Home screen (sign-in / after PIN)
+## A. Taking turns (you chose "back and forth")
 
-- [ ] The Match Word logo is fully visible (not cut off).
-- [ ] My name is readable.
-- [ ] The **trophy is large**. The win **number sits beside the trophy**, not on top of the cup.
-- [ ] Tapping the trophy shows **Wins / Ties / Games played**, then Close works.
-- [ ] Guy’s welcome message is readable.
-- [ ] Create / Edit character is readable and tappable.
-- [ ] Sign Out is visible and does not cover the main buttons.
+You reported that about three-quarters of the way through, the other team was
+getting **two or three turns in a row**. The cause: the game worked out whose turn
+it was by counting the word number, so after a steal the same team could come
+round again. It now goes by **who actually went last**.
 
----
+- [ ] Turns go **back and forth** all game — no team ever gives two clues in a row.
+- [ ] This still holds **after a steal** (the team that stole does not also open the next word).
+- [ ] It still holds in the **second half**, after the halftime switch.
+- [ ] Please play a **full game** and watch the late rounds especially — that is where you saw it before.
 
-## C. Onboarding (first-time screens)
-
-Skip is still available. If you already skipped these once, Gregory can turn them back on for you.
-
-- [ ] **Welcome!** — short thank-you; Skip is visible.
-- [ ] **How It’s Played** — 4 players, 2 teams of 2, one-word clues, type **or** speak, timed answers, buzzer, steal, **8 words per half (16 in all)**, roles switch at halftime.
-- [ ] **Play From Home, Together** — play from different houses; 4-digit join code.
-- [ ] **Playing Solo** — you can jump in without a friend waiting.
-- [ ] **Please Keep the Game Open** — don’t switch apps mid-game; stepping away from the phone is fine.
-- [ ] **Earning Points & Trophies** — trophy at sign-in shows **how many games you won**; tap it for wins, ties, and games played.
-- [ ] **Keeping Match Word Ad-Free** — **$6.99 CAD/month**; **Coming soon:** annual playoff for top scorers, cash prizes, entry fee funds the prize pot.
-- [ ] **Let’s Meet Guy!** — last screen; button says **Let’s Play!**
+For the record, the rule as it now stands: guessing correctly **scores the
+points but does not earn your team another word**. The next word passes to the
+other team. Tell me if you would rather the winning team stayed in.
 
 ---
 
-## D. A complete game (the milestone bar)
+## B. Clues (the repeat you spotted)
 
-Please play **one full match** (or as far as you can). Empty seats can fill automatically.
+You reported the opposition being handed **the same clue you had just given**, and
+then your side giving that same clue again.
 
-- [ ] I reach the studio (curtains, MATCH WORD sign, four seats, Guy in the middle).
-- [ ] I can give or guess a word by **typing**.
-- [ ] I can give or guess a word by **speaking** (one clear word).
-- [ ] I hear Guy (turn the phone **media / music** volume up, not only ringer).
-- [ ] I hear the **buzzer** if time runs out.
-- [ ] Steal works: if a team misses, the other team gets a chance on the **same word**.
-- [ ] At **halftime**, roles switch (clue-givers become guessers).
-- [ ] The game can finish (or I clearly see scoring move).
-- [ ] After a win, the Home trophy number goes up (or ties / games played update when I tap the trophy).
+- [ ] After a steal, the other team's clue-giver gives a **brand new clue** — never yours repeated.
+- [ ] The same clue is **never used twice on the same word**, by either team.
+- [ ] If you try to type a clue that has already been used on that word, you are asked for a different one.
+- [ ] The clue word is now visible to **both** clue-givers, so whoever gets a steal is ready.
+- [ ] Guessers still **cannot** see the word (please confirm this did not leak).
 
 ---
 
-## E. Volume (only after you are in a game)
+## C. Stand-in players ("the clues and answers didn't make sense")
 
-- [ ] With media volume up, Guy is clearly audible (not a whisper).
-- [ ] Buzzer is clearly audible.
-- [ ] Mute / volume control in the game still works if you find the sound button.
+- [ ] When a stand-in **gives a clue**, it relates to the word.
+- [ ] When a stand-in **guesses wrong**, the wrong answer is at least related to the clue — not a random word like "bicycle" for "teapot".
+- [ ] Over a full game the stand-ins feel like people playing, not nonsense.
 
 ---
 
-## F. Not in this build (please don’t treat as a fail)
+## D. Guy's voice
 
-- Apple/Google **Subscribe** checkout is not live yet. Because of that, payment is switched **off** for testing — the trial can expire and you can still play. Nothing can lock you out.
-- The **annual tournament / cash prizes** are **Coming Soon** (onboarding only). There is no entry fee to pay in this build.
-- Prize Room shelf (full room of prizes) is still a later phase; Home trophy + tap-for-points is the current version.
+- [ ] Guy **no longer garbles or distorts** partway through a line.
+- [ ] His **longer** lines (the welcome, the halftime and end-of-game speeches) stay clear all the way through.
+- [ ] He is still a warm game-show host — please say if he now sounds too flat or not deep enough.
+
+He used to be played back slightly slowed down to sound deeper, which is what
+smeared his voice. The depth now comes from the voice itself.
+
+---
+
+## E. Music and audience
+
+- [ ] The music sits **under** Guy and the effects — the horns/trumpets no longer take over.
+- [ ] Music plays **continuously** through the game, not in bursts.
+- [ ] Using the **microphone** (Speak) no longer kills the music — it comes back after you speak.
+- [ ] Speaking twice in a game still leaves the music playing.
+- [ ] At the **end of the game** you hear the theme music **and** the audience.
+- [ ] If it is still not right, the in-game sound control lets you set music to taste.
+
+The mic was the "Mike" problem: opening it shut the whole audio session down and
+nothing ever restarted the music, so it stayed dead for the rest of the game.
+
+---
+
+## F. Your name
+
+- [ ] Your **own name** shows on your seat in the game.
+- [ ] It matches the name on the Home screen.
+- [ ] It is the name you signed up with — not a single letter and not a stand-in's name.
+
+Seat names used to be copied once, when you sat down, and never refreshed. If
+this is still wrong, please tell me **what it shows instead** and **what it
+should say** — that pins it down immediately.
+
+---
+
+## G. Playing with a friend (the next thing you wanted)
+
+Worth trying once the above looks right.
+
+- [ ] I can start a game and give a friend the **4-digit code**.
+- [ ] We both get into the same game from **different houses / phones**.
+- [ ] Turns, clues and scoring behave the same as with stand-ins.
+- [ ] Both of us hear Guy, the buzzer and the music.
+
+---
+
+## H. Still holding from last round (quick re-check)
+
+- [ ] **Upcoming Games** and **Enter the Studio** are readable and do not overlap.
+- [ ] The Subscribe screen does not appear or lock me out — an expired trial can still play.
+- [ ] The Home **trophy** is large and the win number sits beside it, not on the cup.
+- [ ] Guy's welcome and the character buttons are readable.
+
+---
+
+## I. Not in this build (please don't treat as a fail)
+
+- Apple/Google **Subscribe** checkout is not live yet. Payment stays switched **off** for testing — nothing can lock you out.
+- The **annual tournament / cash prizes** are **Coming Soon** (onboarding text only).
+- Prize Room shelf (a full room of prizes) is still a later phase.
 
 ---
 
@@ -93,9 +130,12 @@ Please play **one full match** (or as far as you can). Empty seats can fill auto
 
 | | Yes | Not yet |
 |---|---|---|
-| I got past Home and Subscribe and into a game | | |
-| Buttons were readable on my iPhone | | |
-| I played through (or far enough to see scoring / steal / buzzer) | | |
+| Turns went back and forth all game | | |
+| Clues were never repeated | | |
+| Guy's voice was clear throughout | | |
+| Music sat under the show and kept playing | | |
+| My name showed on my seat | | |
+| I played a complete game | | |
 | I am willing to release the Testing / Bug Fixes & Store Submission milestone | | |
 
 **Name:** _________________ **Date:** _________________

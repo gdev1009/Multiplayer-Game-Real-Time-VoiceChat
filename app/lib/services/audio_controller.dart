@@ -38,15 +38,27 @@ class AudioController extends ChangeNotifier {
   static const _kSfx = 'audio.sfxVolume';
   static const _kVoice = 'audio.voiceVolume';
   static const _kVolumeBoostV3 = 'audio.volumeBoostV3';
+  static const _kMusicTrimV4 = 'audio.musicTrimV4';
+
+  /// Music bed level. Ronna (Aug 2026): "the music is too loud… when the horns
+  /// or trumpets come in it gets annoying very quickly". The bed sits well under
+  /// Guy and the effects now; [_kMusicTrimV4] brings down louder saved values
+  /// once, since the old 0.62 default is already persisted on testers' phones.
+  static const double _defaultMusicVolume = 0.34;
 
   bool _muted = false;
-  // Music sits under the show so voice / SFX can stay at full media volume.
-  double _musicVolume = 0.62;
+  double _musicVolume = _defaultMusicVolume;
   double _sfxVolume = 1.0;
   double _voiceVolume = 1.0;
   /// Temporary duck while the mic is open — never written to prefs.
   double _voiceDuck = 1.0;
   bool _themePlaying = false;
+
+  /// Whether the theme was running when the mic opened. The Speak button tears
+  /// the audio session down (see [beginSpeechInputDuck] and the extra
+  /// [stopAll] on the play screen), which clears [_themePlaying] — so the flag
+  /// itself cannot tell us whether to bring the music back afterwards.
+  bool _themeBeforeSpeech = false;
 
   // --- lipsync ---------------------------------------------------------------
   bool _voicePlaying = false;
@@ -80,7 +92,7 @@ class AudioController extends ChangeNotifier {
     try {
       _prefs ??= await SharedPreferences.getInstance();
       _muted = _prefs?.getBool(_kMuted) ?? false;
-      _musicVolume = _prefs?.getDouble(_kMusic) ?? 0.62;
+      _musicVolume = _prefs?.getDouble(_kMusic) ?? _defaultMusicVolume;
       _sfxVolume = _prefs?.getDouble(_kSfx) ?? 1.0;
       _voiceVolume = _prefs?.getDouble(_kVoice) ?? 1.0;
       // Older Speak-duck bug persisted 0 — treat as "use default" (mute is separate).
@@ -91,10 +103,6 @@ class AudioController extends ChangeNotifier {
       // Lift quieter saved defaults so Guy / buzzer sit on the media slider.
       final boosted = _prefs?.getBool(_kVolumeBoostV3) ?? false;
       if (!boosted) {
-        if (_musicVolume < 0.62) {
-          _musicVolume = 0.62;
-          await _prefs?.setDouble(_kMusic, _musicVolume);
-        }
         if (_sfxVolume < 1.0) {
           _sfxVolume = 1.0;
           await _prefs?.setDouble(_kSfx, _sfxVolume);
@@ -104,6 +112,15 @@ class AudioController extends ChangeNotifier {
           await _prefs?.setDouble(_kVoice, _voiceVolume);
         }
         await _prefs?.setBool(_kVolumeBoostV3, true);
+      }
+      // One-time trim of music beds saved louder than the new default.
+      final trimmed = _prefs?.getBool(_kMusicTrimV4) ?? false;
+      if (!trimmed) {
+        if (_musicVolume > _defaultMusicVolume) {
+          _musicVolume = _defaultMusicVolume;
+          await _prefs?.setDouble(_kMusic, _musicVolume);
+        }
+        await _prefs?.setBool(_kMusicTrimV4, true);
       }
       notifyListeners();
     } catch (err) {
@@ -153,6 +170,7 @@ class AudioController extends ChangeNotifier {
   /// Guy silent for the rest of the session).
   Future<void> beginSpeechInputDuck() async {
     _voiceDuck = 0;
+    _themeBeforeSpeech = _themePlaying;
     notifyListeners();
     await stopHostSpeech();
     await _out.stopAll();
@@ -172,7 +190,17 @@ class AudioController extends ChangeNotifier {
     }
     notifyListeners();
     await _out.reconfigureAudioSession();
-    await _out.setLoopVolume(_effectiveMusic);
+    // The mic teardown stops the loop outright, so setting a volume on a
+    // stopped player left the music dead for the rest of the game once anyone
+    // used Speak (Ronna: "the mike kills the background music entirely" /
+    // "music should play continuously"). Start it again.
+    if (_themeBeforeSpeech || _themePlaying) {
+      _themePlaying = true;
+      _themeBeforeSpeech = false;
+      await _out.playLoop(HostAudio.themeMusic, _effectiveMusic);
+    } else {
+      await _out.setLoopVolume(_effectiveMusic);
+    }
   }
 
   Future<void> _beginLipsync(
@@ -445,8 +473,13 @@ class AudioController extends ChangeNotifier {
     );
   }
 
-  /// Deeper Guy (Ronna) — slight rate drop. Volume uses the media stream at full.
-  static const double _hostPlaybackRate = 0.93;
+  /// Guy plays at his natural rate.
+  ///
+  /// He used to be slowed to 0.93 to read deeper (Ronna's earlier request), but
+  /// resampling a voice track that way smears it, which is what she heard as
+  /// "garbles/distorts partway through" — worst on his longer lines. Depth now
+  /// comes from the voice itself (ElevenLabsTtsService voice settings) instead.
+  static const double _hostPlaybackRate = 1.0;
   static const double _hostVoiceBoost = 1.0;
   /// Crowd at full media volume (values over 1 are clamped by the player).
   static const double _crowdBoost = 1.0;

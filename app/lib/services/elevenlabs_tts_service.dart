@@ -51,11 +51,28 @@ class ElevenLabsTtsService {
     return dir;
   }
 
+  /// Voice settings for Guy.
+  ///
+  /// Ronna (Aug 2026) heard him "garble/distort partway through". Low stability
+  /// with a high style push makes ElevenLabs wobble on longer lines, which is
+  /// what that is; a steadier setting keeps the game-show warmth without the
+  /// artefacts. Depth comes from the voice itself — the player no longer slows
+  /// playback to fake it (see AudioController).
+  static const Map<String, Object> _voiceSettings = {
+    'stability': 0.5,
+    'similarity_boost': 0.85,
+    'style': 0.4,
+    'use_speaker_boost': true,
+  };
+
+  /// Cache fingerprint of [_voiceSettings]. Derived from the same map the
+  /// request sends, so a settings change can never serve stale audio.
+  static final String _settingsTag = _voiceSettings.entries
+      .map((e) => '${e.key}=${e.value}')
+      .join(',');
+
   String _cacheKey(String text) {
-    // Include voice settings so deeper/booming tweaks bust stale caches.
-    final bytes = utf8.encode(
-      '$voiceId|$_modelId|stab0.35|sim0.85|style0.55|$text',
-    );
+    final bytes = utf8.encode('$voiceId|$_modelId|$_settingsTag|$text');
     return sha256.convert(bytes).toString();
   }
 
@@ -88,13 +105,7 @@ class ElevenLabsTtsService {
             body: jsonEncode({
               'text': trimmed,
               'model_id': _modelId,
-              'voice_settings': {
-                // Booming classic game-show host (Ronna's Game Show Host voice).
-                'stability': 0.35,
-                'similarity_boost': 0.85,
-                'style': 0.55,
-                'use_speaker_boost': true,
-              },
+              'voice_settings': _voiceSettings,
             }),
           )
           .timeout(const Duration(seconds: 45));

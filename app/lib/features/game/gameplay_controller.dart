@@ -246,6 +246,9 @@ class GameplayController extends ChangeNotifier {
     _isHost = _hostId != null && _hostId == uid;
     _aiByRole = {for (final p in players) p.role: p.isAi};
     final names = {for (final p in players) p.role: p.displayName};
+    // Seat names are a snapshot from when each player sat down; pull the live
+    // ones so a renamed profile shows the right name on stage.
+    names.addAll(await service.refreshSeatNames(gameId));
     _myRole = null;
     // Remember the other *human* seats so the end-of-game screen can offer to
     // add them as friends. Computer seats and myself are skipped.
@@ -256,7 +259,9 @@ class GameplayController extends ChangeNotifier {
         continue;
       }
       if (!p.isAi && p.profileId != null) {
-        coPlayers.add((profileId: p.profileId!, name: p.displayName));
+        coPlayers.add(
+          (profileId: p.profileId!, name: names[p.role] ?? p.displayName),
+        );
       }
     }
     _humanCoPlayers = coPlayers;
@@ -265,7 +270,7 @@ class GameplayController extends ChangeNotifier {
     // match (video23: Rosie & Pearl shared the same teal hat + cat-eyes).
     final looks = AiPlayer.looksForSeats(
       gameId,
-      players.map((p) => (role: p.role, name: p.displayName)),
+      players.map((p) => (role: p.role, name: names[p.role] ?? p.displayName)),
     );
     _charactersByRole = looks;
 
@@ -684,7 +689,17 @@ class GameplayController extends ChangeNotifier {
     final latest = _state;
     if (latest == null || !latest.isTurnActive) return;
     if (latest.step == TurnStep.awaitingClue) {
-      await submitClue(AiPlayer.clueFor(secret, variant: latest.wordIndex));
+      // Vary by team and exchange, and skip clues already spent on this word,
+      // so a steal never hands the other side the clue it just heard.
+      await submitClue(
+        AiPlayer.clueFor(
+          secret,
+          variant: latest.wordIndex * 7 +
+              latest.exchangeCount +
+              (latest.cluingTeam == 'B' ? 3 : 0),
+          avoid: latest.usedClues,
+        ),
+      );
     } else if (latest.step == TurnStep.awaitingGuess) {
       await submitGuess(
         AiPlayer.guessFor(
