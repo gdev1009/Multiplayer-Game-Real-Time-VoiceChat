@@ -81,8 +81,25 @@ class HostAudio {
   static const String _sfx = 'audio';
   static const String _vox = 'audio/voice';
 
-  /// The looping opening/underscore theme (after Guy's welcome).
-  static const String themeMusic = '$_sfx/theme.mp3';
+  /// The looping bed that runs under the show (after Guy's welcome).
+  ///
+  /// Ronna (Aug 2026): "The music at the end of the game is pretty light and
+  /// easy going. I like that. I think we should use that throughout the game",
+  /// and earlier: "when the horns or trumpets come in, it gets annoying very
+  /// quickly."
+  ///
+  /// So the loop is now the gentle bed rather than [brassTheme]. It is derived
+  /// from the light second half of [openingBed] by `tools/make_gentle_bed.py`,
+  /// which documents the measurements behind the choice.
+  static const String themeMusic = '$_sfx/theme_gentle.mp3';
+
+  /// The original brass theme, kept so the bed can be swapped back in one line.
+  ///
+  /// Not used as the loop any more: it is 8s of a two-second brass stab riff,
+  /// with 51% of its energy in the 400–2500Hz trumpet/trombone band and its
+  /// level slamming between -13dB and -31dB four times per pass. Looping it
+  /// meant that hook returned every two seconds for a whole game.
+  static const String brassTheme = '$_sfx/theme.mp3';
 
   /// Short game-show bed before Guy speaks (Ronna: ~10–15s).
   static const String openingBed = '$_sfx/opening_bed.mp3';
@@ -149,8 +166,8 @@ class HostAudio {
             '$_sfx/applause.mp3',
           ],
           voice: '$_vox/winner.mp3',
-          // Ronna (Aug 2026): the theme and the crowd should send the show off,
-          // so the music keeps running under the wrap-up instead of cutting.
+          // Ronna (Aug 2026): the music and the crowd should send the show off,
+          // so the bed keeps running under the wrap-up instead of cutting.
           music: themeMusic,
         );
       case SoundCue.disconnect:

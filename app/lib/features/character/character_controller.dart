@@ -65,7 +65,14 @@ class CharacterController extends ChangeNotifier {
           );
         }
       case CharacterLayer.hair:
-        _draft = _draft.copyWith(hair: id);
+        // Picking a style for the first time also settles on a colour, so the
+        // preview never shows the untinted grey art.
+        _draft = _draft.copyWith(
+          hair: id,
+          hairColor: id == null
+              ? _draft.hairColor
+              : (_draft.hairColor ?? CharacterCatalog.defaultHairColorId),
+        );
       case CharacterLayer.outfit:
         _draft = _draft.copyWith(outfit: id);
       case CharacterLayer.glasses:
@@ -90,6 +97,17 @@ class CharacterController extends ChangeNotifier {
         CharacterLayer.earrings => _draft.earrings,
         CharacterLayer.accessory => _draft.accessory,
       };
+
+  /// The chosen hair colour id, falling back to the catalog default so the
+  /// swatch row always shows a selection.
+  String get hairColorId =>
+      _draft.hairColor ?? CharacterCatalog.defaultHairColorId;
+
+  /// Sets the hair colour tint applied to the neutral hair art.
+  void setHairColor(String id) {
+    _draft = _draft.copyWith(hairColor: id);
+    notifyListeners();
+  }
 
   void setDisplayName(String name) {
     _draft = _draft.copyWith(displayName: name);

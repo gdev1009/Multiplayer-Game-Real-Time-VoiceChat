@@ -1,5 +1,6 @@
 import '../../models/character.dart';
 import '../character/character_catalog.dart';
+import 'clue_bank.dart';
 
 /// Computer-player behaviour for the seats the host fills with studio players
 ///.
@@ -37,10 +38,15 @@ class AiPlayer {
   }) {
     final key = secretWord.trim().toLowerCase();
     final used = {for (final a in avoid) a.trim().toLowerCase()};
-    final pool = <String>[
-      ...?_hints[key],
-      ...?_semanticClues[key],
-    ];
+    // A word in the curated bank uses *only* its curated clues. Pooling the
+    // legacy tables as well would let the placeholders back in — that is how
+    // "Garden" ended up clued "Spot" and "Dog" clued "Wildlife". The legacy
+    // tables are still there for a word that predates the bank, such as an
+    // in-flight game holding an older deal.
+    final curated = ClueBank.cluesFor(key);
+    final pool = curated.isNotEmpty
+        ? curated
+        : <String>[...?_hints[key], ...?_semanticClues[key]];
     final options = <String>[];
     for (final c in pool) {
       if (_isBannedClue(c, key)) continue;
@@ -96,9 +102,14 @@ class AiPlayer {
   ///
   /// Ronna (Aug 2026): "the clues and answers didn't make sense when stand-ins
   /// played". A miss used to come from [_missPool] regardless of the word, so
-  /// the clue "Teapot" could be answered "Bicycle". Preferring a word from the
-  /// answer's own clue family keeps a miss related to what was actually said.
+  /// the clue "Teapot" could be answered "Bicycle".
+  ///
+  /// A miss is now another answer from the same [ClueBank] family, which is both
+  /// on-topic and a legal thing to say. Guessing one of the word's own *clues*
+  /// would be a foul, so those are no longer used.
   static String _plausibleMiss(String key, int h) {
+    final siblings = ClueBank.siblingsOf(key);
+    if (siblings.isNotEmpty) return siblings[h % siblings.length];
     final related = <String>[
       ...?_semanticClues[key],
       ...?_hints[key],

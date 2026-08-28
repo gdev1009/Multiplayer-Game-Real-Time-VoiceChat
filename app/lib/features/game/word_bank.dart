@@ -1,18 +1,29 @@
 /// Match Word — the built-in bank of secret words.
 ///
-/// Source of truth for offline / demo deals: Ronna's
-/// `docs/Match Word Database v1 (1).xlsx` (1,209 words). The server
-/// mirror lives in `supabase/migrations/0027_ronna_word_database_v1.sql`.
+/// A deal now comes from [ClueBank], which is the single source of truth for
+/// words that can actually be clued. Ronna's full Word Database v1
+/// (`docs/Match Word Database v1 (1).xlsx`, 1,209 words) is kept below as
+/// [allWords] for reference and for recognising a word from an older saved
+/// deal, but it is **not** dealt from: 1,010 of those words had only a generic
+/// category placeholder for a clue, which is what made stand-in play look
+/// nonsensical. See `clue_bank.dart` for the full write-up.
 library;
 
 import 'dart:math';
+
+import 'clue_bank.dart';
 
 /// Curated Match Word bank from Ronna's Word Database v1 spreadsheet.
 class WordBank {
   const WordBank._();
 
   /// Display form (title case). Matching is case-insensitive.
-  static const List<String> words = [
+  ///
+  /// Only words with real clues are dealt, so every round is solvable.
+  static List<String> get words => ClueBank.words;
+
+  /// The full spreadsheet, for reference and for reading older deals.
+  static const List<String> allWords = [
     'Accelerate', 'Accept', 'Accident', 'Account', 'Accountant', 'Accuse', 'Actor', 'Actress',
     'Add', 'Advise', 'Afternoon', 'Agree', 'Alert', 'Allow', 'Anchor', 'Anger',
     'Ankle', 'Anniversary', 'Announce', 'Answer', 'Ant', 'Anthem', 'Apologize', 'Apple',
@@ -169,16 +180,6 @@ class WordBank {
 
   /// Returns [count] distinct words in random order. Falls back to sampling
   /// with repeats only if [count] exceeds the bank size.
-  static List<String> deal(int count, {Random? random}) {
-    final rng = random ?? Random();
-    final pool = List<String>.of(words)..shuffle(rng);
-    if (count <= pool.length) return pool.take(count).toList();
-    final out = <String>[];
-    var i = 0;
-    while (out.length < count) {
-      out.add(pool[i % pool.length]);
-      i++;
-    }
-    return out;
-  }
+  static List<String> deal(int count, {Random? random}) =>
+      ClueBank.deal(count, random: random);
 }

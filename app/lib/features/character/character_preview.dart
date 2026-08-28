@@ -117,6 +117,18 @@ class CharacterPreview extends StatelessWidget {
         filterQuality: FilterQuality.medium,
         errorBuilder: (_, __, ___) => const SizedBox.shrink(),
       );
+      // The hair art is neutral grey so it can take a colour; multiplying keeps
+      // the artist's shading and highlights. Untinted it reads as white, which
+      // is why every character looked white-haired.
+      if (layer == CharacterLayer.hair) {
+        image = ColorFiltered(
+          colorFilter: ColorFilter.mode(
+            CharacterCatalog.hairColor(character.hairColor).tint,
+            BlendMode.modulate,
+          ),
+          child: image,
+        );
+      }
       // Pull hats down onto the crown so they don't float above the skull.
       if (layer == CharacterLayer.hat) {
         image = Transform.translate(
@@ -218,7 +230,9 @@ class CharacterPartThumb extends StatelessWidget {
           outfit: CharacterCatalog.defaultOutfitFor(optionId),
         );
       case CharacterLayer.hair:
-        c = c.copyWith(hair: optionId);
+        // Carry the chosen colour so a style thumbnail shows the hair the
+        // player will actually get, not the untinted grey art.
+        c = c.copyWith(hair: optionId, hairColor: reference.hairColor);
       case CharacterLayer.outfit:
         c = c.copyWith(outfit: optionId);
       case CharacterLayer.glasses:

@@ -87,6 +87,32 @@ class LayerOption {
   String get assetPath => 'assets/images/character/$folder/$id.png';
 }
 
+/// A hair colour a player can pick.
+///
+/// The hair PNGs are painted a neutral light grey (dominant value 224, with
+/// shading down to 128), which is why an untinted character reads as
+/// white-haired — Ronna, Aug 2026: "everybody's hair is white". Multiplying the
+/// art by [tint] keeps the artist's shading and highlights while changing the
+/// colour, so a swatch is stored as an id and the tint is applied at paint time.
+class HairColor {
+  const HairColor({required this.id, required this.label, required this.tint});
+
+  final String id;
+  final String label;
+
+  /// Multiplied over the grey art, so it must be brighter than the wanted
+  /// result: the art's base value of 224 scales the tint to roughly 88%.
+  final Color tint;
+
+  /// The colour to show on a swatch, i.e. what the hair will actually look like.
+  Color get swatch => Color.fromARGB(
+        0xFF,
+        (tint.r * 255 * 0.88).round().clamp(0, 255),
+        (tint.g * 255 * 0.88).round().clamp(0, 255),
+        (tint.b * 255 * 0.88).round().clamp(0, 255),
+      );
+}
+
 /// The catalog of options for every layer.
 ///
 /// Options are **body-aware**: the woman and man have their own hairstyles,
@@ -189,6 +215,35 @@ class CharacterCatalog {
     LayerOption(id: 'earring-3', label: 'Teardrops', folder: 'earrings'),
     LayerOption(id: 'earring-4', label: 'Diamonds', folder: 'earrings'),
   ];
+
+  /// Hair colours, warm to cool, with grey and white last so an older player
+  /// who wants silver hair can still choose it deliberately.
+  static const List<HairColor> hairColors = [
+    HairColor(id: 'black', label: 'Black', tint: Color(0xFF3A3134)),
+    HairColor(id: 'dark-brown', label: 'Dark brown', tint: Color(0xFF6B4A32)),
+    HairColor(id: 'brown', label: 'Brown', tint: Color(0xFF9A6B42)),
+    HairColor(id: 'auburn', label: 'Auburn', tint: Color(0xFFA85A3C)),
+    HairColor(id: 'red', label: 'Red', tint: Color(0xFFC96A38)),
+    HairColor(id: 'blonde', label: 'Blonde', tint: Color(0xFFE0B972)),
+    HairColor(id: 'light-blonde', label: 'Light blonde', tint: Color(0xFFF0DCAA)),
+    HairColor(id: 'grey', label: 'Grey', tint: Color(0xFFC6C2C4)),
+    HairColor(id: 'white', label: 'White', tint: Color(0xFFFFFFFF)),
+  ];
+
+  /// The colour used when a character has a hairstyle but no colour saved.
+  ///
+  /// Ronna's characters were all white-haired because the art is neutral grey
+  /// and nothing tinted it. Defaulting to brown means every existing character
+  /// looks right on the next launch, without anyone re-picking.
+  static const String defaultHairColorId = 'brown';
+
+  /// The [HairColor] for [id], falling back to [defaultHairColorId].
+  static HairColor hairColor(String? id) {
+    for (final c in hairColors) {
+      if (c.id == id) return c;
+    }
+    return hairColors.firstWhere((c) => c.id == defaultHairColorId);
+  }
 
   /// The default body used when none has been chosen yet.
   static String get defaultBodyId => _bodies.first.id;

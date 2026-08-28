@@ -176,12 +176,14 @@ class _CharacterCreationScreenState extends State<CharacterCreationScreen> {
 
   Widget _buildStepBody(CharacterController controller) {
     return switch (_step.kind) {
-      _StepKind.layer => _OptionWrap(
-          layer: _step.layer!,
-          reference: controller.draft,
-          selectedId: controller.selected(_step.layer!),
-          onChoose: (id) => controller.chooseOption(_step.layer!, id),
-        ),
+      _StepKind.layer => _step.layer == CharacterLayer.hair
+          ? _HairStep(controller: controller)
+          : _OptionWrap(
+              layer: _step.layer!,
+              reference: controller.draft,
+              selectedId: controller.selected(_step.layer!),
+              onChoose: (id) => controller.chooseOption(_step.layer!, id),
+            ),
       _StepKind.accessories => _AccessoriesStep(controller: controller),
       _StepKind.name => _NameStep(
           controller: _nameController,
@@ -348,6 +350,146 @@ class _OptionWrap extends StatelessWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+/// The Hair step: a style, then a colour.
+///
+/// Ronna (Aug 2026): "everybody's hair is white. We need to have a choice of
+/// hair colour." The hair art is neutral grey so it can be tinted, but nothing
+/// ever offered the choice, so every character came out white-haired.
+class _HairStep extends StatelessWidget {
+  const _HairStep({required this.controller});
+
+  final CharacterController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasHair = controller.draft.hair != null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _OptionWrap(
+          layer: CharacterLayer.hair,
+          reference: controller.draft,
+          selectedId: controller.selected(CharacterLayer.hair),
+          onChoose: (id) => controller.chooseOption(CharacterLayer.hair, id),
+        ),
+        if (hasHair) ...[
+          const SizedBox(height: AppSpacing.lg),
+          _HairColorPicker(
+            selectedId: controller.hairColorId,
+            onChoose: controller.setHairColor,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// A row of tappable hair-colour swatches.
+class _HairColorPicker extends StatelessWidget {
+  const _HairColorPicker({required this.selectedId, required this.onChoose});
+
+  final String selectedId;
+  final ValueChanged<String> onChoose;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionHeader(
+          icon: Icons.palette_rounded,
+          title: 'Hair colour',
+          hint: 'Tap a colour. Your hair changes right away.',
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Wrap(
+          spacing: AppSpacing.md,
+          runSpacing: AppSpacing.md,
+          children: [
+            for (final colour in CharacterCatalog.hairColors)
+              _SwatchTile(
+                colour: colour,
+                selected: colour.id == selectedId,
+                onTap: () => onChoose(colour.id),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// One hair-colour swatch. Sized to the same generous tap target as the other
+/// option tiles so it is easy to hit.
+class _SwatchTile extends StatelessWidget {
+  const _SwatchTile({
+    required this.colour,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final HairColor colour;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: '${colour.label} hair',
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+        child: Container(
+          width: 88,
+          padding: const EdgeInsets.symmetric(
+            vertical: AppSpacing.sm,
+            horizontal: AppSpacing.xs,
+          ),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            border: Border.all(
+              color: selected ? AppColors.deepPurple : AppColors.divider,
+              width: selected ? 3 : 1,
+            ),
+            borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+            boxShadow: selected ? AppColors.softShadow : AppColors.tileShadow,
+          ),
+          child: Column(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: colour.swatch,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AppColors.divider),
+                ),
+                child: selected
+                    ? const Icon(Icons.check, color: Colors.white, size: 26)
+                    : null,
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                colour.label,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppText.bodyMuted.copyWith(
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  color:
+                      selected ? AppColors.deepPurple : AppColors.textPrimary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

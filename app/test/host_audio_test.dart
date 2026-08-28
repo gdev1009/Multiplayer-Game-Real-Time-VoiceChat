@@ -28,7 +28,21 @@ void main() {
           expect(sounds.voice, startsWith('audio/voice/'));
         }
       }
-      expect(HostAudio.themeMusic, 'audio/theme.mp3');
+      expect(HostAudio.themeMusic, 'audio/theme_gentle.mp3');
+    });
+
+    test('the looping bed is the gentle one, not the brass theme', () {
+      // Ronna (Aug 2026): "The music at the end of the game is pretty light and
+      // easy going. I like that. I think we should use that throughout the
+      // game" — and earlier, the horns "get annoying very quickly". The brass
+      // theme is kept as an asset but must never be the loop.
+      expect(HostAudio.themeMusic, isNot(HostAudio.brassTheme));
+      for (final cue in SoundCue.values) {
+        final sounds = HostAudio.soundsFor(cue);
+        expect(sounds.music, isNot(HostAudio.brassTheme), reason: '$cue');
+        expect(sounds.effects, isNot(contains(HostAudio.brassTheme)),
+            reason: '$cue');
+      }
     });
 
     test('game start opens with the cue-and-prize bed before Guy speaks', () {

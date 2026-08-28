@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:match_word/features/game/ai_player.dart';
+import 'package:match_word/features/game/clue_bank.dart';
 import 'package:match_word/features/game/word_bank.dart';
 
 void main() {
@@ -107,18 +108,25 @@ void main() {
     // Ronna (Aug 2026): "the clues and answers didn't make sense when
     // stand-in's played" — a miss used to be an unrelated word from a fixed
     // pool, so the clue "Teapot" could be answered "Bicycle".
+    //
+    // A miss is now another answer from the same [ClueBank] family: on-topic,
+    // and a legal thing to say. It must *not* be one of the word's own clues,
+    // because saying the clue back is a foul.
     test('a wrong guess relates to the word it is answering', () {
-      // 'garden' has a known clue family; a miss must come from it.
-      final family = {
-        for (var v = 0; v < 8; v++)
-          AiPlayer.clueFor('garden', variant: v).toLowerCase(),
+      final siblings = {
+        for (final s in ClueBank.siblingsOf('garden')) s.toLowerCase(),
+      };
+      final ownClues = {
+        for (final c in ClueBank.cluesFor('garden')) c.toLowerCase(),
       };
       var misses = 0;
       for (var seed = 0; seed < 200; seed++) {
         final guess = AiPlayer.guessFor('garden', seed: seed).toLowerCase();
         if (guess == 'garden') continue;
         misses++;
-        expect(family, contains(guess), reason: 'unrelated miss "$guess"');
+        expect(siblings, contains(guess), reason: 'unrelated miss "$guess"');
+        expect(ownClues, isNot(contains(guess)),
+            reason: 'guessed the clue "$guess", which is a foul');
       }
       expect(misses, greaterThan(0), reason: 'expected some misses to check');
     });
