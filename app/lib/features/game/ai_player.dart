@@ -182,6 +182,7 @@ class AiPlayer {
       seed,
       name,
       usedHair: const {},
+      usedHairColor: const {},
       usedGlasses: const {},
       usedHat: const {},
       usedOutfit: const {},
@@ -196,6 +197,7 @@ class AiPlayer {
     Iterable<({String role, String name})> seats,
   ) {
     final usedHair = <String>{};
+    final usedHairColor = <String>{};
     final usedGlasses = <String>{};
     final usedHat = <String>{};
     final usedOutfit = <String>{};
@@ -206,11 +208,13 @@ class AiPlayer {
         '$salt:${seat.role}:${seat.name}:$i',
         seat.name,
         usedHair: usedHair,
+        usedHairColor: usedHairColor,
         usedGlasses: usedGlasses,
         usedHat: usedHat,
         usedOutfit: usedOutfit,
       );
       if (c.hair != null) usedHair.add(c.hair!);
+      if (c.hairColor != null) usedHairColor.add(c.hairColor!);
       usedGlasses.add(c.glasses ?? '__none__');
       usedHat.add(c.hat ?? '__none__');
       if (c.outfit != null) usedOutfit.add(c.outfit!);
@@ -224,6 +228,7 @@ class AiPlayer {
     String seed,
     String name, {
     required Set<String> usedHair,
+    required Set<String> usedHairColor,
     required Set<String> usedGlasses,
     required Set<String> usedHat,
     required Set<String> usedOutfit,
@@ -262,6 +267,18 @@ class AiPlayer {
     }
 
     final hair = pickAvoid(CharacterLayer.hair, 3, used: usedHair);
+    // Colour the hair too, or the whole table shares the default. White is left
+    // to human players only — a stand-in wearing it reads as the bug Ronna
+    // reported ("everybody's hair is white") rather than as a choice.
+    String? hairColor;
+    if (hair != null) {
+      var palette =
+          CharacterCatalog.hairColors.where((c) => c.id != 'white').toList();
+      final fresh =
+          palette.where((c) => !usedHairColor.contains(c.id)).toList();
+      if (fresh.isNotEmpty) palette = fresh;
+      hairColor = palette[pick(palette.length, 17)].id;
+    }
     final outfit = pickAvoid(CharacterLayer.outfit, 5, used: usedOutfit) ??
         CharacterCatalog.defaultOutfitFor(base);
     final glasses = pickAvoid(
@@ -286,6 +303,7 @@ class AiPlayer {
       displayName: name,
       base: base,
       hair: hair,
+      hairColor: hairColor,
       outfit: outfit,
       glasses: glasses,
       hat: hat,

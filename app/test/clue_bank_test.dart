@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:match_word/features/game/ai_player.dart';
 import 'package:match_word/features/game/clue_bank.dart';
+import 'package:match_word/features/game/game_engine.dart';
 import 'package:match_word/features/game/word_bank.dart';
 
 /// Ronna (Aug 2026): "when the stand in AI plays, the answers they're giving are
@@ -22,11 +23,15 @@ void main() {
       expect(words.length, greaterThanOrEqualTo(200));
     });
 
-    test('each word has at least three clues', () {
-      // One word can need a fresh clue on every exchange.
+    test('the bank holds a clue for every exchange a word can run to', () {
+      // A clue may not be repeated on a word, so a word with fewer clues than
+      // there are exchanges runs dry mid-round and the stand-in falls back to a
+      // meaningless nudge — exactly the complaint this file answers.
+      expect(ClueBank.cluesPerWord,
+          greaterThanOrEqualTo(const MatchConfig().maxExchanges));
       for (final word in words) {
-        expect(ClueBank.clues[word]!.length, greaterThanOrEqualTo(3),
-            reason: '"$word" needs at least three clues');
+        expect(ClueBank.clues[word]!.length, ClueBank.cluesPerWord,
+            reason: '"$word" needs ${ClueBank.cluesPerWord} clues');
       }
     });
 
@@ -115,9 +120,25 @@ void main() {
     test('the generic category placeholders are gone', () {
       // The exact words that made the old bank unplayable.
       const placeholders = {
-        'person', 'someone', 'people', 'place', 'spot', 'area', 'idea',
-        'concept', 'thought', 'career', 'profession', 'work', 'thing', 'item',
-        'object', 'action', 'doing', 'verb', 'location',
+        'person',
+        'someone',
+        'people',
+        'place',
+        'spot',
+        'area',
+        'idea',
+        'concept',
+        'thought',
+        'career',
+        'profession',
+        'work',
+        'thing',
+        'item',
+        'object',
+        'action',
+        'doing',
+        'verb',
+        'location',
       };
       for (final word in words) {
         for (final clue in ClueBank.clues[word]!) {
@@ -138,7 +159,8 @@ void main() {
         for (final word in WordBank.deal(16)) {
           expect(ClueBank.isPlayable(word), isTrue,
               reason: '"$word" was dealt with no clue to give');
-          expect(AiPlayer.clueFor(word).toLowerCase(), isNot(word.toLowerCase()));
+          expect(
+              AiPlayer.clueFor(word).toLowerCase(), isNot(word.toLowerCase()));
         }
       }
     });
@@ -148,7 +170,8 @@ void main() {
         final given = <String>[];
         for (var exchange = 0; exchange < 3; exchange++) {
           final clue = AiPlayer.clueFor(word, variant: exchange, avoid: given);
-          expect(given.map((g) => g.toLowerCase()), isNot(contains(clue.toLowerCase())),
+          expect(given.map((g) => g.toLowerCase()),
+              isNot(contains(clue.toLowerCase())),
               reason: 'repeated "$clue" on "$word"');
           given.add(clue);
         }
@@ -188,7 +211,8 @@ void main() {
     test('a wrong guess is never one of the clues just given', () {
       // Saying the clue back is a foul, so a miss must not be a clue.
       for (final word in ClueBank.words) {
-        final clues = ClueBank.cluesFor(word).map((c) => c.toLowerCase()).toSet();
+        final clues =
+            ClueBank.cluesFor(word).map((c) => c.toLowerCase()).toSet();
         for (var seed = 0; seed < 40; seed++) {
           final guess = AiPlayer.guessFor(word, seed: seed).toLowerCase();
           expect(clues.contains(guess), isFalse,
@@ -209,10 +233,11 @@ void main() {
   test('the server deals the same bank as the app', () {
     // mw_begin_play holds its own copy of the bank, so an app-only change would
     // silently leave online games dealing unclueable words.
-    final sql =
-        File('supabase/migrations/0032_clue_safe_word_bank.sql').readAsStringSync();
-    final array = RegExp(r'v_bank\s+text\[\]\s*:=\s*array\[(.*?)\];', dotAll: true)
-        .firstMatch(sql);
+    final sql = File('supabase/migrations/0032_clue_safe_word_bank.sql')
+        .readAsStringSync();
+    final array =
+        RegExp(r'v_bank\s+text\[\]\s*:=\s*array\[(.*?)\];', dotAll: true)
+            .firstMatch(sql);
     expect(array, isNotNull, reason: 'could not find the server bank');
     final serverWords = RegExp("'([A-Za-z]+)'")
         .allMatches(array!.group(1)!)

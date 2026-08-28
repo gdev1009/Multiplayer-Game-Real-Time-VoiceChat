@@ -163,6 +163,13 @@ void main() {
       expect(glasses.toSet().length, glasses.length);
       final hats = looks.values.map((c) => c.hat ?? '__none__').toList();
       expect(hats.toSet().length, hats.length);
+      // Stand-ins get their own hair colour, and never white — a table of
+      // white-haired stand-ins reads as the bug Ronna reported, not a choice.
+      final colors =
+          looks.values.where((c) => c.hair != null).map((c) => c.hairColor);
+      expect(colors, everyElement(isNotNull));
+      expect(colors, isNot(contains('white')));
+      expect(colors.toSet().length, colors.length);
       // Stable for the same salt.
       final again = AiPlayer.looksForSeats('game-video23', [
         (role: 'A1', name: 'Greg'),

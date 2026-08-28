@@ -1,6 +1,6 @@
 # Match Word — Acceptance checklist (for Ronna)
 
-**Build to test:** iPhone TestFlight **1.0.0 (89) or newer**. Use the exact number Gregory quotes in his message.
+**Build to test:** iPhone TestFlight **1.0.0 (90) or newer**. Use the exact number Gregory quotes in his message.
 
 This round covers the three things you raised after your last game: the
 **stand-in clues that made no sense**, **everyone having white hair**, and the
@@ -14,12 +14,12 @@ Please tick each item. If something fails, a screenshot of that screen is enough
 
 ## 0. Confirm you have the right build (please do this first)
 
-- [ ] In **TestFlight**, Match Word shows **1.0.0 (89)** — tap **Update** if it offers one.
+- [ ] In **TestFlight**, Match Word shows **1.0.0 (90)** — tap **Update** if it offers one.
 - [ ] Fully close Match Word (swipe it away), then open it again.
-- [ ] At the bottom of the **PIN / sign-in** screen you can read **“Match Word 1.0.0 (89)”**.
-- [ ] At the bottom of the **Home** screen (under Sign Out) you can read the same **1.0.0 (89)**.
+- [ ] At the bottom of the **PIN / sign-in** screen you can read **“Match Word 1.0.0 (90)”**.
+- [ ] At the bottom of the **Home** screen (under Sign Out) you can read the same **1.0.0 (90)**.
 
-If those lines do not say **89**, please stop and send a screenshot — you are on an
+If those lines do not say **90**, please stop and send a screenshot — you are on an
 older install and nothing below is a fair test.
 
 ---
@@ -71,15 +71,20 @@ was the secret word. That is exactly what you saw: "the answers they're giving
 are not making any sense. And yet often times they tell them they're right."
 
 The fix: a game now only deals words that have **real clues** that point at one
-answer. That is 274 words, each with three hand-written clues (a game uses 16
+answer. That is 274 words, each with **five** hand-written clues (a game uses 16
 words, so there is plenty of variety). Examples of the new clues:
 
 | Word | Clues |
 |---|---|
-| Tomato | Ketchup · Vine · Salsa |
-| Spider | Web · Arachnid · Tarantula |
-| Birthday | Candles · Presents · Wishes |
-| Nose | Nostrils · Sneeze · Sniffle |
+| Tomato | Ketchup · Vine · Salsa · Marinara · Ripe |
+| Spider | Web · Arachnid · Tarantula · Cobweb · Eightlegged |
+| Birthday | Candles · Presents · Wishes · Celebration · Age |
+| Nose | Nostrils · Sneeze · Sniffle · Smell · Nasal |
+
+Five is deliberate, not decoration. A word can run to five exchanges before it is
+revealed, and no clue may be repeated on a word — so a word with only three clues
+would run dry on the fourth exchange and the stand-in would fall back to a vague
+filler word. Every word now carries a real clue for every exchange it can reach.
 
 - [ ] Every clue you hear **points at its word**. No more "Person", "Place", "Thing" or "Spot".
 - [ ] When a stand-in **guesses wrong**, the wrong answer is still in the same family — a miss on a food word is another food, not "bicycle" for "teapot".
@@ -104,6 +109,7 @@ nothing ever coloured it — so everyone came out white-haired. There is now a
 - [ ] The choice is still there after you **save and reopen** the app.
 - [ ] Your existing character is **no longer white-haired** (it defaults to brown).
 - [ ] **Grey** and **White** are still available if you want them.
+- [ ] The **stand-in players** at the table each have their **own** hair colour, and none of them are white.
 
 ---
 
