@@ -52,13 +52,12 @@ void main() {
       expect(HostAudio.openingBedDuration.inSeconds, inInclusiveRange(10, 15));
     });
 
-    test('winner keeps the theme running under the applause', () {
-      // Ronna (Aug 2026): the theme and the audience should send the show off,
-      // so the finale no longer cuts the music.
+    test('winner keeps the theme running under a single crowd bed', () {
       final s = HostAudio.soundsFor(SoundCue.winner);
       expect(s.stopMusic, isFalse);
       expect(s.music, HostAudio.themeMusic);
-      expect(s.effects, contains('audio/applause.mp3'));
+      expect(s.effects, contains('audio/cheer.mp3'));
+      expect(s.effects, isNot(contains('audio/applause.mp3')));
     });
 
     test('only the disconnect alarm stops the music', () {
@@ -93,11 +92,15 @@ void main() {
       expect(r.effects, contains('audio/reveal.mp3'));
     });
 
-    test('winner plays cheer + applause after Guy (crowd on cue)', () {
+    test('winner plays one crowd bed after Guy', () {
       final w = HostAudio.soundsFor(SoundCue.winner);
       expect(w.effects, contains('audio/cheer.mp3'));
-      expect(w.effects, contains('audio/applause.mp3'));
+      expect(w.effects, isNot(contains('audio/applause.mp3')));
       expect(w.voice, isNotNull);
+    });
+
+    test('a timed-out steal uses a shorter buzz than a wrong guess', () {
+      expect(HostAudio.timeoutBuzzerHold, lessThan(HostAudio.buzzerHold));
     });
 
     test('only correct and winner include crowd cheer/applause', () {

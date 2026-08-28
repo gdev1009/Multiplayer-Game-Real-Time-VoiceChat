@@ -189,7 +189,7 @@ class AudioController extends ChangeNotifier {
       await _prefs?.setDouble(_kVoice, _voiceVolume);
     }
     notifyListeners();
-    await _out.reconfigureAudioSession();
+      await _out.reconfigureAudioSession();
     // The mic teardown stops the loop outright, so setting a volume on a
     // stopped player left the music dead for the rest of the game once anyone
     // used Speak (Ronna: "the mike kills the background music entirely" /
@@ -197,7 +197,7 @@ class AudioController extends ChangeNotifier {
     if (_themeBeforeSpeech || _themePlaying) {
       _themePlaying = true;
       _themeBeforeSpeech = false;
-      await _out.playLoop(HostAudio.themeMusic, _effectiveMusic);
+      await _out.ensureLoop(HostAudio.themeMusic, _effectiveMusic);
     } else {
       await _out.setLoopVolume(_effectiveMusic);
     }
@@ -283,7 +283,7 @@ class AudioController extends ChangeNotifier {
 
   Future<void> startTheme() async {
     _themePlaying = true;
-    await _out.playLoop(HostAudio.themeMusic, _effectiveMusic);
+    await _out.ensureLoop(HostAudio.themeMusic, _effectiveMusic);
   }
 
   Future<void> stopTheme() async {
@@ -306,6 +306,100 @@ class AudioController extends ChangeNotifier {
   }
 
   Future<void> playCue(SoundCue cue) async {
+    if (cue == SoundCue.steal || cue == SoundCue.reveal) {
+      await _playMissCue(cue, buzzerHold: HostAudio.buzzerHold);
+      return;
+    }
+    await _playCueInternal(cue);
+  }
+
+  /// Timed-out guess: shorter buzz, then Guy, without replaying on the steal.
+  Future<void> playTimeoutFanfare({required bool reveal}) async {
+    final cue = reveal ? SoundCue.reveal : SoundCue.steal;
+    await _playMissCue(cue, buzzerHold: HostAudio.timeoutBuzzerHold);
+  }
+
+  Future<void> _playMissCue(
+    SoundCue cue, {
+    required Duration buzzerHold,
+  }) async {
+    final epoch = _cueEpoch;
+    final sounds = HostAudio.soundsFor(cue);
+    final sfxVol = _effectiveSfx;
+    final line = HostVoiceScripts.lineFor(cue);
+    final fallback = HostVoiceScripts.fallbackAssetFor(cue) ?? sounds.voice;
+
+    await _ensureThemeBed();
+    if (epoch != _cueEpoch) return;
+
+    for (final effect in sounds.effects) {
+      if (epoch != _cueEpoch) return;
+      final vol = sfxVol;
+      if (effect.contains('buzzer')) {
+        unawaited(_out.playOneShot(effect, vol));
+        await Future<void>.delayed(buzzerHold);
+        if (epoch != _cueEpoch) return;
+        await _out.stopSfx();
+      } else {
+        unawaited(_out.playOneShot(effect, vol));
+        await Future<void>.delayed(const Duration(milliseconds: 40));
+      }
+    }
+    if (epoch != _cueEpoch) return;
+
+    if (line == null && fallback == null) return;
+
+    final ducked = _themePlaying ? _effectiveMusic * 0.06 : null;
+    if (ducked != null) await _out.setLoopVolume(ducked);
+
+    try {
+      if (epoch != _cueEpoch) return;
+
+      String? filePath;
+      if (line != null) {
+        filePath = await _tts.synthesizeToFile(line);
+      }
+      if (epoch != _cueEpoch) return;
+
+      if (filePath != null) {
+        final env = VoiceEnvelope.synthetic(
+          filePath,
+          durationMs: _estimateMs(line!),
+        );
+        await _beginLipsync(filePath, envelope: env);
+        if (epoch != _cueEpoch) {
+          _endLipsync();
+          return;
+        }
+        await _out.playOneShot(
+          filePath,
+          (_effectiveVoice * _hostVoiceBoost).clamp(0.0, 1.0),
+          voice: true,
+          fromFile: true,
+          playbackRate: _hostPlaybackRate,
+        );
+      } else if (fallback != null) {
+        await _beginLipsync(fallback);
+        if (epoch != _cueEpoch) {
+          _endLipsync();
+          return;
+        }
+        await _out.playOneShot(
+          fallback,
+          (_effectiveVoice * _hostVoiceBoost).clamp(0.0, 1.0),
+          voice: true,
+          playbackRate: _hostPlaybackRate,
+        );
+      }
+    } finally {
+      if (epoch == _cueEpoch) {
+        _endLipsync();
+      }
+      if (ducked != null) await _out.setLoopVolume(_effectiveMusic);
+    }
+  }
+
+  Future<void> _playCueInternal(SoundCue cue) async {
     final epoch = _cueEpoch;
     final sounds = HostAudio.soundsFor(cue);
     final sfxVol = sounds.isAlarm ? (_muted ? 0.9 : _sfxVolume) : _effectiveSfx;
@@ -327,6 +421,9 @@ class AudioController extends ChangeNotifier {
       }
       await _playOpeningBed();
       if (epoch != _cueEpoch) return;
+      // Bed ends → start the loop immediately so the welcome line is not over
+      // silence (Ronna: music should run through the whole game).
+      await _startThemeAfterIntro();
     }
 
     if (sounds.stopMusic) {
@@ -334,7 +431,9 @@ class AudioController extends ChangeNotifier {
       await _out.stopLoop();
     } else if (sounds.music != null) {
       _themePlaying = true;
-      await _out.playLoop(sounds.music!, _effectiveMusic);
+      await _out.ensureLoop(sounds.music!, _effectiveMusic);
+    } else {
+      await _ensureThemeBed();
     }
     if (epoch != _cueEpoch) return;
 
@@ -427,7 +526,7 @@ class AudioController extends ChangeNotifier {
       if (epoch == _cueEpoch) {
         _endLipsync();
       }
-      if (isIntro && epoch == _cueEpoch) {
+      if (isIntro && epoch == _cueEpoch && !_themePlaying) {
         _hostIntroPlaying = false;
         await _startThemeAfterIntro();
         notifyListeners();
@@ -486,7 +585,13 @@ class AudioController extends ChangeNotifier {
 
   Future<void> _startThemeAfterIntro() async {
     _themePlaying = true;
-    await _out.playLoop(HostAudio.themeMusic, _effectiveMusic);
+    await _out.ensureLoop(HostAudio.themeMusic, _effectiveMusic);
+  }
+
+  /// Keeps the bed running under cues that do not name a replacement track.
+  Future<void> _ensureThemeBed() async {
+    if (!_themePlaying || _muted) return;
+    await _out.ensureLoop(HostAudio.themeMusic, _effectiveMusic);
   }
 
   Future<void> playDisconnectAlarm() => playCue(SoundCue.disconnect);

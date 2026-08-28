@@ -67,6 +67,30 @@ class CharacterPreview extends StatelessWidget {
         CharacterLayer.accessory => character.accessory,
       };
 
+  ColorFilter get _hairTintFilter => ColorFilter.mode(
+        CharacterCatalog.hairColor(character.hairColor).tint,
+        BlendMode.modulate,
+      );
+
+  Widget _assetImage(String path) => Image.asset(
+        path,
+        fit: BoxFit.contain,
+        gaplessPlayback: true,
+        filterQuality: FilterQuality.medium,
+        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+      );
+
+  /// Paints a neutral-grey eyebrow mask in the chosen hair colour.
+  void _addTintedBrows(List<Widget> layers, String? maskPath) {
+    if (maskPath == null) return;
+    layers.add(
+      ColorFiltered(
+        colorFilter: _hairTintFilter,
+        child: _assetImage(maskPath),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final layers = <Widget>[];
@@ -83,24 +107,12 @@ class CharacterPreview extends StatelessWidget {
       if (layer == CharacterLayer.base && effectivePose != null) {
         final posePath = poseAssetPath(character.base, effectivePose);
         if (posePath != null) {
-          layers.add(
-            Image.asset(
-              posePath,
-              fit: BoxFit.contain,
-              gaplessPlayback: true,
-              filterQuality: FilterQuality.medium,
-              errorBuilder: (_, __, ___) {
-                final id = character.base;
-                if (id == null) return const SizedBox.shrink();
-                final option = CharacterCatalog.find(CharacterLayer.base, id);
-                if (option == null) return const SizedBox.shrink();
-                return Image.asset(
-                  option.assetPath,
-                  fit: BoxFit.contain,
-                  gaplessPlayback: true,
-                  filterQuality: FilterQuality.medium,
-                );
-              },
+          layers.add(_assetImage(posePath));
+          _addTintedBrows(
+            layers,
+            CharacterCatalog.eyebrowMaskForPose(
+              character.base,
+              effectivePose,
             ),
           );
           continue;
@@ -110,24 +122,26 @@ class CharacterPreview extends StatelessWidget {
       if (id == null) continue;
       final option = CharacterCatalog.find(layer, id);
       if (option == null) continue;
-      Widget image = Image.asset(
-        option.assetPath,
-        fit: BoxFit.contain,
-        gaplessPlayback: true,
-        filterQuality: FilterQuality.medium,
-        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-      );
+      Widget image = _assetImage(option.assetPath);
       // The hair art is neutral grey so it can take a colour; multiplying keeps
       // the artist's shading and highlights. Untinted it reads as white, which
       // is why every character looked white-haired.
       if (layer == CharacterLayer.hair) {
-        image = ColorFiltered(
-          colorFilter: ColorFilter.mode(
-            CharacterCatalog.hairColor(character.hairColor).tint,
-            BlendMode.modulate,
-          ),
-          child: image,
+        image = ColorFiltered(colorFilter: _hairTintFilter, child: image);
+        layers.add(image);
+        // Brows are authored as light strokes on the hair sheet (and on the
+        // base body). Tinting the whole hair layer should catch them, but the
+        // dedicated mask guarantees they track the colour picker.
+        _addTintedBrows(layers, option.browMaskPath);
+        continue;
+      }
+      if (layer == CharacterLayer.base) {
+        layers.add(image);
+        _addTintedBrows(
+          layers,
+          CharacterCatalog.eyebrowMaskForBase(character.base),
         );
+        continue;
       }
       // Pull hats down onto the crown so they don't float above the skull.
       if (layer == CharacterLayer.hat) {

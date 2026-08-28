@@ -1,7 +1,7 @@
 name: match_word
 description: Match Word — a real-time multiplayer word game for seniors (Grandma Mac).
 publish_to: "none"
-version: 1.0.0+90
+version: 1.0.0+91
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
@@ -75,6 +75,8 @@ flutter:
     - assets/images/host/mouth/
     - assets/images/character/base/body-female.png
     - assets/images/character/base/body-male.png
+    - assets/images/character/base/body-female-brows.png
+    - assets/images/character/base/body-male-brows.png
     - assets/images/character/hair/
     - assets/images/character/outfit/
     - assets/images/character/glasses/

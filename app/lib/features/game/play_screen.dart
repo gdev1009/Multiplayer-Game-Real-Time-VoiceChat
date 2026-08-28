@@ -189,12 +189,19 @@ class _PlayScreenState extends State<PlayScreen> {
           return;
         }
         if (timeoutFanfare) {
-          // TIME is already on Greg — buzz → Guy → then Team B.
+          // TIME is already on the guesser — shorter buzz → Guy → hand off.
           try {
-            await audio.playCue(SoundCue.steal);
+            await audio.playTimeoutFanfare(
+              reveal: controller.timeoutWouldReveal,
+            );
           } finally {
             await controller.completeTimeoutFanfare();
-            if (mounted) _timeoutFanfareStarted = false;
+            if (mounted) {
+              // The fanfare already played steal/reveal — do not fire it again
+              // when the state transition lands.
+              _prevState = controller.state;
+              _timeoutFanfareStarted = false;
+            }
           }
           return;
         }

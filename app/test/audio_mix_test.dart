@@ -18,6 +18,16 @@ class _FakeOutput implements SoundOutput {
   Future<void> configure() async {}
 
   @override
+  Future<void> ensureLoop(String asset, double volume) async {
+    if (loopRunning && loopAsset == asset) {
+      calls.add('ensureLoop($asset, $volume)');
+      loopVolume = volume;
+      return;
+    }
+    await playLoop(asset, volume);
+  }
+
+  @override
   Future<void> playLoop(String asset, double volume) async {
     calls.add('playLoop($asset, $volume)');
     loopAsset = asset;
@@ -180,6 +190,16 @@ void main() {
         prefs: {'audio.musicVolume': 0.2, 'audio.musicTrimV4': true},
       );
       expect(audio.musicVolume, closeTo(0.2, 0.001));
+    });
+
+    test('the loop is not restarted when the same bed is already playing', () async {
+      final out = _FakeOutput();
+      final audio = await _controller(out);
+      await audio.startTheme();
+      final starts = out.calls.where((c) => c.startsWith('playLoop')).length;
+      await audio.startTheme();
+      expect(out.calls.where((c) => c.startsWith('playLoop')).length, starts);
+      expect(out.calls.any((c) => c.startsWith('ensureLoop')), isTrue);
     });
 
     test('muting silences the bed without losing the saved level', () async {

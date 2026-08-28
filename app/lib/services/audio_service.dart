@@ -19,6 +19,10 @@ abstract class SoundOutput {
   /// Start (or restart) the looping background track at [asset], [volume] 0..1.
   Future<void> playLoop(String asset, double volume);
 
+  /// Start the loop only when [asset] is not already playing — keeps the bed
+  /// continuous instead of restarting from the top on every cue.
+  Future<void> ensureLoop(String asset, double volume);
+
   /// Play a one-shot music bed (non-looping) and wait until it finishes
   /// (or [maxWait] elapses). Used for the opening cue before Guy speaks.
   Future<void> playMusicOnce(
@@ -87,6 +91,8 @@ class AudioService implements SoundOutput {
   final List<AudioPlayer> _sfxPool;
   int _next = 0;
   bool _configured = false;
+  String? _loopAsset;
+  bool _loopActive = false;
   Completer<void>? _voiceWait;
 
   @override
@@ -141,12 +147,26 @@ class AudioService implements SoundOutput {
     await configure();
     try {
       await _music.stop();
+      _loopActive = false;
+      _loopAsset = null;
       await _music.setReleaseMode(ReleaseMode.loop);
       await _music.setVolume(volume);
       await _music.play(AssetSource(asset), volume: volume);
+      _loopAsset = asset;
+      _loopActive = true;
     } catch (err) {
       debugPrint('AudioService.playLoop($asset) failed (ignored): $err');
     }
+  }
+
+  @override
+  Future<void> ensureLoop(String asset, double volume) async {
+    await configure();
+    if (_loopActive && _loopAsset == asset) {
+      await setLoopVolume(volume);
+      return;
+    }
+    await playLoop(asset, volume);
   }
 
   @override
@@ -181,6 +201,8 @@ class AudioService implements SoundOutput {
   Future<void> stopLoop() async {
     try {
       await _music.stop();
+      _loopActive = false;
+      _loopAsset = null;
     } catch (_) {}
   }
 
@@ -265,6 +287,8 @@ class AudioService implements SoundOutput {
   Future<void> stopAll() async {
     try {
       await _music.stop();
+      _loopActive = false;
+      _loopAsset = null;
       await _voice.stop();
       for (final p in _sfxPool) {
         await p.stop();

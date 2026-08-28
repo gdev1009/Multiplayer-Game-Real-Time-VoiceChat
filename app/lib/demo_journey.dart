@@ -163,6 +163,8 @@ class _SilentOutput implements SoundOutput {
   @override
   Future<void> playLoop(String asset, double volume) async {}
   @override
+  Future<void> ensureLoop(String asset, double volume) async {}
+  @override
   Future<void> playMusicOnce(String asset, double volume,
       {Duration maxWait = const Duration(seconds: 16)}) async {}
   @override
