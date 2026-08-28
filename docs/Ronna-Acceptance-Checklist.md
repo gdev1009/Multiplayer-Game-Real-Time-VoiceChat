@@ -40,6 +40,14 @@ For the record, the rule as it now stands: guessing correctly **scores the
 points but does not earn your team another word**. The next word passes to the
 other team. Tell me if you would rather the winning team stayed in.
 
+One thing to expect, so it does not look like the old fault coming back. A steal
+counts as that team's turn. So if the other side keeps stealing from you, **you**
+will keep being the one who opens the next word — you may open two or three words
+in a row. Nobody is getting extra turns there; they took theirs by stealing.
+The alternative is to alternate strictly on who opens each word, but then the
+team that steals gives two clues back to back instead. It cannot be both. Say
+which reads better to you once you have played a full game.
+
 ---
 
 ## B. Clues (the repeat you spotted)
