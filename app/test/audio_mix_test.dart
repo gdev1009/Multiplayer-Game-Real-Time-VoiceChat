@@ -42,6 +42,8 @@ class _FakeOutput implements SoundOutput {
     Duration maxWait = const Duration(seconds: 16),
   }) async {
     calls.add('playMusicOnce($asset)');
+    loopRunning = false;
+    loopAsset = null;
   }
 
   @override
@@ -210,6 +212,21 @@ void main() {
       expect(out.loopVolume, 0);
       await audio.setMuted(false);
       expect(audio.musicVolume, chosen);
+    });
+
+    test('the opening bed clears stale loop state so game 2+ still has music',
+        () async {
+      final out = _FakeOutput();
+      final audio = await _controller(out);
+      await audio.startTheme();
+      expect(out.loopRunning, isTrue);
+
+      await out.playMusicOnce(HostAudio.openingBed, audio.musicVolume);
+      expect(out.loopRunning, isFalse);
+
+      await audio.ensureThemePlaying();
+      expect(out.loopRunning, isTrue);
+      expect(out.loopAsset, HostAudio.themeMusic);
     });
   });
 }

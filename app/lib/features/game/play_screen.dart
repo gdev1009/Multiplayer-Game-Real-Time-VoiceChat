@@ -159,11 +159,20 @@ class _PlayScreenState extends State<PlayScreen> {
         .toList();
     _prevState = state;
 
+    final inActivePlay = _startedShow &&
+        !state.isOver &&
+        !state.isHalftime &&
+        (state.phase == GamePhase.firstHalf ||
+            state.phase == GamePhase.secondHalf);
+
     // Stray updates while a seat is held must NOT clear the spotlight.
     if (!timeoutFanfare &&
         missCues.isEmpty &&
         otherCues.isEmpty &&
         _startedShow) {
+      if (audio != null && inActivePlay) {
+        unawaited(audio.ensureThemePlaying());
+      }
       return;
     }
 
@@ -175,6 +184,10 @@ class _PlayScreenState extends State<PlayScreen> {
         controller.clearSpotlightHold();
       }
       return;
+    }
+
+    if (inActivePlay) {
+      unawaited(audio.ensureThemePlaying());
     }
 
     if (timeoutFanfare) _timeoutFanfareStarted = true;
@@ -566,7 +579,6 @@ class _InputArea extends StatelessWidget {
               // Fully release game audio so Android STT can take the mic
               // (media playback session otherwise steals recognition).
               await a?.beginSpeechInputDuck();
-              await a?.stopAll();
               try {
                 return await speech!.listenForWord();
               } finally {

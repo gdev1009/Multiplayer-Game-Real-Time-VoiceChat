@@ -54,6 +54,9 @@ class AudioController extends ChangeNotifier {
   double _voiceDuck = 1.0;
   bool _themePlaying = false;
 
+  /// Serialises host cues so a cheer from one beat cannot bleed into the next.
+  Future<void>? _cueQueue;
+
   /// Whether the theme was running when the mic opened. The Speak button tears
   /// the audio session down (see [beginSpeechInputDuck] and the extra
   /// [stopAll] on the play screen), which clears [_themePlaying] — so the flag
@@ -292,9 +295,35 @@ class AudioController extends ChangeNotifier {
   }
 
   Future<void> reactToTransition(MatchState? prev, MatchState next) async {
-    for (final cue in HostAudio.cuesForTransition(prev, next)) {
-      await playCue(cue);
+    await _serialCue(() async {
+      for (final cue in HostAudio.cuesForTransition(prev, next)) {
+        await _dispatchCue(cue);
+      }
+    });
+  }
+
+  /// Keeps the gentle bed running under active play (safe to call often).
+  Future<void> ensureThemePlaying() async {
+    if (_muted) return;
+    if (!_themePlaying && !_hostIntroPlaying) {
+      _themePlaying = true;
     }
+    if (!_themePlaying) return;
+    await _out.ensureLoop(HostAudio.themeMusic, _effectiveMusic);
+  }
+
+  Future<void> _serialCue(Future<void> Function() body) {
+    final next = (_cueQueue ?? Future<void>.value()).then((_) => body());
+    _cueQueue = next.catchError((_) {});
+    return next;
+  }
+
+  Future<void> _dispatchCue(SoundCue cue) async {
+    if (cue == SoundCue.steal || cue == SoundCue.reveal) {
+      await _playMissCue(cue, buzzerHold: HostAudio.buzzerHold);
+      return;
+    }
+    await _playCueInternal(cue);
   }
 
   /// Call as soon as the play screen opens so clue input stays locked while
@@ -305,24 +334,20 @@ class AudioController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> playCue(SoundCue cue) async {
-    if (cue == SoundCue.steal || cue == SoundCue.reveal) {
-      await _playMissCue(cue, buzzerHold: HostAudio.buzzerHold);
-      return;
-    }
-    await _playCueInternal(cue);
-  }
+  Future<void> playCue(SoundCue cue) =>
+      _serialCue(() => _dispatchCue(cue));
 
   /// Timed-out guess: shorter buzz, then Guy, without replaying on the steal.
-  Future<void> playTimeoutFanfare({required bool reveal}) async {
-    final cue = reveal ? SoundCue.reveal : SoundCue.steal;
-    await _playMissCue(cue, buzzerHold: HostAudio.timeoutBuzzerHold);
-  }
+  Future<void> playTimeoutFanfare({required bool reveal}) => _serialCue(() async {
+        final cue = reveal ? SoundCue.reveal : SoundCue.steal;
+        await _playMissCue(cue, buzzerHold: HostAudio.timeoutBuzzerHold);
+      });
 
   Future<void> _playMissCue(
     SoundCue cue, {
     required Duration buzzerHold,
   }) async {
+    await _out.stopSfx();
     final epoch = _cueEpoch;
     final sounds = HostAudio.soundsFor(cue);
     final sfxVol = _effectiveSfx;
@@ -400,6 +425,9 @@ class AudioController extends ChangeNotifier {
   }
 
   Future<void> _playCueInternal(SoundCue cue) async {
+    if (cue == SoundCue.roundStart || cue == SoundCue.halftime) {
+      await _out.stopSfx();
+    }
     final epoch = _cueEpoch;
     final sounds = HostAudio.soundsFor(cue);
     final sfxVol = sounds.isAlarm ? (_muted ? 0.9 : _sfxVolume) : _effectiveSfx;
@@ -590,7 +618,11 @@ class AudioController extends ChangeNotifier {
 
   /// Keeps the bed running under cues that do not name a replacement track.
   Future<void> _ensureThemeBed() async {
-    if (!_themePlaying || _muted) return;
+    if (_muted) return;
+    if (!_themePlaying) {
+      if (_hostIntroPlaying) return;
+      _themePlaying = true;
+    }
     await _out.ensureLoop(HostAudio.themeMusic, _effectiveMusic);
   }
 

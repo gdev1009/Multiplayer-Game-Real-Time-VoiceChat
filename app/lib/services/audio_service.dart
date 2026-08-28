@@ -163,8 +163,13 @@ class AudioService implements SoundOutput {
   Future<void> ensureLoop(String asset, double volume) async {
     await configure();
     if (_loopActive && _loopAsset == asset) {
-      await setLoopVolume(volume);
-      return;
+      if (_music.state == PlayerState.playing) {
+        await setLoopVolume(volume);
+        return;
+      }
+      // Player stopped without updating our bookkeeping (opening bed, STT, etc.).
+      _loopActive = false;
+      _loopAsset = null;
     }
     await playLoop(asset, volume);
   }
@@ -178,6 +183,11 @@ class AudioService implements SoundOutput {
     await configure();
     try {
       await _music.stop();
+      // The one-shot bed shares the loop player — without clearing these flags
+      // ensureLoop() thinks the theme is still running and never restarts it
+      // (music dies for the rest of the match after game 2+).
+      _loopActive = false;
+      _loopAsset = null;
       await _music.setReleaseMode(ReleaseMode.release);
       await _music.setVolume(volume.clamp(0.0, 1.0));
       await _music.play(AssetSource(asset), volume: volume.clamp(0.0, 1.0));
