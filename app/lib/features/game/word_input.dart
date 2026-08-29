@@ -94,7 +94,7 @@ class _WordInputState extends State<WordInput> {
             style: AppText.body,
           ),
           behavior: SnackBarBehavior.floating,
-          duration: Duration(seconds: 2),
+          duration: Duration(seconds: 6),
         ),
       );
     }

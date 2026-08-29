@@ -107,8 +107,11 @@ class HostAudio {
   /// How long to hold the opening bed before the welcome line.
   static const Duration openingBedDuration = Duration(milliseconds: 13000);
 
-  /// Exact buzz length on wrong / timeout before Guy speaks.
+  /// Exact buzz length on a wrong guess before Guy speaks.
   static const Duration buzzerHold = Duration(seconds: 3);
+
+  /// Shorter buzz on a timed-out guess — the steal should hand off quickly.
+  static const Duration timeoutBuzzerHold = Duration(milliseconds: 1500);
 
   /// Max cheer / applause bed after Guy speaks on correct / winner (≤8s).
   static const Duration crowdAfterVoiceMax = Duration(milliseconds: 8000);
@@ -129,7 +132,7 @@ class HostAudio {
           voice: '$_vox/your_turn.mp3',
         );
       case SoundCue.correct:
-        // Correct: ding → Guy confirms → crowd cheer (deferred in AudioController).
+        // Correct: ding → Guy confirms → crowd after he speaks.
         return const CueSounds(
           effects: [
             '$_sfx/ding.mp3',
@@ -158,16 +161,10 @@ class HostAudio {
           voice: '$_vox/halftime.mp3',
         );
       case SoundCue.winner:
-        // Game end: fanfare → Guy wrap-up → crowd (cheer deferred in AudioController).
+        // Game end: Guy wrap-up → one crowd bed (cheer already has applause).
         return const CueSounds(
-          effects: [
-            '$_sfx/winner.mp3',
-            '$_sfx/cheer.mp3',
-            '$_sfx/applause.mp3',
-          ],
+          effects: ['$_sfx/cheer.mp3'],
           voice: '$_vox/winner.mp3',
-          // Ronna (Aug 2026): the music and the crowd should send the show off,
-          // so the bed keeps running under the wrap-up instead of cutting.
           music: themeMusic,
         );
       case SoundCue.disconnect:

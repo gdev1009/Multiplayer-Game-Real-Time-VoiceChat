@@ -15,7 +15,7 @@ BUILD_NUM="${VERSION_LINE##*+}"
 BUILD_NUM="${BUILD_NUM%%[[:space:]]*}"
 
 echo "Building universal release APK (build $BUILD_NUM)…"
-flutter build apk --release
+flutter build apk --release --dart-define=MW_BUILD="$BUILD_NUM"
 
 SRC="$APP/build/app/outputs/flutter-apk/app-release.apk"
 mkdir -p "$OUT_DIR"

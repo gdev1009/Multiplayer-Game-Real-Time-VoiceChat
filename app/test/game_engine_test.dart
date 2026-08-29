@@ -359,6 +359,30 @@ void main() {
     });
   });
 
+  group('a timed-out guess', () {
+    test('hands the word to the other team when exchanges remain', () {
+      var s = _startGame();
+      s = MatchEngine.submitClue(s, 'hint');
+      expect(s.step, TurnStep.awaitingGuess);
+      final timed = MatchEngine.timeoutGuess(s);
+      expect(timed.cluingTeam, 'B');
+      expect(timed.step, TurnStep.awaitingClue);
+      expect(timed.lastOutcome, WordOutcome.wrong);
+      expect(timed.feed.last.text, 'TIME');
+    });
+
+    test('reveals the word on the final exchange', () {
+      var s = _startGame(config: const MatchConfig(wordsPerHalf: 2, maxExchanges: 2));
+      s = MatchEngine.submitClue(s, 'hint');
+      s = MatchEngine.submitGuess(s, 'miss');
+      s = MatchEngine.submitClue(s, 'hint2');
+      expect(s.exchangeCount, 1);
+      final timed = MatchEngine.timeoutGuess(s);
+      expect(timed.lastOutcome, WordOutcome.revealed);
+      expect(timed.step, TurnStep.resolved);
+    });
+  });
+
   group('WordBank', () {
     test('deals the requested number of distinct words', () {
       final dealt = WordBank.deal(16, random: Random(1));

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:match_word/features/character/character_catalog.dart';
@@ -104,7 +106,7 @@ void main() {
     });
   });
 
-  testWidgets('the preview tints the hair instead of painting it grey',
+  testWidgets('the preview tints the hair and eyebrows instead of painting grey',
       (tester) async {
     await tester.pumpWidget(
       const MaterialApp(
@@ -122,16 +124,43 @@ void main() {
     );
 
     final tinted = tester.widgetList<ColorFiltered>(find.byType(ColorFiltered));
-    expect(tinted, isNotEmpty, reason: 'the hair layer is not being tinted');
+    expect(tinted.length, greaterThanOrEqualTo(2),
+        reason: 'hair and eyebrows must both be tinted');
+    final auburn = CharacterCatalog.hairColor('auburn').tint;
     expect(
-      tinted.any((w) =>
-          w.colorFilter ==
-          ColorFilter.mode(
-            CharacterCatalog.hairColor('auburn').tint,
-            BlendMode.modulate,
-          )),
-      isTrue,
-      reason: 'the chosen colour is not the one applied',
+      tinted.where((w) =>
+          w.colorFilter == ColorFilter.mode(auburn, BlendMode.modulate)).length,
+      1,
+      reason: 'hair uses modulate',
     );
+    expect(
+      tinted.where((w) =>
+          w.colorFilter == ColorFilter.mode(auburn, BlendMode.srcIn)).length,
+      1,
+      reason: 'brows use srcIn for solid colour',
+    );
+  });
+
+  test('every hairstyle ships an eyebrow mask companion', () {
+    for (final layer in [
+      CharacterLayer.hair,
+    ]) {
+      for (final option in CharacterCatalog.forLayer(layer, baseId: 'body-female')) {
+        expect(
+          File(option.browMaskPath).existsSync(),
+          isTrue,
+          reason: '${option.id} is missing ${option.browMaskPath}',
+        );
+      }
+      for (final option in CharacterCatalog.forLayer(layer, baseId: 'body-male')) {
+        expect(File(option.browMaskPath).existsSync(), isTrue,
+            reason: '${option.id} is missing ${option.browMaskPath}');
+      }
+    }
+    for (final base in ['body-female', 'body-male']) {
+      final mask = CharacterCatalog.eyebrowMaskForBase(base);
+      expect(mask, isNotNull);
+      expect(File(mask!).existsSync(), isTrue, reason: '$base brows mask');
+    }
   });
 }

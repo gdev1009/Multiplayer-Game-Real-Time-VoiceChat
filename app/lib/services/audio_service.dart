@@ -19,6 +19,13 @@ abstract class SoundOutput {
   /// Start (or restart) the looping background track at [asset], [volume] 0..1.
   Future<void> playLoop(String asset, double volume);
 
+  /// Start the loop only when [asset] is not already playing — keeps the bed
+  /// continuous instead of restarting from the top on every cue.
+  Future<void> ensureLoop(String asset, double volume);
+
+  /// Whether the loop player is actually playing right now (not just flagged).
+  bool get isLoopPlaying;
+
   /// Play a one-shot music bed (non-looping) and wait until it finishes
   /// (or [maxWait] elapses). Used for the opening cue before Guy speaks.
   Future<void> playMusicOnce(
@@ -32,6 +39,9 @@ abstract class SoundOutput {
 
   /// Live-update the looping track's volume (for the music slider / mute).
   Future<void> setLoopVolume(double volume);
+
+  /// Resume the loop player if Android paused it (e.g. after host voice).
+  Future<void> resumeLoopIfNeeded();
 
   /// Fire a one-shot sound. When [voice] is true it plays on the dedicated
   /// voice channel (a new voice line interrupts the previous one); otherwise it
@@ -83,14 +93,25 @@ class AudioService implements SoundOutput {
       : _sfxPool = List.generate(sfxVoices, (_) => AudioPlayer());
 
   final AudioPlayer _music = AudioPlayer();
+  /// One-shot opening bed — never shares the loop player so the theme is not
+  /// torn down when Guy's welcome starts (game 2+ used to lose music here).
+  final AudioPlayer _openingBed = AudioPlayer();
   final AudioPlayer _voice = AudioPlayer();
   final List<AudioPlayer> _sfxPool;
   int _next = 0;
   bool _configured = false;
+  String? _loopAsset;
+  bool _loopActive = false;
   Completer<void>? _voiceWait;
 
   @override
   bool get isSilent => false;
+
+  @override
+  bool get isLoopPlaying =>
+      _loopActive &&
+      _loopAsset != null &&
+      _music.state == PlayerState.playing;
 
   @override
   Future<void> configure() async {
@@ -114,12 +135,14 @@ class AudioService implements SoundOutput {
             stayAwake: false,
             contentType: AndroidContentType.music,
             usageType: AndroidUsageType.media,
-            audioFocus: AndroidAudioFocus.gain,
+            // Do not grab exclusive focus — Guy's voice must not pause the bed.
+            audioFocus: AndroidAudioFocus.none,
           ),
         ),
       );
       await _music.setReleaseMode(ReleaseMode.loop);
       await _music.setPlayerMode(PlayerMode.mediaPlayer);
+      await _openingBed.setPlayerMode(PlayerMode.mediaPlayer);
     } catch (err) {
       debugPrint('AudioService.configure failed (ignored): $err');
       _configured = false;
@@ -141,12 +164,26 @@ class AudioService implements SoundOutput {
     await configure();
     try {
       await _music.stop();
+      _loopActive = false;
+      _loopAsset = null;
       await _music.setReleaseMode(ReleaseMode.loop);
       await _music.setVolume(volume);
       await _music.play(AssetSource(asset), volume: volume);
+      _loopAsset = asset;
+      _loopActive = true;
     } catch (err) {
       debugPrint('AudioService.playLoop($asset) failed (ignored): $err');
     }
+  }
+
+  @override
+  Future<void> ensureLoop(String asset, double volume) async {
+    await configure();
+    if (_loopActive && _loopAsset == asset) {
+      await setLoopVolume(volume);
+      return;
+    }
+    await playLoop(asset, volume);
   }
 
   @override
@@ -157,23 +194,22 @@ class AudioService implements SoundOutput {
   }) async {
     await configure();
     try {
-      await _music.stop();
-      await _music.setReleaseMode(ReleaseMode.release);
-      await _music.setVolume(volume.clamp(0.0, 1.0));
-      await _music.play(AssetSource(asset), volume: volume.clamp(0.0, 1.0));
+      await _openingBed.stop();
+      await _openingBed.setReleaseMode(ReleaseMode.release);
+      await _openingBed.setVolume(volume.clamp(0.0, 1.0));
+      await _openingBed.play(
+        AssetSource(asset),
+        volume: volume.clamp(0.0, 1.0),
+      );
       try {
-        await _music.onPlayerComplete.first.timeout(maxWait);
+        await _openingBed.onPlayerComplete.first.timeout(maxWait);
       } catch (_) {
         try {
-          await _music.stop();
+          await _openingBed.stop();
         } catch (_) {}
       }
     } catch (err) {
       debugPrint('AudioService.playMusicOnce($asset) failed (ignored): $err');
-    } finally {
-      try {
-        await _music.setReleaseMode(ReleaseMode.loop);
-      } catch (_) {}
     }
   }
 
@@ -181,6 +217,8 @@ class AudioService implements SoundOutput {
   Future<void> stopLoop() async {
     try {
       await _music.stop();
+      _loopActive = false;
+      _loopAsset = null;
     } catch (_) {}
   }
 
@@ -188,6 +226,16 @@ class AudioService implements SoundOutput {
   Future<void> setLoopVolume(double volume) async {
     try {
       await _music.setVolume(volume);
+    } catch (_) {}
+  }
+
+  @override
+  Future<void> resumeLoopIfNeeded() async {
+    if (!_loopActive || _loopAsset == null) return;
+    try {
+      if (_music.state == PlayerState.paused) {
+        await _music.resume();
+      }
     } catch (_) {}
   }
 
@@ -265,6 +313,8 @@ class AudioService implements SoundOutput {
   Future<void> stopAll() async {
     try {
       await _music.stop();
+      _loopActive = false;
+      _loopAsset = null;
       await _voice.stop();
       for (final p in _sfxPool) {
         await p.stop();
@@ -278,7 +328,10 @@ class AudioService implements SoundOutput {
 
   @override
   Future<void> releaseForSpeechInput() async {
-    await stopAll();
+    // Pause playback but keep loop bookkeeping — [endSpeechInputDuck] restarts.
+    await stopLoop();
+    await stopVoice();
+    await stopSfx();
     try {
       await AudioPlayer.global.setAudioContext(
         AudioContext(
@@ -306,6 +359,7 @@ class AudioService implements SoundOutput {
   @override
   void dispose() {
     _music.dispose();
+    _openingBed.dispose();
     _voice.dispose();
     for (final p in _sfxPool) {
       p.dispose();

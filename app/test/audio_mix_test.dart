@@ -15,7 +15,20 @@ class _FakeOutput implements SoundOutput {
   bool get isSilent => true;
 
   @override
+  bool get isLoopPlaying => loopRunning;
+
+  @override
   Future<void> configure() async {}
+
+  @override
+  Future<void> ensureLoop(String asset, double volume) async {
+    if (loopRunning && loopAsset == asset) {
+      calls.add('ensureLoop($asset, $volume)');
+      loopVolume = volume;
+      return;
+    }
+    await playLoop(asset, volume);
+  }
 
   @override
   Future<void> playLoop(String asset, double volume) async {
@@ -32,6 +45,7 @@ class _FakeOutput implements SoundOutput {
     Duration maxWait = const Duration(seconds: 16),
   }) async {
     calls.add('playMusicOnce($asset)');
+    // Opening bed uses a separate player — theme loop is untouched.
   }
 
   @override
@@ -44,6 +58,11 @@ class _FakeOutput implements SoundOutput {
   Future<void> setLoopVolume(double volume) async {
     calls.add('setLoopVolume($volume)');
     loopVolume = volume;
+  }
+
+  @override
+  Future<void> resumeLoopIfNeeded() async {
+    calls.add('resumeLoopIfNeeded');
   }
 
   @override
@@ -72,8 +91,10 @@ class _FakeOutput implements SoundOutput {
   }
 
   @override
-  Future<void> releaseForSpeechInput() async =>
-      calls.add('releaseForSpeechInput');
+  Future<void> releaseForSpeechInput() async {
+    calls.add('releaseForSpeechInput');
+    loopRunning = false;
+  }
 
   @override
   Future<void> reconfigureAudioSession() async =>
@@ -111,9 +132,8 @@ void main() {
       await audio.startTheme();
       expect(out.loopRunning, isTrue);
 
-      // The play screen ducks, then tears the session down for the recogniser.
+      // The play screen ducks for the recogniser (no extra stopAll).
       await audio.beginSpeechInputDuck();
-      await audio.stopAll();
       expect(out.loopRunning, isFalse, reason: 'mic teardown stops the loop');
 
       await audio.endSpeechInputDuck();
@@ -129,7 +149,6 @@ void main() {
 
       for (var turn = 0; turn < 2; turn++) {
         await audio.beginSpeechInputDuck();
-        await audio.stopAll();
         await audio.endSpeechInputDuck();
         expect(out.loopRunning, isTrue, reason: 'turn $turn');
       }
@@ -140,7 +159,6 @@ void main() {
       final audio = await _controller(out);
 
       await audio.beginSpeechInputDuck();
-      await audio.stopAll();
       await audio.endSpeechInputDuck();
       expect(out.loopRunning, isFalse);
     });
@@ -182,6 +200,16 @@ void main() {
       expect(audio.musicVolume, closeTo(0.2, 0.001));
     });
 
+    test('the loop is not restarted when the same bed is already playing', () async {
+      final out = _FakeOutput();
+      final audio = await _controller(out);
+      await audio.startTheme();
+      final starts = out.calls.where((c) => c.startsWith('playLoop')).length;
+      await audio.startTheme();
+      expect(out.calls.where((c) => c.startsWith('playLoop')).length, starts);
+      expect(out.calls.any((c) => c.startsWith('setLoopVolume')), isTrue);
+    });
+
     test('muting silences the bed without losing the saved level', () async {
       final out = _FakeOutput();
       final audio = await _controller(out);
@@ -190,6 +218,19 @@ void main() {
       expect(out.loopVolume, 0);
       await audio.setMuted(false);
       expect(audio.musicVolume, chosen);
+    });
+
+    test('the opening bed does not stop an already-running theme loop', () async {
+      final out = _FakeOutput();
+      final audio = await _controller(out);
+      await audio.startTheme();
+      expect(out.loopRunning, isTrue);
+
+      await out.playMusicOnce(HostAudio.openingBed, audio.musicVolume);
+      expect(out.loopRunning, isTrue, reason: 'opening bed uses its own player');
+
+      await audio.ensureThemePlaying();
+      expect(out.loopRunning, isTrue);
     });
   });
 }

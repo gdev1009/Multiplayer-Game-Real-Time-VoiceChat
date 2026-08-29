@@ -26,7 +26,10 @@ class AudioController extends ChangeNotifier {
         _prefs = prefs,
         _tts = tts ?? ElevenLabsTtsService() {
     _load();
+    unawaited(_out.configure());
   }
+
+  Timer? _themeWatchdog;
 
   final SoundOutput _out;
   final ElevenLabsTtsService _tts;
@@ -53,6 +56,11 @@ class AudioController extends ChangeNotifier {
   /// Temporary duck while the mic is open — never written to prefs.
   double _voiceDuck = 1.0;
   bool _themePlaying = false;
+  /// Once the match bed has started, keep trying to restore it until game end.
+  bool _matchMusicOn = false;
+
+  /// Serialises host cues so a cheer from one beat cannot bleed into the next.
+  Future<void>? _cueQueue;
 
   /// Whether the theme was running when the mic opened. The Speak button tears
   /// the audio session down (see [beginSpeechInputDuck] and the extra
@@ -63,6 +71,8 @@ class AudioController extends ChangeNotifier {
   // --- lipsync ---------------------------------------------------------------
   bool _voicePlaying = false;
   bool _hostIntroPlaying = false;
+  /// True while a host cue (effects + Guy + crowd) is still running.
+  bool _hostCueBusy = false;
   String? _voiceAsset;
   double _mouthOpen = 0;
   double _mouthSmoothed = 0;
@@ -76,6 +86,8 @@ class AudioController extends ChangeNotifier {
   bool get voicePlaying => _voicePlaying;
   /// True while the long game-start welcome / rules line is running.
   bool get hostIntroPlaying => _hostIntroPlaying;
+  /// True while ding/Guy/cheer (or similar) for the current beat is playing.
+  bool get hostCueBusy => _hostCueBusy;
   String? get voiceAsset => _voiceAsset;
   double get mouthOpen => _mouthOpen;
   bool get muted => _muted;
@@ -170,13 +182,12 @@ class AudioController extends ChangeNotifier {
   /// Guy silent for the rest of the session).
   Future<void> beginSpeechInputDuck() async {
     _voiceDuck = 0;
-    _themeBeforeSpeech = _themePlaying;
+    _themeBeforeSpeech = _themePlaying || _matchMusicOn;
     notifyListeners();
     await stopHostSpeech();
-    await _out.stopAll();
     await _out.releaseForSpeechInput();
     // Let the OS actually release the playback session before STT starts.
-    await Future<void>.delayed(const Duration(milliseconds: 350));
+    await Future<void>.delayed(const Duration(milliseconds: 500));
   }
 
   /// Restore levels and re-claim the audio session after speech recognition
@@ -190,14 +201,12 @@ class AudioController extends ChangeNotifier {
     }
     notifyListeners();
     await _out.reconfigureAudioSession();
-    // The mic teardown stops the loop outright, so setting a volume on a
-    // stopped player left the music dead for the rest of the game once anyone
-    // used Speak (Ronna: "the mike kills the background music entirely" /
-    // "music should play continuously"). Start it again.
-    if (_themeBeforeSpeech || _themePlaying) {
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    if (_themeBeforeSpeech || _themePlaying || _matchMusicOn) {
       _themePlaying = true;
+      _matchMusicOn = true;
       _themeBeforeSpeech = false;
-      await _out.playLoop(HostAudio.themeMusic, _effectiveMusic);
+      await _restartThemeBed();
     } else {
       await _out.setLoopVolume(_effectiveMusic);
     }
@@ -283,7 +292,9 @@ class AudioController extends ChangeNotifier {
 
   Future<void> startTheme() async {
     _themePlaying = true;
-    await _out.playLoop(HostAudio.themeMusic, _effectiveMusic);
+    _matchMusicOn = true;
+    await _restartThemeBed();
+    _startThemeWatchdog();
   }
 
   Future<void> stopTheme() async {
@@ -292,9 +303,78 @@ class AudioController extends ChangeNotifier {
   }
 
   Future<void> reactToTransition(MatchState? prev, MatchState next) async {
-    for (final cue in HostAudio.cuesForTransition(prev, next)) {
-      await playCue(cue);
+    await _serialCue(() async {
+      for (final cue in HostAudio.cuesForTransition(prev, next)) {
+        await _dispatchCue(cue);
+      }
+    });
+  }
+
+  /// Keeps the gentle bed running under active play (safe to call often).
+  Future<void> ensureThemePlaying() async {
+    if (_muted) return;
+    _themePlaying = true;
+    _matchMusicOn = true;
+    await _restartThemeBed();
+  }
+
+  Future<void> _restartThemeBed({bool force = false}) async {
+    if (_muted) return;
+    _themePlaying = true;
+    _matchMusicOn = true;
+    if (force || !_out.isLoopPlaying) {
+      await _out.playLoop(HostAudio.themeMusic, _effectiveMusic);
+    } else {
+      await _out.setLoopVolume(_effectiveMusic);
     }
+  }
+
+  /// Guy uses a separate voice player; Android can still pause the loop.
+  /// Keep the bed at full volume (no ducking) and restart if it stalled.
+  Future<void> _restoreMusicBedAfterHostVoice() async {
+    if (_muted || !_matchMusicOn) return;
+    await _out.resumeLoopIfNeeded();
+    if (!_out.isLoopPlaying) {
+      await _out.playLoop(HostAudio.themeMusic, _effectiveMusic);
+    } else {
+      await _out.setLoopVolume(_effectiveMusic);
+    }
+  }
+
+  void _startThemeWatchdog() {
+    _themeWatchdog?.cancel();
+    _themeWatchdog = Timer.periodic(const Duration(seconds: 6), (_) {
+      if (!_matchMusicOn || _muted) return;
+      unawaited(_restartThemeBed(force: !_out.isLoopPlaying));
+    });
+  }
+
+  void _stopThemeWatchdog() {
+    _themeWatchdog?.cancel();
+    _themeWatchdog = null;
+  }
+
+  Future<void> _serialCue(Future<void> Function() body) {
+    final next = (_cueQueue ?? Future<void>.value()).then((_) async {
+      _hostCueBusy = true;
+      notifyListeners();
+      try {
+        await body();
+      } finally {
+        _hostCueBusy = false;
+        notifyListeners();
+      }
+    });
+    _cueQueue = next.catchError((_) {});
+    return next;
+  }
+
+  Future<void> _dispatchCue(SoundCue cue) async {
+    if (cue == SoundCue.steal || cue == SoundCue.reveal) {
+      await _playMissCue(cue, buzzerHold: HostAudio.buzzerHold);
+      return;
+    }
+    await _playCueInternal(cue);
   }
 
   /// Call as soon as the play screen opens so clue input stays locked while
@@ -305,14 +385,106 @@ class AudioController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> playCue(SoundCue cue) async {
+  Future<void> playCue(SoundCue cue) =>
+      _serialCue(() => _dispatchCue(cue));
+
+  /// Timed-out guess: shorter buzz, then Guy, without replaying on the steal.
+  Future<void> playTimeoutFanfare({required bool reveal}) => _serialCue(() async {
+        final cue = reveal ? SoundCue.reveal : SoundCue.steal;
+        await _playMissCue(cue, buzzerHold: HostAudio.timeoutBuzzerHold);
+      });
+
+  Future<void> _playMissCue(
+    SoundCue cue, {
+    required Duration buzzerHold,
+  }) async {
+    await _out.stopSfx();
+    final epoch = _cueEpoch;
+    final sounds = HostAudio.soundsFor(cue);
+    final sfxVol = _effectiveSfx;
+    final line = HostVoiceScripts.lineFor(cue);
+    final fallback = HostVoiceScripts.fallbackAssetFor(cue) ?? sounds.voice;
+
+    await _ensureThemeBed();
+    if (epoch != _cueEpoch) return;
+
+    for (final effect in sounds.effects) {
+      if (epoch != _cueEpoch) return;
+      final vol = sfxVol;
+      if (effect.contains('buzzer')) {
+        unawaited(_out.playOneShot(effect, vol));
+        await Future<void>.delayed(buzzerHold);
+        if (epoch != _cueEpoch) return;
+        await _out.stopSfx();
+      } else {
+        unawaited(_out.playOneShot(effect, vol));
+        await Future<void>.delayed(const Duration(milliseconds: 40));
+      }
+    }
+    if (epoch != _cueEpoch) return;
+
+    if (line == null && fallback == null) return;
+
+    try {
+      if (epoch != _cueEpoch) return;
+
+      String? filePath;
+      if (line != null) {
+        filePath = await _tts.synthesizeToFile(line);
+      }
+      if (epoch != _cueEpoch) return;
+
+      if (filePath != null) {
+        final env = VoiceEnvelope.synthetic(
+          filePath,
+          durationMs: _estimateMs(line!),
+        );
+        await _beginLipsync(filePath, envelope: env);
+        if (epoch != _cueEpoch) {
+          _endLipsync();
+          return;
+        }
+        await _out.playOneShot(
+          filePath,
+          (_effectiveVoice * _hostVoiceBoost).clamp(0.0, 1.0),
+          voice: true,
+          fromFile: true,
+          playbackRate: _hostPlaybackRate,
+        );
+      } else if (fallback != null) {
+        await _beginLipsync(fallback);
+        if (epoch != _cueEpoch) {
+          _endLipsync();
+          return;
+        }
+        await _out.playOneShot(
+          fallback,
+          (_effectiveVoice * _hostVoiceBoost).clamp(0.0, 1.0),
+          voice: true,
+          playbackRate: _hostPlaybackRate,
+        );
+      }
+    } finally {
+      if (epoch == _cueEpoch) {
+        _endLipsync();
+      }
+      if (epoch == _cueEpoch) {
+        await _restoreMusicBedAfterHostVoice();
+      }
+    }
+  }
+
+  Future<void> _playCueInternal(SoundCue cue) async {
+    if (cue == SoundCue.roundStart || cue == SoundCue.halftime) {
+      await _out.stopSfx();
+    }
     final epoch = _cueEpoch;
     final sounds = HostAudio.soundsFor(cue);
     final sfxVol = sounds.isAlarm ? (_muted ? 0.9 : _sfxVolume) : _effectiveSfx;
     final isIntro = cue == SoundCue.gameStart;
     final line = HostVoiceScripts.lineFor(cue);
     final fallback = HostVoiceScripts.fallbackAssetFor(cue) ?? sounds.voice;
-    // Correct + winner only: hold crowd until Guy finishes speaking.
+    // Correct + winner: ding/fanfare → Guy → crowd after he finishes.
     final crowdAfterVoice =
         cue == SoundCue.correct || cue == SoundCue.winner;
 
@@ -325,6 +497,8 @@ class AudioController extends ChangeNotifier {
       if (line != null) {
         ttsFuture = _tts.synthesizeToFile(line);
       }
+      // Start the gentle loop right away (opening bed uses its own player).
+      await _startThemeAfterIntro();
       await _playOpeningBed();
       if (epoch != _cueEpoch) return;
     }
@@ -334,7 +508,9 @@ class AudioController extends ChangeNotifier {
       await _out.stopLoop();
     } else if (sounds.music != null) {
       _themePlaying = true;
-      await _out.playLoop(sounds.music!, _effectiveMusic);
+      await _out.ensureLoop(sounds.music!, _effectiveMusic);
+    } else {
+      await _ensureThemeBed();
     }
     if (epoch != _cueEpoch) return;
 
@@ -368,8 +544,8 @@ class AudioController extends ChangeNotifier {
     if (epoch != _cueEpoch) return;
 
     if (line == null && fallback == null) {
-      if (crowdEffects.isNotEmpty && epoch == _cueEpoch) {
-        await _playCrowdBed(crowdEffects, sfxVol, epoch);
+      if (crowdEffects.isNotEmpty) {
+        await _playCrowdBed(crowdEffects, sfxVol);
       }
       if (isIntro) {
         _hostIntroPlaying = false;
@@ -378,9 +554,6 @@ class AudioController extends ChangeNotifier {
       }
       return;
     }
-
-    final ducked = _themePlaying ? _effectiveMusic * 0.06 : null;
-    if (ducked != null) await _out.setLoopVolume(ducked);
 
     try {
       if (epoch != _cueEpoch) return;
@@ -429,26 +602,26 @@ class AudioController extends ChangeNotifier {
       }
       if (isIntro && epoch == _cueEpoch) {
         _hostIntroPlaying = false;
-        await _startThemeAfterIntro();
         notifyListeners();
       }
-      if (ducked != null) await _out.setLoopVolume(_effectiveMusic);
+      if (epoch == _cueEpoch) {
+        await _restoreMusicBedAfterHostVoice();
+      }
     }
 
-    // Crowd cheer only after Guy confirms (correct / winner).
-    if (crowdEffects.isNotEmpty && epoch == _cueEpoch) {
-      await _playCrowdBed(crowdEffects, sfxVol, epoch);
+    // Crowd cheer after Guy confirms (correct / winner).
+    if (crowdEffects.isNotEmpty) {
+      await _playCrowdBed(crowdEffects, sfxVol);
+      await _restoreMusicBedAfterHostVoice();
     }
   }
 
   Future<void> _playCrowdBed(
     List<String> effects,
     double sfxVol,
-    int epoch,
   ) async {
     final vol = (sfxVol * _crowdBoost).clamp(0.0, 1.0);
     for (final effect in effects) {
-      if (epoch != _cueEpoch) return;
       await _out.playOneShot(
         effect,
         vol,
@@ -486,30 +659,51 @@ class AudioController extends ChangeNotifier {
 
   Future<void> _startThemeAfterIntro() async {
     _themePlaying = true;
-    await _out.playLoop(HostAudio.themeMusic, _effectiveMusic);
+    _matchMusicOn = true;
+    await _restartThemeBed();
+    _startThemeWatchdog();
+  }
+
+  /// Keeps the bed running under cues that do not name a replacement track.
+  Future<void> _ensureThemeBed() async {
+    if (_muted) return;
+    if (!_themePlaying && !_matchMusicOn) {
+      if (_hostIntroPlaying) return;
+      _themePlaying = true;
+      _matchMusicOn = true;
+    }
+    await _restartThemeBed();
   }
 
   Future<void> playDisconnectAlarm() => playCue(SoundCue.disconnect);
 
-  /// Player tapped a control — hush Guy immediately and cancel any pending cue.
+  /// Player tapped a control — hush Guy immediately (crowd bed still runs).
   Future<void> stopHostSpeech() async {
-    _cueEpoch++;
     _hostIntroPlaying = false;
     _endLipsync();
     await _out.stopVoice();
     notifyListeners();
   }
 
+  /// Skip the long welcome intro and cancel any in-flight opening cue.
+  Future<void> skipIntro() async {
+    _cueEpoch++;
+    await stopHostSpeech();
+  }
+
   Future<void> stopAll() async {
     _cueEpoch++;
     _themePlaying = false;
+    _matchMusicOn = false;
     _hostIntroPlaying = false;
+    _stopThemeWatchdog();
     _endLipsync();
     await _out.stopAll();
   }
 
   @override
   void dispose() {
+    _stopThemeWatchdog();
     _lipsyncTimer?.cancel();
     _tts.dispose();
     _out.dispose();

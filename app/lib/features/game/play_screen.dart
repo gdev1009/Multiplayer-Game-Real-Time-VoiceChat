@@ -105,7 +105,9 @@ class _PlayScreenState extends State<PlayScreen> {
       // Hold AI / auto-advance while Guy talks. Humans can tap to barge in
       // (Speak / Send / Next stop his voice via [stopHostSpeech]).
       controller.inputBlocked = () {
-        return audio.hostIntroPlaying || audio.voicePlaying;
+        return audio.hostIntroPlaying ||
+            audio.voicePlaying ||
+            audio.hostCueBusy;
       };
     } catch (_) {
       controller.inputBlocked = null;
@@ -159,11 +161,20 @@ class _PlayScreenState extends State<PlayScreen> {
         .toList();
     _prevState = state;
 
+    final inActivePlay = _startedShow &&
+        !state.isOver &&
+        !state.isHalftime &&
+        (state.phase == GamePhase.firstHalf ||
+            state.phase == GamePhase.secondHalf);
+
     // Stray updates while a seat is held must NOT clear the spotlight.
     if (!timeoutFanfare &&
         missCues.isEmpty &&
         otherCues.isEmpty &&
         _startedShow) {
+      if (audio != null && inActivePlay) {
+        unawaited(audio.ensureThemePlaying());
+      }
       return;
     }
 
@@ -175,6 +186,10 @@ class _PlayScreenState extends State<PlayScreen> {
         controller.clearSpotlightHold();
       }
       return;
+    }
+
+    if (inActivePlay) {
+      unawaited(audio.ensureThemePlaying());
     }
 
     if (timeoutFanfare) _timeoutFanfareStarted = true;
@@ -189,12 +204,19 @@ class _PlayScreenState extends State<PlayScreen> {
           return;
         }
         if (timeoutFanfare) {
-          // TIME is already on Greg — buzz → Guy → then Team B.
+          // TIME is already on the guesser — shorter buzz → Guy → hand off.
           try {
-            await audio.playCue(SoundCue.steal);
+            await audio.playTimeoutFanfare(
+              reveal: controller.timeoutWouldReveal,
+            );
           } finally {
             await controller.completeTimeoutFanfare();
-            if (mounted) _timeoutFanfareStarted = false;
+            if (mounted) {
+              // The fanfare already played steal/reveal — do not fire it again
+              // when the state transition lands.
+              _prevState = controller.state;
+              _timeoutFanfareStarted = false;
+            }
           }
           return;
         }
@@ -398,7 +420,7 @@ class _MatchBody extends StatelessWidget {
                 behavior: HitTestBehavior.opaque,
                 onTap: () {
                   try {
-                    context.read<AudioController>().stopHostSpeech();
+                    context.read<AudioController>().skipIntro();
                   } catch (_) {}
                 },
                 child: const _WaitingPanel(
@@ -559,7 +581,6 @@ class _InputArea extends StatelessWidget {
               // Fully release game audio so Android STT can take the mic
               // (media playback session otherwise steals recognition).
               await a?.beginSpeechInputDuck();
-              await a?.stopAll();
               try {
                 return await speech!.listenForWord();
               } finally {
@@ -638,6 +659,10 @@ class _ResolvedPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final guessed = state.lastOutcome == WordOutcome.guessed;
     final secret = state.secretWord.trim();
+    var cueBusy = false;
+    try {
+      cueBusy = context.watch<AudioController>().hostCueBusy;
+    } catch (_) {}
     final headline = guessed
         ? (secret.isEmpty
             ? 'Nice work! On to the next word.'
@@ -723,12 +748,9 @@ class _ResolvedPanel extends StatelessWidget {
           label: 'Next word',
           icon: Icons.arrow_forward_rounded,
           isLoading: controller.busy,
-          onPressed: controller.busy
+          onPressed: controller.busy || cueBusy
               ? null
               : () {
-                  try {
-                    context.read<AudioController>().stopHostSpeech();
-                  } catch (_) {}
                   controller.nextWord();
                 },
         ),
@@ -807,9 +829,6 @@ class _HalftimePanel extends StatelessWidget {
             onPressed: controller.busy
                 ? null
                 : () {
-                    try {
-                      context.read<AudioController>().stopHostSpeech();
-                    } catch (_) {}
                     controller.beginSecondHalf();
                   },
           )

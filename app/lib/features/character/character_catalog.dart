@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'character_poses.dart';
+
 /// The character layers, in back-to-front stacking order.
 ///
 /// The assembly engine paints them in this order, so later entries appear on
@@ -85,15 +87,20 @@ class LayerOption {
   ///
   /// Convention: `assets/images/character/<folder>/<id>.png`.
   String get assetPath => 'assets/images/character/$folder/$id.png';
+
+  /// Companion mask with only the neutral eyebrow strokes from [assetPath].
+  ///
+  /// Multiplied by the hair colour at paint time so brows track the picker.
+  String get browMaskPath => 'assets/images/character/$folder/$id-brows.png';
 }
 
 /// A hair colour a player can pick.
 ///
 /// The hair PNGs are painted a neutral light grey (dominant value 224, with
 /// shading down to 128), which is why an untinted character reads as
-/// white-haired — Ronna, Aug 2026: "everybody's hair is white". Multiplying the
-/// art by [tint] keeps the artist's shading and highlights while changing the
-/// colour, so a swatch is stored as an id and the tint is applied at paint time.
+/// white-haired — Ronna, Aug 2026: "everybody's hair is white". The eyebrow
+/// arches use the same neutral strokes on the base body and hair sheets, so
+/// they are tinted with the same colour at paint time.
 class HairColor {
   const HairColor({required this.id, required this.label, required this.tint});
 
@@ -243,6 +250,24 @@ class CharacterCatalog {
       if (c.id == id) return c;
     }
     return hairColors.firstWhere((c) => c.id == defaultHairColorId);
+  }
+
+  /// Brow-mask path for a base body, or null when [baseId] is unknown.
+  static String? eyebrowMaskForBase(String? baseId) => switch (baseId) {
+        'body-female' => 'assets/images/character/base/body-female-brows.png',
+        'body-male' => 'assets/images/character/base/body-male-brows.png',
+        _ => null,
+      };
+
+  /// Brow-mask path for a face pose on [baseId].
+  static String? eyebrowMaskForPose(String? baseId, CharacterPose pose) {
+    final folder = switch (baseId) {
+      'body-female' => 'female',
+      'body-male' => 'male',
+      _ => null,
+    };
+    if (folder == null) return null;
+    return 'assets/images/character/poses/$folder/${pose.assetId}-brows.png';
   }
 
   /// The default body used when none has been chosen yet.

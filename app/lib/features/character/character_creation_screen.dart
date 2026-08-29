@@ -403,7 +403,7 @@ class _HairColorPicker extends StatelessWidget {
         const _SectionHeader(
           icon: Icons.palette_rounded,
           title: 'Hair colour',
-          hint: 'Tap a colour. Your hair changes right away.',
+          hint: 'Tap a colour. Hair and eyebrows change right away.',
         ),
         const SizedBox(height: AppSpacing.md),
         Wrap(

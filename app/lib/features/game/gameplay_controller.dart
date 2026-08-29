@@ -137,6 +137,13 @@ class GameplayController extends ChangeNotifier {
   /// True after the guess clock hits zero, until buzz + Guy finish and the steal applies.
   bool get timeoutFanfarePending => _timeoutFanfarePending;
 
+  /// True when a timed-out guess would reveal the word (final exchange).
+  bool get timeoutWouldReveal {
+    final s = _state;
+    if (s == null || s.step != TurnStep.awaitingGuess) return false;
+    return s.exchangeCount + 1 >= s.config.maxExchanges;
+  }
+
   /// Name shown in the waiting dock (holds on the failing guesser during miss audio).
   String get displayClockName {
     final hold = _spotlightHoldRole;

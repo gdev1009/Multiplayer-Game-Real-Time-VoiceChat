@@ -25,10 +25,15 @@ import 'services/audio_service.dart';
 class _SilentOutput implements SoundOutput {
   @override
   bool get isSilent => true;
+
+  @override
+  bool get isLoopPlaying => false;
   @override
   Future<void> configure() async {}
   @override
   Future<void> playLoop(String asset, double volume) async {}
+  @override
+  Future<void> ensureLoop(String asset, double volume) async {}
   @override
   Future<void> playMusicOnce(String asset, double volume,
       {Duration maxWait = const Duration(seconds: 16)}) async {}
@@ -36,6 +41,8 @@ class _SilentOutput implements SoundOutput {
   Future<void> stopLoop() async {}
   @override
   Future<void> setLoopVolume(double volume) async {}
+  @override
+  Future<void> resumeLoopIfNeeded() async {}
   @override
   Future<void> playOneShot(
     String asset,
