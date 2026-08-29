@@ -126,12 +126,19 @@ void main() {
     final tinted = tester.widgetList<ColorFiltered>(find.byType(ColorFiltered));
     expect(tinted.length, greaterThanOrEqualTo(2),
         reason: 'hair and eyebrows must both be tinted');
-    final auburn = ColorFilter.mode(
-      CharacterCatalog.hairColor('auburn').tint,
-      BlendMode.modulate,
+    final auburn = CharacterCatalog.hairColor('auburn').tint;
+    expect(
+      tinted.where((w) =>
+          w.colorFilter == ColorFilter.mode(auburn, BlendMode.modulate)).length,
+      1,
+      reason: 'hair uses modulate',
     );
-    expect(tinted.where((w) => w.colorFilter == auburn).length,
-        greaterThanOrEqualTo(2));
+    expect(
+      tinted.where((w) =>
+          w.colorFilter == ColorFilter.mode(auburn, BlendMode.srcIn)).length,
+      1,
+      reason: 'brows use srcIn for solid colour',
+    );
   });
 
   test('every hairstyle ships an eyebrow mask companion', () {

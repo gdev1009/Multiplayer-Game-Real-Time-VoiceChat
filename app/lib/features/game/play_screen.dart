@@ -105,7 +105,9 @@ class _PlayScreenState extends State<PlayScreen> {
       // Hold AI / auto-advance while Guy talks. Humans can tap to barge in
       // (Speak / Send / Next stop his voice via [stopHostSpeech]).
       controller.inputBlocked = () {
-        return audio.hostIntroPlaying || audio.voicePlaying;
+        return audio.hostIntroPlaying ||
+            audio.voicePlaying ||
+            audio.hostCueBusy;
       };
     } catch (_) {
       controller.inputBlocked = null;
@@ -657,6 +659,10 @@ class _ResolvedPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final guessed = state.lastOutcome == WordOutcome.guessed;
     final secret = state.secretWord.trim();
+    var cueBusy = false;
+    try {
+      cueBusy = context.watch<AudioController>().hostCueBusy;
+    } catch (_) {}
     final headline = guessed
         ? (secret.isEmpty
             ? 'Nice work! On to the next word.'
@@ -742,7 +748,7 @@ class _ResolvedPanel extends StatelessWidget {
           label: 'Next word',
           icon: Icons.arrow_forward_rounded,
           isLoading: controller.busy,
-          onPressed: controller.busy
+          onPressed: controller.busy || cueBusy
               ? null
               : () {
                   controller.nextWord();

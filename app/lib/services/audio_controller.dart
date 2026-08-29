@@ -71,6 +71,8 @@ class AudioController extends ChangeNotifier {
   // --- lipsync ---------------------------------------------------------------
   bool _voicePlaying = false;
   bool _hostIntroPlaying = false;
+  /// True while a host cue (effects + Guy + crowd) is still running.
+  bool _hostCueBusy = false;
   String? _voiceAsset;
   double _mouthOpen = 0;
   double _mouthSmoothed = 0;
@@ -84,6 +86,8 @@ class AudioController extends ChangeNotifier {
   bool get voicePlaying => _voicePlaying;
   /// True while the long game-start welcome / rules line is running.
   bool get hostIntroPlaying => _hostIntroPlaying;
+  /// True while ding/Guy/cheer (or similar) for the current beat is playing.
+  bool get hostCueBusy => _hostCueBusy;
   String? get voiceAsset => _voiceAsset;
   double get mouthOpen => _mouthOpen;
   bool get muted => _muted;
@@ -313,11 +317,11 @@ class AudioController extends ChangeNotifier {
     await _restartThemeBed();
   }
 
-  Future<void> _restartThemeBed() async {
+  Future<void> _restartThemeBed({bool force = false}) async {
     if (_muted) return;
     _themePlaying = true;
     _matchMusicOn = true;
-    if (!_out.isLoopPlaying) {
+    if (force || !_out.isLoopPlaying) {
       await _out.playLoop(HostAudio.themeMusic, _effectiveMusic);
     } else {
       await _out.setLoopVolume(_effectiveMusic);
@@ -326,9 +330,9 @@ class AudioController extends ChangeNotifier {
 
   void _startThemeWatchdog() {
     _themeWatchdog?.cancel();
-    _themeWatchdog = Timer.periodic(const Duration(seconds: 4), (_) {
+    _themeWatchdog = Timer.periodic(const Duration(seconds: 6), (_) {
       if (!_matchMusicOn || _muted) return;
-      unawaited(_restartThemeBed());
+      unawaited(_restartThemeBed(force: !_out.isLoopPlaying));
     });
   }
 
@@ -338,7 +342,16 @@ class AudioController extends ChangeNotifier {
   }
 
   Future<void> _serialCue(Future<void> Function() body) {
-    final next = (_cueQueue ?? Future<void>.value()).then((_) => body());
+    final next = (_cueQueue ?? Future<void>.value()).then((_) async {
+      _hostCueBusy = true;
+      notifyListeners();
+      try {
+        await body();
+      } finally {
+        _hostCueBusy = false;
+        notifyListeners();
+      }
+    });
     _cueQueue = next.catchError((_) {});
     return next;
   }
@@ -578,9 +591,8 @@ class AudioController extends ChangeNotifier {
       if (epoch == _cueEpoch) {
         _endLipsync();
       }
-      if (isIntro && epoch == _cueEpoch && !_themePlaying) {
+      if (isIntro && epoch == _cueEpoch) {
         _hostIntroPlaying = false;
-        await _startThemeAfterIntro();
         notifyListeners();
       }
       if (ducked != null) await _out.setLoopVolume(_effectiveMusic);

@@ -35,7 +35,7 @@ def _is_brow_pixel(rgb: np.ndarray, alpha: np.ndarray) -> np.ndarray:
 def extract_brows(src: Path, dest: Path) -> int:
     im = np.array(Image.open(src).convert("RGBA"))
     h, w = im.shape[:2]
-    y0, y1 = int(h * 0.145), int(h * 0.205)
+    y0, y1 = int(h * 0.152), int(h * 0.192)
     x0, x1 = int(w * 0.28), int(w * 0.72)
 
     out = np.zeros_like(im)

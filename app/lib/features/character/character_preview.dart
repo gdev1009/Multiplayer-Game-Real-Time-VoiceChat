@@ -80,15 +80,30 @@ class CharacterPreview extends StatelessWidget {
         errorBuilder: (_, __, ___) => const SizedBox.shrink(),
       );
 
-  /// Paints a neutral-grey eyebrow mask in the chosen hair colour.
+  /// Paints eyebrow mask pixels in a solid hair colour (no grey fringe).
   void _addTintedBrows(List<Widget> layers, String? maskPath) {
     if (maskPath == null) return;
     layers.add(
       ColorFiltered(
-        colorFilter: _hairTintFilter,
+        colorFilter: ColorFilter.mode(
+          CharacterCatalog.hairColor(character.hairColor).tint,
+          BlendMode.srcIn,
+        ),
         child: _assetImage(maskPath),
       ),
     );
+  }
+
+  /// Hair sheets carry their own brow masks; avoid stacking base + hair brows
+  /// (double arches bled into the eyes on some styles).
+  bool get _usesHairBrowMask {
+    if (character.hat != null && character.hat!.trim().isNotEmpty) {
+      return false;
+    }
+    final hairId = character.hair;
+    if (hairId == null || hairId.trim().isEmpty) return false;
+    final opt = CharacterCatalog.find(CharacterLayer.hair, hairId);
+    return opt != null;
   }
 
   @override
@@ -108,13 +123,15 @@ class CharacterPreview extends StatelessWidget {
         final posePath = poseAssetPath(character.base, effectivePose);
         if (posePath != null) {
           layers.add(_assetImage(posePath));
-          _addTintedBrows(
-            layers,
-            CharacterCatalog.eyebrowMaskForPose(
-              character.base,
-              effectivePose,
-            ),
-          );
+          if (!_usesHairBrowMask) {
+            _addTintedBrows(
+              layers,
+              CharacterCatalog.eyebrowMaskForPose(
+                character.base,
+                effectivePose,
+              ),
+            );
+          }
           continue;
         }
       }
@@ -137,10 +154,12 @@ class CharacterPreview extends StatelessWidget {
       }
       if (layer == CharacterLayer.base) {
         layers.add(image);
-        _addTintedBrows(
-          layers,
-          CharacterCatalog.eyebrowMaskForBase(character.base),
-        );
+        if (!_usesHairBrowMask) {
+          _addTintedBrows(
+            layers,
+            CharacterCatalog.eyebrowMaskForBase(character.base),
+          );
+        }
         continue;
       }
       // Pull hats down onto the crown so they don't float above the skull.

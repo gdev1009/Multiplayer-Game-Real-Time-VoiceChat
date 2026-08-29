@@ -105,7 +105,10 @@ class AudioService implements SoundOutput {
   bool get isSilent => false;
 
   @override
-  bool get isLoopPlaying => _loopActive && _loopAsset != null;
+  bool get isLoopPlaying =>
+      _loopActive &&
+      _loopAsset != null &&
+      _music.state == PlayerState.playing;
 
   @override
   Future<void> configure() async {
