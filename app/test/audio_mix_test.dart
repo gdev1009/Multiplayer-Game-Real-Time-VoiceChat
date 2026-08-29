@@ -15,6 +15,9 @@ class _FakeOutput implements SoundOutput {
   bool get isSilent => true;
 
   @override
+  bool get isLoopPlaying => loopRunning;
+
+  @override
   Future<void> configure() async {}
 
   @override
@@ -42,8 +45,7 @@ class _FakeOutput implements SoundOutput {
     Duration maxWait = const Duration(seconds: 16),
   }) async {
     calls.add('playMusicOnce($asset)');
-    loopRunning = false;
-    loopAsset = null;
+    // Opening bed uses a separate player — theme loop is untouched.
   }
 
   @override
@@ -84,8 +86,10 @@ class _FakeOutput implements SoundOutput {
   }
 
   @override
-  Future<void> releaseForSpeechInput() async =>
-      calls.add('releaseForSpeechInput');
+  Future<void> releaseForSpeechInput() async {
+    calls.add('releaseForSpeechInput');
+    loopRunning = false;
+  }
 
   @override
   Future<void> reconfigureAudioSession() async =>
@@ -123,9 +127,8 @@ void main() {
       await audio.startTheme();
       expect(out.loopRunning, isTrue);
 
-      // The play screen ducks, then tears the session down for the recogniser.
+      // The play screen ducks for the recogniser (no extra stopAll).
       await audio.beginSpeechInputDuck();
-      await audio.stopAll();
       expect(out.loopRunning, isFalse, reason: 'mic teardown stops the loop');
 
       await audio.endSpeechInputDuck();
@@ -141,7 +144,6 @@ void main() {
 
       for (var turn = 0; turn < 2; turn++) {
         await audio.beginSpeechInputDuck();
-        await audio.stopAll();
         await audio.endSpeechInputDuck();
         expect(out.loopRunning, isTrue, reason: 'turn $turn');
       }
@@ -152,7 +154,6 @@ void main() {
       final audio = await _controller(out);
 
       await audio.beginSpeechInputDuck();
-      await audio.stopAll();
       await audio.endSpeechInputDuck();
       expect(out.loopRunning, isFalse);
     });
@@ -214,19 +215,17 @@ void main() {
       expect(audio.musicVolume, chosen);
     });
 
-    test('the opening bed clears stale loop state so game 2+ still has music',
-        () async {
+    test('the opening bed does not stop an already-running theme loop', () async {
       final out = _FakeOutput();
       final audio = await _controller(out);
       await audio.startTheme();
       expect(out.loopRunning, isTrue);
 
       await out.playMusicOnce(HostAudio.openingBed, audio.musicVolume);
-      expect(out.loopRunning, isFalse);
+      expect(out.loopRunning, isTrue, reason: 'opening bed uses its own player');
 
       await audio.ensureThemePlaying();
       expect(out.loopRunning, isTrue);
-      expect(out.loopAsset, HostAudio.themeMusic);
     });
   });
 }

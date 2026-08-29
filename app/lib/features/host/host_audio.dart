@@ -132,12 +132,10 @@ class HostAudio {
           voice: '$_vox/your_turn.mp3',
         );
       case SoundCue.correct:
-        // Correct: ding → Guy confirms → crowd cheer (deferred in AudioController).
+        // Correct: ding → Guy confirms. No crowd mid-game (Ronna: clapping
+        // after every guess felt wrong during matching).
         return const CueSounds(
-          effects: [
-            '$_sfx/ding.mp3',
-            '$_sfx/cheer.mp3',
-          ],
+          effects: ['$_sfx/ding.mp3'],
           voice: '$_vox/nice_guess.mp3',
         );
       case SoundCue.steal:
@@ -161,16 +159,10 @@ class HostAudio {
           voice: '$_vox/halftime.mp3',
         );
       case SoundCue.winner:
-        // Game end: fanfare → Guy wrap-up → one crowd bed (cheer already has
-        // applause baked in — playing both sounded like clapping twice).
+        // Game end: Guy wrap-up → one crowd bed (cheer already has applause).
         return const CueSounds(
-          effects: [
-            '$_sfx/winner.mp3',
-            '$_sfx/cheer.mp3',
-          ],
+          effects: ['$_sfx/cheer.mp3'],
           voice: '$_vox/winner.mp3',
-          // Ronna (Aug 2026): the music and the crowd should send the show off,
-          // so the bed keeps running under the wrap-up instead of cutting.
           music: themeMusic,
         );
       case SoundCue.disconnect:

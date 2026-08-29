@@ -18,6 +18,11 @@ class SpeechInputService {
   Completer<String?>? _session;
   String _latest = '';
   bool _heardListening = false;
+  DateTime? _listenStartedAt;
+
+  /// Seniors need time to start speaking and finish a single word.
+  static const Duration defaultListenFor = Duration(seconds: 15);
+  static const Duration defaultPauseFor = Duration(seconds: 3);
 
   bool get isAvailable => _ready;
   bool get isListening => _speech.isListening;
@@ -41,17 +46,9 @@ class SpeechInputService {
             _finishSession();
           }
         },
-        onStatus: (s) {
-          debugPrint('SpeechInput status: $s');
-          if (s == SpeechToText.listeningStatus) {
-            _heardListening = true;
-          }
-          if (s == SpeechToText.doneStatus ||
-              (_heardListening && s == SpeechToText.notListeningStatus)) {
-            _finishSession();
-          }
-        },
-        finalTimeout: const Duration(milliseconds: 900),
+        onStatus: _onStatus,
+        // Give the OS time to deliver a final transcript after a pause.
+        finalTimeout: const Duration(seconds: 5),
       );
       if (_ready) {
         _localeId = await _pickLocale();
@@ -61,6 +58,32 @@ class SpeechInputService {
       _ready = false;
     }
     return _ready;
+  }
+
+  void _onStatus(String status) {
+    debugPrint('SpeechInput status: $status');
+    if (status == SpeechToText.listeningStatus) {
+      _heardListening = true;
+      _listenStartedAt ??= DateTime.now();
+      return;
+    }
+    if (status == SpeechToText.doneStatus) {
+      _finishSession();
+      return;
+    }
+    // Do **not** finish on a brief notListening blip before the mic is ready —
+    // that was cutting sessions off with no words heard.
+    if (status == SpeechToText.notListeningStatus && _heardListening) {
+      final started = _listenStartedAt;
+      if (started != null &&
+          DateTime.now().difference(started) <
+              const Duration(milliseconds: 800)) {
+        return;
+      }
+      if (_latest.trim().isNotEmpty) {
+        _finishSession();
+      }
+    }
   }
 
   void _finishSession() {
@@ -93,26 +116,29 @@ class SpeechInputService {
 
   /// Listen for a short phrase and return a cleaned single word, or null.
   Future<String?> listenForWord({
-    Duration listenFor = const Duration(seconds: 10),
-    Duration pauseFor = const Duration(milliseconds: 1600),
+    Duration listenFor = defaultListenFor,
+    Duration pauseFor = defaultPauseFor,
   }) async {
     if (!await ensureReady()) return null;
 
     if (_speech.isListening) {
       await _speech.stop();
-      await Future<void>.delayed(const Duration(milliseconds: 250));
+      await Future<void>.delayed(const Duration(milliseconds: 300));
     }
 
     _latest = '';
     _heardListening = false;
+    _listenStartedAt = null;
     final session = Completer<String?>();
     _session = session;
 
     try {
       await _speech.listen(
         onResult: (result) {
-          _latest = result.recognizedWords;
-          if (result.finalResult) {
+          if (result.recognizedWords.trim().isNotEmpty) {
+            _latest = result.recognizedWords;
+          }
+          if (result.finalResult && _latest.trim().isNotEmpty) {
             _finishSession();
           }
         },
@@ -121,8 +147,7 @@ class SpeechInputService {
           pauseFor: pauseFor,
           partialResults: true,
           cancelOnError: false,
-          // One-word clue / guess — confirmation, not long dictation.
-          listenMode: ListenMode.confirmation,
+          listenMode: ListenMode.search,
           autoPunctuation: false,
           enableHapticFeedback: false,
           localeId: _localeId,
@@ -136,19 +161,20 @@ class SpeechInputService {
 
     try {
       final heard = await session.future.timeout(
-        listenFor + const Duration(seconds: 2),
+        listenFor + const Duration(seconds: 3),
         onTimeout: () => cleanWord(_latest),
       );
       return heard ?? cleanWord(_latest);
     } finally {
       _session = null;
+      _listenStartedAt = null;
       try {
         if (_speech.isListening) {
           await _speech.stop();
         }
       } catch (_) {}
       // Give Android a beat to release the mic before game audio resumes.
-      await Future<void>.delayed(const Duration(milliseconds: 400));
+      await Future<void>.delayed(const Duration(milliseconds: 500));
     }
   }
 

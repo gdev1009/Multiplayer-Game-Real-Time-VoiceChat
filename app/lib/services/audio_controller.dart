@@ -53,6 +53,8 @@ class AudioController extends ChangeNotifier {
   /// Temporary duck while the mic is open — never written to prefs.
   double _voiceDuck = 1.0;
   bool _themePlaying = false;
+  /// Once the match bed has started, keep trying to restore it until game end.
+  bool _matchMusicOn = false;
 
   /// Serialises host cues so a cheer from one beat cannot bleed into the next.
   Future<void>? _cueQueue;
@@ -173,13 +175,12 @@ class AudioController extends ChangeNotifier {
   /// Guy silent for the rest of the session).
   Future<void> beginSpeechInputDuck() async {
     _voiceDuck = 0;
-    _themeBeforeSpeech = _themePlaying;
+    _themeBeforeSpeech = _themePlaying || _matchMusicOn;
     notifyListeners();
     await stopHostSpeech();
-    await _out.stopAll();
     await _out.releaseForSpeechInput();
     // Let the OS actually release the playback session before STT starts.
-    await Future<void>.delayed(const Duration(milliseconds: 350));
+    await Future<void>.delayed(const Duration(milliseconds: 500));
   }
 
   /// Restore levels and re-claim the audio session after speech recognition
@@ -192,15 +193,13 @@ class AudioController extends ChangeNotifier {
       await _prefs?.setDouble(_kVoice, _voiceVolume);
     }
     notifyListeners();
-      await _out.reconfigureAudioSession();
-    // The mic teardown stops the loop outright, so setting a volume on a
-    // stopped player left the music dead for the rest of the game once anyone
-    // used Speak (Ronna: "the mike kills the background music entirely" /
-    // "music should play continuously"). Start it again.
-    if (_themeBeforeSpeech || _themePlaying) {
+    await _out.reconfigureAudioSession();
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    if (_themeBeforeSpeech || _themePlaying || _matchMusicOn) {
       _themePlaying = true;
+      _matchMusicOn = true;
       _themeBeforeSpeech = false;
-      await _out.ensureLoop(HostAudio.themeMusic, _effectiveMusic);
+      await _restartThemeBed();
     } else {
       await _out.setLoopVolume(_effectiveMusic);
     }
@@ -286,7 +285,8 @@ class AudioController extends ChangeNotifier {
 
   Future<void> startTheme() async {
     _themePlaying = true;
-    await _out.ensureLoop(HostAudio.themeMusic, _effectiveMusic);
+    _matchMusicOn = true;
+    await _restartThemeBed();
   }
 
   Future<void> stopTheme() async {
@@ -305,11 +305,18 @@ class AudioController extends ChangeNotifier {
   /// Keeps the gentle bed running under active play (safe to call often).
   Future<void> ensureThemePlaying() async {
     if (_muted) return;
-    if (!_themePlaying && !_hostIntroPlaying) {
-      _themePlaying = true;
-    }
-    if (!_themePlaying) return;
+    if (!_matchMusicOn && !_themePlaying) return;
+    _themePlaying = true;
+    _matchMusicOn = true;
+    await _restartThemeBed();
+  }
+
+  Future<void> _restartThemeBed() async {
+    if (_muted) return;
     await _out.ensureLoop(HostAudio.themeMusic, _effectiveMusic);
+    if (!_out.isLoopPlaying) {
+      await _out.playLoop(HostAudio.themeMusic, _effectiveMusic);
+    }
   }
 
   Future<void> _serialCue(Future<void> Function() body) {
@@ -434,9 +441,8 @@ class AudioController extends ChangeNotifier {
     final isIntro = cue == SoundCue.gameStart;
     final line = HostVoiceScripts.lineFor(cue);
     final fallback = HostVoiceScripts.fallbackAssetFor(cue) ?? sounds.voice;
-    // Correct + winner only: hold crowd until Guy finishes speaking.
-    final crowdAfterVoice =
-        cue == SoundCue.correct || cue == SoundCue.winner;
+    // Correct: ding → Guy confirms (no mid-game crowd — only winner cheers).
+    final crowdAfterVoice = cue == SoundCue.winner;
 
     // Prefetch welcome TTS while the opening bed plays so there is no silent
     // gap after the music ends (video25).
@@ -613,17 +619,19 @@ class AudioController extends ChangeNotifier {
 
   Future<void> _startThemeAfterIntro() async {
     _themePlaying = true;
-    await _out.ensureLoop(HostAudio.themeMusic, _effectiveMusic);
+    _matchMusicOn = true;
+    await _restartThemeBed();
   }
 
   /// Keeps the bed running under cues that do not name a replacement track.
   Future<void> _ensureThemeBed() async {
     if (_muted) return;
-    if (!_themePlaying) {
+    if (!_themePlaying && !_matchMusicOn) {
       if (_hostIntroPlaying) return;
       _themePlaying = true;
+      _matchMusicOn = true;
     }
-    await _out.ensureLoop(HostAudio.themeMusic, _effectiveMusic);
+    await _restartThemeBed();
   }
 
   Future<void> playDisconnectAlarm() => playCue(SoundCue.disconnect);
@@ -640,6 +648,7 @@ class AudioController extends ChangeNotifier {
   Future<void> stopAll() async {
     _cueEpoch++;
     _themePlaying = false;
+    _matchMusicOn = false;
     _hostIntroPlaying = false;
     _endLipsync();
     await _out.stopAll();

@@ -372,6 +372,9 @@ PrizeRoom _demoPrizeRoom() => PrizeRoom(
 class _SilentOutput implements SoundOutput {
   @override
   bool get isSilent => true;
+
+  @override
+  bool get isLoopPlaying => false;
   @override
   Future<void> configure() async {}
   @override
