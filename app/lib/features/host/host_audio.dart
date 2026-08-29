@@ -132,10 +132,12 @@ class HostAudio {
           voice: '$_vox/your_turn.mp3',
         );
       case SoundCue.correct:
-        // Correct: ding → Guy confirms. No crowd mid-game (Ronna: clapping
-        // after every guess felt wrong during matching).
+        // Correct: ding → Guy confirms → crowd after he speaks.
         return const CueSounds(
-          effects: ['$_sfx/ding.mp3'],
+          effects: [
+            '$_sfx/ding.mp3',
+            '$_sfx/cheer.mp3',
+          ],
           voice: '$_vox/nice_guess.mp3',
         );
       case SoundCue.steal:

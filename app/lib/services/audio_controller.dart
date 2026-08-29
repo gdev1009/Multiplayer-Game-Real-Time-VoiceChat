@@ -26,7 +26,10 @@ class AudioController extends ChangeNotifier {
         _prefs = prefs,
         _tts = tts ?? ElevenLabsTtsService() {
     _load();
+    unawaited(_out.configure());
   }
+
+  Timer? _themeWatchdog;
 
   final SoundOutput _out;
   final ElevenLabsTtsService _tts;
@@ -305,7 +308,6 @@ class AudioController extends ChangeNotifier {
   /// Keeps the gentle bed running under active play (safe to call often).
   Future<void> ensureThemePlaying() async {
     if (_muted) return;
-    if (!_matchMusicOn && !_themePlaying) return;
     _themePlaying = true;
     _matchMusicOn = true;
     await _restartThemeBed();
@@ -313,10 +315,26 @@ class AudioController extends ChangeNotifier {
 
   Future<void> _restartThemeBed() async {
     if (_muted) return;
-    await _out.ensureLoop(HostAudio.themeMusic, _effectiveMusic);
+    _themePlaying = true;
+    _matchMusicOn = true;
     if (!_out.isLoopPlaying) {
       await _out.playLoop(HostAudio.themeMusic, _effectiveMusic);
+    } else {
+      await _out.setLoopVolume(_effectiveMusic);
     }
+  }
+
+  void _startThemeWatchdog() {
+    _themeWatchdog?.cancel();
+    _themeWatchdog = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (!_matchMusicOn || _muted) return;
+      unawaited(_restartThemeBed());
+    });
+  }
+
+  void _stopThemeWatchdog() {
+    _themeWatchdog?.cancel();
+    _themeWatchdog = null;
   }
 
   Future<void> _serialCue(Future<void> Function() body) {
@@ -441,8 +459,9 @@ class AudioController extends ChangeNotifier {
     final isIntro = cue == SoundCue.gameStart;
     final line = HostVoiceScripts.lineFor(cue);
     final fallback = HostVoiceScripts.fallbackAssetFor(cue) ?? sounds.voice;
-    // Correct: ding → Guy confirms (no mid-game crowd — only winner cheers).
-    final crowdAfterVoice = cue == SoundCue.winner;
+    // Correct + winner: ding/fanfare → Guy → crowd after he finishes.
+    final crowdAfterVoice =
+        cue == SoundCue.correct || cue == SoundCue.winner;
 
     // Prefetch welcome TTS while the opening bed plays so there is no silent
     // gap after the music ends (video25).
@@ -453,11 +472,10 @@ class AudioController extends ChangeNotifier {
       if (line != null) {
         ttsFuture = _tts.synthesizeToFile(line);
       }
+      // Start the gentle loop right away (opening bed uses its own player).
+      await _startThemeAfterIntro();
       await _playOpeningBed();
       if (epoch != _cueEpoch) return;
-      // Bed ends → start the loop immediately so the welcome line is not over
-      // silence (Ronna: music should run through the whole game).
-      await _startThemeAfterIntro();
     }
 
     if (sounds.stopMusic) {
@@ -501,8 +519,8 @@ class AudioController extends ChangeNotifier {
     if (epoch != _cueEpoch) return;
 
     if (line == null && fallback == null) {
-      if (crowdEffects.isNotEmpty && epoch == _cueEpoch) {
-        await _playCrowdBed(crowdEffects, sfxVol, epoch);
+      if (crowdEffects.isNotEmpty) {
+        await _playCrowdBed(crowdEffects, sfxVol);
       }
       if (isIntro) {
         _hostIntroPlaying = false;
@@ -568,20 +586,18 @@ class AudioController extends ChangeNotifier {
       if (ducked != null) await _out.setLoopVolume(_effectiveMusic);
     }
 
-    // Crowd cheer only after Guy confirms (correct / winner).
-    if (crowdEffects.isNotEmpty && epoch == _cueEpoch) {
-      await _playCrowdBed(crowdEffects, sfxVol, epoch);
+    // Crowd cheer after Guy confirms (correct / winner).
+    if (crowdEffects.isNotEmpty) {
+      await _playCrowdBed(crowdEffects, sfxVol);
     }
   }
 
   Future<void> _playCrowdBed(
     List<String> effects,
     double sfxVol,
-    int epoch,
   ) async {
     final vol = (sfxVol * _crowdBoost).clamp(0.0, 1.0);
     for (final effect in effects) {
-      if (epoch != _cueEpoch) return;
       await _out.playOneShot(
         effect,
         vol,
@@ -621,6 +637,7 @@ class AudioController extends ChangeNotifier {
     _themePlaying = true;
     _matchMusicOn = true;
     await _restartThemeBed();
+    _startThemeWatchdog();
   }
 
   /// Keeps the bed running under cues that do not name a replacement track.
@@ -636,13 +653,18 @@ class AudioController extends ChangeNotifier {
 
   Future<void> playDisconnectAlarm() => playCue(SoundCue.disconnect);
 
-  /// Player tapped a control — hush Guy immediately and cancel any pending cue.
+  /// Player tapped a control — hush Guy immediately (crowd bed still runs).
   Future<void> stopHostSpeech() async {
-    _cueEpoch++;
     _hostIntroPlaying = false;
     _endLipsync();
     await _out.stopVoice();
     notifyListeners();
+  }
+
+  /// Skip the long welcome intro and cancel any in-flight opening cue.
+  Future<void> skipIntro() async {
+    _cueEpoch++;
+    await stopHostSpeech();
   }
 
   Future<void> stopAll() async {
@@ -650,12 +672,14 @@ class AudioController extends ChangeNotifier {
     _themePlaying = false;
     _matchMusicOn = false;
     _hostIntroPlaying = false;
+    _stopThemeWatchdog();
     _endLipsync();
     await _out.stopAll();
   }
 
   @override
   void dispose() {
+    _stopThemeWatchdog();
     _lipsyncTimer?.cancel();
     _tts.dispose();
     _out.dispose();

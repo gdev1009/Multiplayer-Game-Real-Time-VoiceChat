@@ -418,7 +418,7 @@ class _MatchBody extends StatelessWidget {
                 behavior: HitTestBehavior.opaque,
                 onTap: () {
                   try {
-                    context.read<AudioController>().stopHostSpeech();
+                    context.read<AudioController>().skipIntro();
                   } catch (_) {}
                 },
                 child: const _WaitingPanel(
@@ -745,9 +745,6 @@ class _ResolvedPanel extends StatelessWidget {
           onPressed: controller.busy
               ? null
               : () {
-                  try {
-                    context.read<AudioController>().stopHostSpeech();
-                  } catch (_) {}
                   controller.nextWord();
                 },
         ),
@@ -826,9 +823,6 @@ class _HalftimePanel extends StatelessWidget {
             onPressed: controller.busy
                 ? null
                 : () {
-                    try {
-                      context.read<AudioController>().stopHostSpeech();
-                    } catch (_) {}
                     controller.beginSecondHalf();
                   },
           )

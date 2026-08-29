@@ -70,10 +70,10 @@ void main() {
       }
     });
 
-    test('correct plays ding only — no mid-game crowd', () {
+    test('correct plays ding + cheer after Guy speaks', () {
       final ok = HostAudio.soundsFor(SoundCue.correct);
-      expect(ok.effects, equals(['audio/ding.mp3']));
-      expect(ok.effects, isNot(contains('audio/cheer.mp3')));
+      expect(ok.effects, contains('audio/ding.mp3'));
+      expect(ok.effects, contains('audio/cheer.mp3'));
       expect(ok.voice, 'audio/voice/nice_guess.mp3');
     });
 
@@ -102,13 +102,13 @@ void main() {
       expect(HostAudio.timeoutBuzzerHold, lessThan(HostAudio.buzzerHold));
     });
 
-    test('only the winner cue includes crowd cheer/applause', () {
+    test('only correct and winner include crowd cheer/applause', () {
       for (final cue in SoundCue.values) {
         final effects = HostAudio.soundsFor(cue).effects;
         final hasCrowd = effects.any(
           (e) => e.contains('cheer') || e.contains('applause'),
         );
-        if (cue == SoundCue.winner) {
+        if (cue == SoundCue.correct || cue == SoundCue.winner) {
           expect(hasCrowd, isTrue, reason: '$cue should cheer');
         } else {
           expect(hasCrowd, isFalse, reason: '$cue must not cheer');

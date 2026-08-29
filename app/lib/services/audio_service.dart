@@ -105,10 +105,7 @@ class AudioService implements SoundOutput {
   bool get isSilent => false;
 
   @override
-  bool get isLoopPlaying =>
-      _loopActive &&
-      _loopAsset != null &&
-      _music.state == PlayerState.playing;
+  bool get isLoopPlaying => _loopActive && _loopAsset != null;
 
   @override
   Future<void> configure() async {
@@ -138,6 +135,7 @@ class AudioService implements SoundOutput {
       );
       await _music.setReleaseMode(ReleaseMode.loop);
       await _music.setPlayerMode(PlayerMode.mediaPlayer);
+      await _openingBed.setPlayerMode(PlayerMode.mediaPlayer);
     } catch (err) {
       debugPrint('AudioService.configure failed (ignored): $err');
       _configured = false;
@@ -175,13 +173,8 @@ class AudioService implements SoundOutput {
   Future<void> ensureLoop(String asset, double volume) async {
     await configure();
     if (_loopActive && _loopAsset == asset) {
-      if (_music.state == PlayerState.playing) {
-        await setLoopVolume(volume);
-        return;
-      }
-      // Player stopped without updating our bookkeeping (opening bed, STT, etc.).
-      _loopActive = false;
-      _loopAsset = null;
+      await setLoopVolume(volume);
+      return;
     }
     await playLoop(asset, volume);
   }

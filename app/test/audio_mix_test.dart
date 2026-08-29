@@ -202,7 +202,7 @@ void main() {
       final starts = out.calls.where((c) => c.startsWith('playLoop')).length;
       await audio.startTheme();
       expect(out.calls.where((c) => c.startsWith('playLoop')).length, starts);
-      expect(out.calls.any((c) => c.startsWith('ensureLoop')), isTrue);
+      expect(out.calls.any((c) => c.startsWith('setLoopVolume')), isTrue);
     });
 
     test('muting silences the bed without losing the saved level', () async {
