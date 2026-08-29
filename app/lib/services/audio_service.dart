@@ -40,6 +40,9 @@ abstract class SoundOutput {
   /// Live-update the looping track's volume (for the music slider / mute).
   Future<void> setLoopVolume(double volume);
 
+  /// Resume the loop player if Android paused it (e.g. after host voice).
+  Future<void> resumeLoopIfNeeded();
+
   /// Fire a one-shot sound. When [voice] is true it plays on the dedicated
   /// voice channel (a new voice line interrupts the previous one); otherwise it
   /// plays on a small rotating pool so effects can overlap (e.g. cheer + ding).
@@ -132,7 +135,8 @@ class AudioService implements SoundOutput {
             stayAwake: false,
             contentType: AndroidContentType.music,
             usageType: AndroidUsageType.media,
-            audioFocus: AndroidAudioFocus.gain,
+            // Do not grab exclusive focus — Guy's voice must not pause the bed.
+            audioFocus: AndroidAudioFocus.none,
           ),
         ),
       );
@@ -222,6 +226,16 @@ class AudioService implements SoundOutput {
   Future<void> setLoopVolume(double volume) async {
     try {
       await _music.setVolume(volume);
+    } catch (_) {}
+  }
+
+  @override
+  Future<void> resumeLoopIfNeeded() async {
+    if (!_loopActive || _loopAsset == null) return;
+    try {
+      if (_music.state == PlayerState.paused) {
+        await _music.resume();
+      }
     } catch (_) {}
   }
 

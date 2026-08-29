@@ -61,6 +61,11 @@ class _FakeOutput implements SoundOutput {
   }
 
   @override
+  Future<void> resumeLoopIfNeeded() async {
+    calls.add('resumeLoopIfNeeded');
+  }
+
+  @override
   Future<void> playOneShot(
     String asset,
     double volume, {

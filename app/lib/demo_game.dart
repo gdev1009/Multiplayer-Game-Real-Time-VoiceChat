@@ -42,6 +42,8 @@ class _SilentOutput implements SoundOutput {
   @override
   Future<void> setLoopVolume(double volume) async {}
   @override
+  Future<void> resumeLoopIfNeeded() async {}
+  @override
   Future<void> playOneShot(
     String asset,
     double volume, {

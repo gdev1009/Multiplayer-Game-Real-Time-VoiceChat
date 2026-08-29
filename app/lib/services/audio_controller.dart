@@ -294,6 +294,7 @@ class AudioController extends ChangeNotifier {
     _themePlaying = true;
     _matchMusicOn = true;
     await _restartThemeBed();
+    _startThemeWatchdog();
   }
 
   Future<void> stopTheme() async {
@@ -322,6 +323,18 @@ class AudioController extends ChangeNotifier {
     _themePlaying = true;
     _matchMusicOn = true;
     if (force || !_out.isLoopPlaying) {
+      await _out.playLoop(HostAudio.themeMusic, _effectiveMusic);
+    } else {
+      await _out.setLoopVolume(_effectiveMusic);
+    }
+  }
+
+  /// Guy uses a separate voice player; Android can still pause the loop.
+  /// Keep the bed at full volume (no ducking) and restart if it stalled.
+  Future<void> _restoreMusicBedAfterHostVoice() async {
+    if (_muted || !_matchMusicOn) return;
+    await _out.resumeLoopIfNeeded();
+    if (!_out.isLoopPlaying) {
       await _out.playLoop(HostAudio.themeMusic, _effectiveMusic);
     } else {
       await _out.setLoopVolume(_effectiveMusic);
@@ -412,9 +425,6 @@ class AudioController extends ChangeNotifier {
 
     if (line == null && fallback == null) return;
 
-    final ducked = _themePlaying ? _effectiveMusic * 0.06 : null;
-    if (ducked != null) await _out.setLoopVolume(ducked);
-
     try {
       if (epoch != _cueEpoch) return;
 
@@ -458,7 +468,9 @@ class AudioController extends ChangeNotifier {
       if (epoch == _cueEpoch) {
         _endLipsync();
       }
-      if (ducked != null) await _out.setLoopVolume(_effectiveMusic);
+      if (epoch == _cueEpoch) {
+        await _restoreMusicBedAfterHostVoice();
+      }
     }
   }
 
@@ -543,9 +555,6 @@ class AudioController extends ChangeNotifier {
       return;
     }
 
-    final ducked = _themePlaying ? _effectiveMusic * 0.06 : null;
-    if (ducked != null) await _out.setLoopVolume(ducked);
-
     try {
       if (epoch != _cueEpoch) return;
 
@@ -595,12 +604,15 @@ class AudioController extends ChangeNotifier {
         _hostIntroPlaying = false;
         notifyListeners();
       }
-      if (ducked != null) await _out.setLoopVolume(_effectiveMusic);
+      if (epoch == _cueEpoch) {
+        await _restoreMusicBedAfterHostVoice();
+      }
     }
 
     // Crowd cheer after Guy confirms (correct / winner).
     if (crowdEffects.isNotEmpty) {
       await _playCrowdBed(crowdEffects, sfxVol);
+      await _restoreMusicBedAfterHostVoice();
     }
   }
 
