@@ -50,3 +50,4 @@ node_modules/
 # Python bytecode / local tool backups
 **/__pycache__/
 app/tools/collar_fix_backup/
+docs/SVID_*.mp4
