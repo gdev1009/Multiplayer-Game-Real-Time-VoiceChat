@@ -18,10 +18,8 @@ import 'clue_bank.dart';
 class AiPlayer {
   const AiPlayer._();
 
-  /// Roughly how often a moderate-skill studio guesser lands the word on a
-  /// given attempt. Tuned so AI seats score often enough that a table feels
-  /// alive, while still missing enough for steals and reveals.
-  static const double _guessAccuracy = 0.9;
+  /// Ronna (Sep 2026): stand-ins should win ~20% of guesses — beatable.
+  static const double _guessAccuracy = 0.2;
 
   /// A one-word clue for [secretWord]. Uses a hand-picked hint for the words in
   /// the studio bank; falls back to a friendly generic nudge otherwise. The

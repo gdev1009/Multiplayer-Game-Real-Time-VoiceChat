@@ -82,6 +82,8 @@ class AudioController extends ChangeNotifier {
   int _voiceGeneration = 0;
   /// Bumped by [stopHostSpeech] so an in-flight [playCue] abandons TTS / voice.
   int _cueEpoch = 0;
+  /// Guards the end-of-game brass fanfare so it cannot fire twice.
+  bool _finaleBrassPlayed = false;
 
   bool get voicePlaying => _voicePlaying;
   /// True while the long game-start welcome / rules line is running.
@@ -403,7 +405,9 @@ class AudioController extends ChangeNotifier {
     final sounds = HostAudio.soundsFor(cue);
     final sfxVol = _effectiveSfx;
     final line = HostVoiceScripts.lineFor(cue);
-    final fallback = HostVoiceScripts.fallbackAssetFor(cue) ?? sounds.voice;
+    final fallback = line == null
+        ? (HostVoiceScripts.fallbackAssetFor(cue) ?? sounds.voice)
+        : null;
 
     await _ensureThemeBed();
     if (epoch != _cueEpoch) return;
@@ -483,10 +487,11 @@ class AudioController extends ChangeNotifier {
     final sfxVol = sounds.isAlarm ? (_muted ? 0.9 : _sfxVolume) : _effectiveSfx;
     final isIntro = cue == SoundCue.gameStart;
     final line = HostVoiceScripts.lineFor(cue);
-    final fallback = HostVoiceScripts.fallbackAssetFor(cue) ?? sounds.voice;
-    // Correct + winner: ding/fanfare → Guy → crowd after he finishes.
-    final crowdAfterVoice =
-        cue == SoundCue.correct || cue == SoundCue.winner;
+    final fallback = line == null
+        ? (HostVoiceScripts.fallbackAssetFor(cue) ?? sounds.voice)
+        : null;
+    // Correct: ding → Guy → crowd after he finishes. Winner: Guy once → brass.
+    final crowdAfterVoice = cue == SoundCue.correct;
 
     // Prefetch welcome TTS while the opening bed plays so there is no silent
     // gap after the music ends (video25).
@@ -605,15 +610,35 @@ class AudioController extends ChangeNotifier {
         notifyListeners();
       }
       if (epoch == _cueEpoch) {
-        await _restoreMusicBedAfterHostVoice();
+        if (cue != SoundCue.winner) {
+          await _restoreMusicBedAfterHostVoice();
+        }
       }
     }
 
-    // Crowd cheer after Guy confirms (correct / winner).
     if (crowdEffects.isNotEmpty) {
       await _playCrowdBed(crowdEffects, sfxVol);
-      await _restoreMusicBedAfterHostVoice();
+      if (cue != SoundCue.winner) {
+        await _restoreMusicBedAfterHostVoice();
+      }
     }
+    if (cue == SoundCue.winner && epoch == _cueEpoch) {
+      await _playFinaleBrass();
+    }
+  }
+
+  /// Ronna (Sep 2026): horns/brass fanfare once, after Guy's "see you next time".
+  Future<void> _playFinaleBrass() async {
+    if (_muted || _finaleBrassPlayed) return;
+    _finaleBrassPlayed = true;
+    _stopThemeWatchdog();
+    _matchMusicOn = false;
+    await _out.stopLoop();
+    await _out.playMusicOnce(
+      HostAudio.brassTheme,
+      _effectiveMusic,
+      maxWait: const Duration(seconds: 10),
+    );
   }
 
   Future<void> _playCrowdBed(
@@ -695,6 +720,7 @@ class AudioController extends ChangeNotifier {
     _cueEpoch++;
     _themePlaying = false;
     _matchMusicOn = false;
+    _finaleBrassPlayed = false;
     _hostIntroPlaying = false;
     _stopThemeWatchdog();
     _endLipsync();

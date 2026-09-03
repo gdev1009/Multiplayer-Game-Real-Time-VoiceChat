@@ -161,11 +161,9 @@ class HostAudio {
           voice: '$_vox/halftime.mp3',
         );
       case SoundCue.winner:
-        // Game end: Guy wrap-up → one crowd bed (cheer already has applause).
+        // Game end: Guy wrap-up once → brass horns after (AudioController).
         return const CueSounds(
-          effects: ['$_sfx/cheer.mp3'],
           voice: '$_vox/winner.mp3',
-          music: themeMusic,
         );
       case SoundCue.disconnect:
         return const CueSounds(
@@ -205,7 +203,12 @@ class HostAudio {
     // Word outcomes — a correct guess, a miss/steal, or a reveal.
     if (next.lastOutcome == WordOutcome.guessed &&
         prev.lastOutcome != WordOutcome.guessed) {
-      cues.add(SoundCue.correct);
+      // Last word of the match: skip the mid-game "correct" line — Guy's
+      // wrap-up (SoundCue.winner) carries the whole finale once.
+      final lastWord = next.wordIndex >= next.config.totalWords - 1;
+      if (!lastWord) {
+        cues.add(SoundCue.correct);
+      }
     } else if (next.lastOutcome == WordOutcome.wrong &&
         prev.lastOutcome != WordOutcome.wrong) {
       cues.add(SoundCue.steal);

@@ -100,7 +100,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     final short = AppResponsive.isShort(context);
-    final iconSize = AppResponsive.s(context, short ? 64 : 80).clamp(56.0, 88.0);
+    final iconSize = AppResponsive.s(context, short ? 88 : 112).clamp(80.0, 128.0);
     final p = _pages[_index];
 
     return AppPage(

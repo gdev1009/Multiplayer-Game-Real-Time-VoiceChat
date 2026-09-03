@@ -23,6 +23,7 @@ class WordInput extends StatefulWidget {
     this.onSpeakRequested,
     this.onInteract,
     this.compact = false,
+    this.clueTurn = false,
   });
 
   /// The action label, e.g. "Your clue" or "Your guess".
@@ -46,6 +47,10 @@ class WordInput extends StatefulWidget {
 
   /// Tight padding for the live studio play screen (more room for the stage).
   final bool compact;
+
+  /// When true, the type field uses white background + bright red letters
+  /// (Ronna: clue entry should match the on-stage clue plaque).
+  final bool clueTurn;
 
   @override
   State<WordInput> createState() => _WordInputState();
@@ -235,7 +240,10 @@ class _WordInputState extends State<WordInput> {
         final sendW = narrow ? 52.0 : 58.0;
         const gold = Color(0xFFE8B84A);
         const goldOuter = Color(0xFFF1B159);
-        const fieldFill = Color(0xFF3A2468);
+        const clueRed = Color(0xFFEE0011);
+        final fieldFill = widget.clueTurn ? Colors.white : const Color(0xFF3A2468);
+        final fieldText = widget.clueTurn ? clueRed : Colors.white;
+        final fieldBorder = widget.clueTurn ? clueRed : gold;
 
         return Semantics(
           label: '${widget.label}. Type or speak your word.',
@@ -293,7 +301,7 @@ class _WordInputState extends State<WordInput> {
                               child: Container(
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(color: gold, width: 1.5),
+                                  border: Border.all(color: fieldBorder, width: 1.5),
                                 ),
                                 padding: const EdgeInsets.all(1.5),
                                 child: ClipRRect(
@@ -340,11 +348,11 @@ class _WordInputState extends State<WordInput> {
                                             onSubmitted: (_) => _send(),
                                             style: AppText.body.copyWith(
                                               fontSize: fieldSize,
-                                              color: Colors.white,
+                                              color: fieldText,
                                               height: 1.0,
                                               fontWeight: FontWeight.w900,
                                             ),
-                                            cursorColor: gold,
+                                            cursorColor: fieldBorder,
                                             keyboardAppearance: Brightness.dark,
                                             decoration: InputDecoration(
                                               isCollapsed: true,
@@ -355,7 +363,11 @@ class _WordInputState extends State<WordInput> {
                                               hintStyle:
                                                   AppText.bodyMuted.copyWith(
                                                 fontSize: hintSize,
-                                                color: Colors.white70,
+                                                color: widget.clueTurn
+                                                    ? clueRed.withValues(
+                                                        alpha: 0.45,
+                                                      )
+                                                    : Colors.white70,
                                                 height: 1.0,
                                                 fontWeight: FontWeight.w800,
                                               ),

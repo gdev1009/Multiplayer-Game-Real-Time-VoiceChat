@@ -340,6 +340,11 @@ class _MatchBody extends StatelessWidget {
         state.step == TurnStep.awaitingClue &&
         amClueGiver &&
         state.secretWord.trim().isNotEmpty;
+    final pendingClue = state.pendingClue?.trim() ?? '';
+    final showClueBanner = !introPlaying &&
+        showTurnDock &&
+        state.step == TurnStep.awaitingGuess &&
+        pendingClue.isNotEmpty;
 
     // Bottom dock hugs content — shorter on narrow/short phones.
     // Stage stays full-screen (Android adjustPan + Scaffold
@@ -378,7 +383,21 @@ class _MatchBody extends StatelessWidget {
             right: size.width * 0.18,
             top: size.height * 0.238,
             height: (size.height * 0.048).clamp(40.0, 52.0),
-            child: _StageMysteryWord(word: state.secretWord),
+            child: _StageWordPlaque(
+              word: state.secretWord,
+              label: 'Your word',
+            ),
+          )
+        else if (showClueBanner)
+          Positioned(
+            left: size.width * 0.14,
+            right: size.width * 0.14,
+            top: size.height * 0.238,
+            height: (size.height * 0.048).clamp(40.0, 52.0),
+            child: _StageWordPlaque(
+              word: pendingClue,
+              label: 'Clue',
+            ),
           ),
         if (state.isOver)
           Positioned(
@@ -443,53 +462,56 @@ class _MatchBody extends StatelessWidget {
   }
 }
 
-/// Large gold plaque under the MATCH WORD marquee — clue-giver only.
-class _StageMysteryWord extends StatelessWidget {
-  const _StageMysteryWord({required this.word});
+/// White plaque with bright red letters under the MATCH WORD marquee.
+///
+/// Ronna (Sep 2026): clue / word cards must read clearly — white background,
+/// bright red text (not the old purple plaque with white letters).
+class _StageWordPlaque extends StatelessWidget {
+  const _StageWordPlaque({required this.word, required this.label});
+
   final String word;
+  final String label;
+
+  static const _clueRed = Color(0xFFEE0011);
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Color(0xF2281648),
-            Color(0xF2160C30),
+    return Semantics(
+      label: '$label: ${word.trim()}',
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: _clueRed, width: 2.8),
+          boxShadow: [
+            BoxShadow(
+              color: _clueRed.withValues(alpha: 0.35),
+              blurRadius: 14,
+              spreadRadius: 1,
+            ),
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.25),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
           ],
         ),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFFFD36A), width: 2.6),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFFFFD36A).withValues(alpha: 0.35),
-            blurRadius: 16,
-            spreadRadius: 1,
-          ),
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.45),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-        child: Center(
-          child: FittedBox(
-            fit: BoxFit.contain,
-            child: Text(
-              word.toUpperCase(),
-              maxLines: 1,
-              textAlign: TextAlign.center,
-              style: AppText.body.copyWith(
-                color: Colors.white,
-                fontWeight: FontWeight.w900,
-                fontSize: 56,
-                letterSpacing: 1.4,
-                height: 1.0,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+          child: Center(
+            child: FittedBox(
+              fit: BoxFit.contain,
+              child: Text(
+                word.trim().toUpperCase(),
+                maxLines: 1,
+                textAlign: TextAlign.center,
+                style: AppText.body.copyWith(
+                  color: _clueRed,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 56,
+                  letterSpacing: 1.4,
+                  height: 1.0,
+                ),
               ),
             ),
           ),
@@ -542,13 +564,21 @@ class _InputArea extends StatelessWidget {
   Widget build(BuildContext context) {
     if (!controller.isMyTurn) {
       final holding = controller.spotlightHoldRole != null;
+      final giving = holding ? false : state.step == TurnStep.awaitingClue;
+      final steal = giving && state.lastOutcome == WordOutcome.wrong;
+      final waitName = controller.displayClockName;
       return _WaitingPanel(
-        name: controller.displayClockName,
-        // During miss fanfare, keep the failing guesser as the focus.
-        giving: holding ? false : state.step == TurnStep.awaitingClue,
+        name: waitName,
+        giving: giving,
+        message: steal && waitName.isNotEmpty
+            ? 'A steal — waiting for $waitName’s new clue…'
+            : null,
       );
     }
     final giving = state.step == TurnStep.awaitingClue;
+    // After a miss the word stays live — the other team (or you, on a
+    // steal-back) must give a *new* clue. Two X's on stage is not "stuck".
+    final stealClue = giving && state.lastOutcome == WordOutcome.wrong;
     SpeechInputService? speech;
     AudioController? audio;
     try {
@@ -563,8 +593,14 @@ class _InputArea extends StatelessWidget {
     }
     return WordInput(
       key: ValueKey('${state.wordIndex}-${state.step}-${state.cluingTeam}'),
-      label: giving ? 'One-word clue' : 'Guess',
-      hint: giving ? 'A word that hints at it…' : 'What is the word?',
+      label: giving
+          ? (stealClue ? 'New one-word clue' : 'One-word clue')
+          : 'Guess',
+      hint: giving
+          ? (stealClue
+              ? 'A steal — give a new clue…'
+              : 'A word that hints at it…')
+          : 'What is the word?',
       onSubmit: (text) async {
         await audio?.stopHostSpeech();
         if (giving) {
@@ -574,6 +610,7 @@ class _InputArea extends StatelessWidget {
         }
       },
       compact: true,
+      clueTurn: giving,
       onSpeakRequested: speech == null
           ? null
           : () async {
@@ -744,16 +781,23 @@ class _ResolvedPanel extends StatelessWidget {
                 ),
         ),
         const SizedBox(height: AppSpacing.sm),
-        BigButton(
-          label: 'Next word',
-          icon: Icons.arrow_forward_rounded,
-          isLoading: controller.busy,
-          onPressed: controller.busy || cueBusy
-              ? null
-              : () {
-                  controller.nextWord();
-                },
-        ),
+        if (controller.isLocal || controller.isHost)
+          BigButton(
+            label: 'Next word',
+            icon: Icons.arrow_forward_rounded,
+            isLoading: controller.busy,
+            onPressed: controller.busy || cueBusy
+                ? null
+                : () {
+                    controller.nextWord();
+                  },
+          )
+        else
+          const _WaitingPanel(
+            name: 'the host',
+            giving: false,
+            message: 'Waiting for the host to deal the next word…',
+          ),
       ],
     );
   }

@@ -131,7 +131,7 @@ void main() {
       expect(misses, greaterThan(0), reason: 'expected some misses to check');
     });
 
-    test('lands the word most of the time but not always (moderate skill)', () {
+    test('lands the word about one time in five (beatable stand-ins)', () {
       var correct = 0;
       const trials = 300;
       for (var seed = 0; seed < trials; seed++) {
@@ -141,8 +141,8 @@ void main() {
         }
       }
       final rate = correct / trials;
-      expect(rate, greaterThan(0.75));
-      expect(rate, lessThan(0.98));
+      expect(rate, greaterThan(0.12));
+      expect(rate, lessThan(0.32));
     });
 
     test('looksForSeats keeps hair/glasses/hat/outfit unique in a match', () {

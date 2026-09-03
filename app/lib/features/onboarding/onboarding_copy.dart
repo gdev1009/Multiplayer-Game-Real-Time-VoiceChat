@@ -28,7 +28,9 @@ class OnboardingCopy {
       'If your team misses, the other team can steal — their clue-giver gives a new clue '
       'on the same word, and their guesser tries. That can go back and forth a few times.\n\n'
       'Giving your answer is timed. If you cannot answer in time, you will hear a buzzer '
-      'and the other team gets a try.';
+      'and the other team gets a try.\n\n'
+      'When a word is finished, the host taps Next word to deal the next one — '
+      'only the host can do that.';
 
   static const friendsTitle = 'Play From Home, Together';
   static const friendsBody =

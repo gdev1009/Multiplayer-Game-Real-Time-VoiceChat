@@ -41,7 +41,7 @@ class _RefLayout {
   static const maxSeatWidth = 0.50;
 
   // Host — room for gesture hand; geometrically centered on stage.
-  static const hostWidth = 0.50;
+  static const hostWidth = 0.68;
   static const hostShiftX = 0.0;
 
   // Seat nameplates (measured from Seat_on / Seat_off art).
@@ -135,9 +135,9 @@ class _StageMetrics {
     final bLeft = w - seatW + oh;
 
     // Host stands on the stage floor between the pods (ref screenshot).
-    var hostH = rectH * 0.78;
+    var hostH = rectH * 0.92;
     var hostW = hostH * _kHostAspect;
-    final maxHostW = _clamp(w * _RefLayout.hostWidth, 200.0, 380.0);
+    final maxHostW = _clamp(w * _RefLayout.hostWidth, 240.0, 500.0);
     if (hostW > maxHostW) {
       hostW = maxHostW;
       hostH = hostW / _kHostAspect;
@@ -651,6 +651,33 @@ class _SevenSegPainter extends CustomPainter {
 
 // ─── Seat pod (Seat_on / Seat_off + avatar + name text) ─────────────────────
 
+/// Ronna (Sep 2026): turn lights glow bright red on the seat's LED bar
+/// (the curved recess in Seat_on art), not a second row under the base.
+class _RedSeatLightsPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    const count = 11;
+    final glow = Paint()
+      ..color = const Color(0xFFFF1744).withValues(alpha: 0.65)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+    final core = Paint()..color = const Color(0xFFFF1020);
+    final hot = Paint()..color = const Color(0xFFFFE8E8);
+    for (var i = 0; i < count; i++) {
+      final t = i / (count - 1);
+      final x = size.width * (0.06 + 0.88 * t);
+      // Bar bows down in the middle (matches Seat_on LED recess).
+      final bow = 1 - 4 * (t - 0.5) * (t - 0.5);
+      final y = size.height * (0.36 + 0.38 * bow);
+      canvas.drawCircle(Offset(x, y), 10, glow);
+      canvas.drawCircle(Offset(x, y), 5.2, core);
+      canvas.drawCircle(Offset(x, y), 2.0, hot);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
 PlayEntry? _lineForSeat(MatchState state, String role) {
   if (state.isResolved || state.isHalftime || state.isOver) return null;
   if (state.wordIndex == 0 && state.feed.isEmpty) return null;
@@ -663,11 +690,8 @@ PlayEntry? _lineForSeat(MatchState state, String role) {
     }
   }
   if (mine == null) return null;
-  if (state.step == TurnStep.awaitingClue &&
-      mine.kind == PlayKind.clue &&
-      role == state.clueGiverRole) {
-    return null;
-  }
+  // Clues show in the centre plaque under MATCH WORD — not on the seat.
+  if (mine.kind == PlayKind.clue) return null;
   return mine;
 }
 
@@ -728,7 +752,7 @@ class _SeatPod extends StatelessWidget {
         : _RefLayout.nameplateInsetXOff;
 
     final pod = AnimatedScale(
-      scale: active ? 1.01 : 1.0,
+      scale: active ? 1.04 : 1.0,
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOutCubic,
       alignment: Alignment.bottomCenter,
@@ -787,7 +811,18 @@ class _SeatPod extends StatelessWidget {
                         ),
                       ),
                     ),
-                    // 4. Name inside the painted gold/dark plate only.
+                    // 4. Bright red lights on the LED bar (under the nameplate).
+                    if (active)
+                      Positioned(
+                        left: aw * 0.05,
+                        right: aw * 0.05,
+                        top: ah * 0.725,
+                        height: ah * 0.155,
+                        child: CustomPaint(
+                          painter: _RedSeatLightsPainter(),
+                        ),
+                      ),
+                    // 5. Name inside the painted gold/dark plate only.
                     Positioned(
                       left: aw * plateInsetX,
                       right: aw * plateInsetX,
@@ -884,6 +919,8 @@ class _PlayerBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final correct = entry.correct == true;
     final wrong = entry.correct == false;
+    final isClue = entry.kind == PlayKind.clue;
+    const clueRed = Color(0xFFEE0011);
     final bg = correct
         ? const Color(0xFFC8E6C9)
         : wrong
@@ -893,12 +930,16 @@ class _PlayerBubble extends StatelessWidget {
         ? AppColors.success
         : wrong
             ? AppColors.error
-            : AppColors.deepPurpleDark;
+            : isClue
+                ? clueRed
+                : AppColors.deepPurpleDark;
     final border = correct
         ? AppColors.success
         : wrong
             ? AppColors.error
-            : const Color(0xFFAA5BAC).withValues(alpha: 0.55);
+            : isClue
+                ? clueRed
+                : const Color(0xFFAA5BAC).withValues(alpha: 0.55);
     final raw = entry.text.trim();
     final isTimeout = raw == '…' || raw.toLowerCase() == 'time';
     final label = raw;
@@ -1105,7 +1146,7 @@ class _PlayerBustState extends State<_PlayerBust>
       // Head near the top red line, torso tucked into the seat lip (bottom
       // red line). Hard ClipRect on the parent Positioned keeps hats/arms
       // inside the blue pad — never past the purple frame.
-      final bustScale = widget.foreground ? 2.90 : 2.80;
+      final bustScale = widget.foreground ? 3.15 : 3.05;
       final render = math.max(boxW, boxH) * 1.12;
       return SizedBox(
         width: boxW,

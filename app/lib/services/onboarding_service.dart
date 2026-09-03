@@ -10,7 +10,7 @@ class OnboardingService {
   final ProfileService _profiles;
 
   /// Bump when walkthrough copy/layout must be shown again to existing testers.
-  static const contentVersion = 2;
+  static const contentVersion = 3;
   static const seenKey = 'mw_onboarding_seen_v2';
   static const _versionKey = 'mw_onboarding_version';
 

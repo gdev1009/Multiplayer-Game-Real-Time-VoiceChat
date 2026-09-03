@@ -17,10 +17,14 @@ void main() {
       MatchEngine.start(words: words, names: names, config: const MatchConfig());
 
   group('HostAudio.soundsFor', () {
-    test('every cue maps to at least one effect and a valid theme', () {
+    test('every cue maps to audio assets (effects and/or voice)', () {
       for (final cue in SoundCue.values) {
         final sounds = HostAudio.soundsFor(cue);
-        expect(sounds.effects, isNotEmpty, reason: '$cue has no effect');
+        expect(
+          sounds.effects.isNotEmpty || sounds.voice != null,
+          isTrue,
+          reason: '$cue has no audio',
+        );
         for (final e in sounds.effects) {
           expect(e, startsWith('audio/'));
         }
@@ -52,12 +56,12 @@ void main() {
       expect(HostAudio.openingBedDuration.inSeconds, inInclusiveRange(10, 15));
     });
 
-    test('winner keeps the theme running under a single crowd bed', () {
+    test('winner is Guy wrap-up only — brass plays in AudioController', () {
       final s = HostAudio.soundsFor(SoundCue.winner);
       expect(s.stopMusic, isFalse);
-      expect(s.music, HostAudio.themeMusic);
-      expect(s.effects, contains('audio/cheer.mp3'));
-      expect(s.effects, isNot(contains('audio/applause.mp3')));
+      expect(s.music, isNull);
+      expect(s.effects, isEmpty);
+      expect(s.voice, 'audio/voice/winner.mp3');
     });
 
     test('only the disconnect alarm stops the music', () {
@@ -91,10 +95,9 @@ void main() {
       expect(r.effects, contains('audio/reveal.mp3'));
     });
 
-    test('winner plays one crowd bed after Guy', () {
+    test('winner has no bundled crowd — applause is for correct guesses', () {
       final w = HostAudio.soundsFor(SoundCue.winner);
-      expect(w.effects, contains('audio/cheer.mp3'));
-      expect(w.effects, isNot(contains('audio/applause.mp3')));
+      expect(w.effects, isEmpty);
       expect(w.voice, isNotNull);
     });
 
@@ -102,13 +105,13 @@ void main() {
       expect(HostAudio.timeoutBuzzerHold, lessThan(HostAudio.buzzerHold));
     });
 
-    test('only correct and winner include crowd cheer/applause', () {
+    test('only correct includes crowd cheer/applause', () {
       for (final cue in SoundCue.values) {
         final effects = HostAudio.soundsFor(cue).effects;
         final hasCrowd = effects.any(
           (e) => e.contains('cheer') || e.contains('applause'),
         );
-        if (cue == SoundCue.correct || cue == SoundCue.winner) {
+        if (cue == SoundCue.correct) {
           expect(hasCrowd, isTrue, reason: '$cue should cheer');
         } else {
           expect(hasCrowd, isFalse, reason: '$cue must not cheer');
@@ -137,6 +140,32 @@ void main() {
       expect(guessed.lastOutcome, WordOutcome.guessed);
       expect(HostAudio.cuesForTransition(clued, guessed),
           contains(SoundCue.correct),);
+    });
+
+    test('the last word skips correct so Guy only speaks once at the finale', () {
+      var s = start();
+      for (var guard = 0;
+          s.wordIndex < s.config.totalWords - 1 && guard < 200;
+          guard++) {
+        if (s.isHalftime) {
+          s = MatchEngine.beginSecondHalf(s);
+          continue;
+        }
+        if (s.isResolved) {
+          s = MatchEngine.nextWord(s);
+          continue;
+        }
+        s = MatchEngine.submitClue(s, 'hint');
+        s = MatchEngine.submitGuess(s, s.secretWord);
+      }
+      expect(s.wordIndex, s.config.totalWords - 1);
+      final clued = MatchEngine.submitClue(s, 'hint');
+      final guessed = MatchEngine.submitGuess(clued, clued.secretWord);
+      expect(guessed.lastOutcome, WordOutcome.guessed);
+      expect(
+        HostAudio.cuesForTransition(clued, guessed),
+        isNot(contains(SoundCue.correct)),
+      );
     });
 
     test('a wrong guess (steal) fires the steal cue', () {
