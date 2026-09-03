@@ -317,4 +317,84 @@ class GameplayService {
         .order('created_at')
         .map((rows) => rows.map(playEntryFromMap).toList());
   }
+
+  // ---------------------------------------------------------------------------
+  // Mid-game leave-app alarm (Ronna: anti-cheat — Messenger / dictionary peek)
+  // ---------------------------------------------------------------------------
+
+  RealtimeChannel? _disconnectChannel;
+
+  /// Join the ephemeral disconnect channel for [gameId].
+  ///
+  /// Uses Realtime Broadcast (no SQL). [onAway] / [onBack] receive the event
+  /// payload (`role`, `name`). Safe to call again — tears down any prior join.
+  Future<void> subscribeDisconnect({
+    required String gameId,
+    required void Function(Map<String, dynamic> payload) onAway,
+    void Function(Map<String, dynamic> payload)? onBack,
+  }) async {
+    await unsubscribeDisconnect();
+    final channel = _client.channel('mw_disconnect:$gameId');
+    channel.onBroadcast(
+      event: 'player_away',
+      callback: (payload) => onAway(_broadcastData(payload)),
+    );
+    if (onBack != null) {
+      channel.onBroadcast(
+        event: 'player_back',
+        callback: (payload) => onBack(_broadcastData(payload)),
+      );
+    }
+    channel.subscribe();
+    _disconnectChannel = channel;
+  }
+
+  /// Tell the table this human left Match Word for another app.
+  Future<void> publishPlayerAway({
+    required String role,
+    required String name,
+  }) async {
+    final channel = _disconnectChannel;
+    if (channel == null) return;
+    try {
+      await channel.sendBroadcastMessage(
+        event: 'player_away',
+        payload: {'role': role, 'name': name},
+      );
+    } catch (e) {
+      debugPrint('[GameplayService] publishPlayerAway failed: $e');
+    }
+  }
+
+  /// Tell the table this human is back in Match Word.
+  Future<void> publishPlayerBack({required String role}) async {
+    final channel = _disconnectChannel;
+    if (channel == null) return;
+    try {
+      await channel.sendBroadcastMessage(
+        event: 'player_back',
+        payload: {'role': role},
+      );
+    } catch (e) {
+      debugPrint('[GameplayService] publishPlayerBack failed: $e');
+    }
+  }
+
+  Future<void> unsubscribeDisconnect() async {
+    final channel = _disconnectChannel;
+    _disconnectChannel = null;
+    if (channel == null) return;
+    try {
+      await _client.removeChannel(channel);
+    } catch (e) {
+      debugPrint('[GameplayService] unsubscribeDisconnect failed: $e');
+    }
+  }
+
+  /// Broadcast callbacks sometimes nest the body under `payload`.
+  static Map<String, dynamic> _broadcastData(Map<String, dynamic> raw) {
+    final inner = raw['payload'];
+    if (inner is Map) return Map<String, dynamic>.from(inner);
+    return raw;
+  }
 }

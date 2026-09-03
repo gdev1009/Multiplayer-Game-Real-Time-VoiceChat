@@ -613,7 +613,9 @@ class _StartingPanelState extends State<_StartingPanel> {
       MaterialPageRoute<void>(
         builder: (_) => ChangeNotifierProvider<GameplayController>.value(
           value: controller,
-          child: const PlayScreen(),
+          child: PlayScreen(
+            disconnectSignal: controller.disconnectSignal,
+          ),
         ),
       ),
     );

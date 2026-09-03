@@ -67,6 +67,14 @@ class GameplayController extends ChangeNotifier {
   /// The other human players in this match — used by the end-of-game screen to
   /// let the player add them as friends.
   List<({String profileId, String name})> get humanCoPlayers => _humanCoPlayers;
+
+  /// Feeds [PlayScreen]'s disconnect alarm when another human leaves the app
+  /// mid-game (Realtime Broadcast). Demo host can also write this notifier.
+  final ValueNotifier<String?> disconnectSignal = ValueNotifier<String?>(null);
+
+  /// True after we told the table we backgrounded, until we resume.
+  bool _awayPublished = false;
+
   List<String> _words = const []; // the dealt secret words, in play order.
   bool _isHost = false;
   Timer? _aiTimer;
@@ -316,10 +324,76 @@ class GameplayController extends ChangeNotifier {
         _state = MatchEngine.start(words: words, names: names);
       }
       _subscribe(service, gameId, names);
+      _subscribeDisconnect(service, gameId);
       // The host may already be on the clock for a computer seat (e.g. word 1
       // opens with an AI guesser): kick off auto-play from the seeded state.
       _maybeDriveComputer();
     });
+  }
+
+  /// Listen for other humans leaving Match Word for another app (anti-cheat).
+  void _subscribeDisconnect(GameplayService service, String gameId) {
+    unawaited(
+      service.subscribeDisconnect(
+        gameId: gameId,
+        onAway: _onRemotePlayerAway,
+        onBack: _onRemotePlayerBack,
+      ),
+    );
+  }
+
+  void _onRemotePlayerAway(Map<String, dynamic> payload) {
+    final role = (payload['role'] as String?)?.trim();
+    if (role == null || role.isEmpty) return;
+    // Don't alarm ourselves — we're the one who left.
+    if (role == _myRole) return;
+    final rawName = (payload['name'] as String?)?.trim();
+    final name = (rawName != null && rawName.isNotEmpty)
+        ? rawName
+        : (_names[role] ?? 'A player');
+    // Reset then set so a second leave still notifies listeners.
+    disconnectSignal.value = null;
+    disconnectSignal.value =
+        '$name left the game. We\'ll pause while they come back.';
+  }
+
+  void _onRemotePlayerBack(Map<String, dynamic> payload) {
+    final role = (payload['role'] as String?)?.trim();
+    if (role == null || role.isEmpty || role == _myRole) return;
+    // Soft clear only if the overlay is still about this seat.
+    final current = disconnectSignal.value;
+    if (current == null) return;
+    final name = _names[role] ?? '';
+    if (name.isNotEmpty && current.contains(name)) {
+      disconnectSignal.value = null;
+    }
+  }
+
+  /// Call when this device backgrounds mid-match (home / other app / lock).
+  ///
+  /// Ronna (Sep 2026): alarm must fire so nobody can peek the word in
+  /// Messenger. Studio AI seats never publish.
+  Future<void> reportLeftApp() async {
+    if (isLocal || _awayPublished) return;
+    final role = _myRole;
+    if (role == null || (_aiByRole[role] ?? false)) return;
+    final s = _state;
+    if (s == null || s.isOver) return;
+    _awayPublished = true;
+    final name = (_names[role] ?? '').trim();
+    await _service?.publishPlayerAway(
+      role: role,
+      name: name.isEmpty ? 'A player' : name,
+    );
+  }
+
+  /// Call when this device returns to Match Word after [reportLeftApp].
+  Future<void> reportReturnedApp() async {
+    if (!_awayPublished) return;
+    _awayPublished = false;
+    final role = _myRole;
+    if (role == null || isLocal) return;
+    await _service?.publishPlayerBack(role: role);
   }
 
   void _subscribe(
@@ -1002,6 +1076,8 @@ class GameplayController extends ChangeNotifier {
     _pollTimer?.cancel();
     _stateSub?.cancel();
     _playsSub?.cancel();
+    unawaited(_service?.unsubscribeDisconnect());
+    disconnectSignal.dispose();
     super.dispose();
   }
 }

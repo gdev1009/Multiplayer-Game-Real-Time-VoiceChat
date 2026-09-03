@@ -83,7 +83,7 @@ class PlayScreen extends StatefulWidget {
   State<PlayScreen> createState() => _PlayScreenState();
 }
 
-class _PlayScreenState extends State<PlayScreen> {
+class _PlayScreenState extends State<PlayScreen> with WidgetsBindingObserver {
   MatchState? _prevState;
   bool _startedShow = false;
   bool _awardedPrizes = false;
@@ -93,7 +93,17 @@ class _PlayScreenState extends State<PlayScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     widget.disconnectSignal?.addListener(_onDisconnectSignal);
+  }
+
+  @override
+  void didUpdateWidget(covariant PlayScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.disconnectSignal != widget.disconnectSignal) {
+      oldWidget.disconnectSignal?.removeListener(_onDisconnectSignal);
+      widget.disconnectSignal?.addListener(_onDisconnectSignal);
+    }
   }
 
   @override
@@ -116,10 +126,34 @@ class _PlayScreenState extends State<PlayScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     widget.disconnectSignal?.removeListener(_onDisconnectSignal);
     // Hush the room when leaving the game.
     _audioMaybe?.stopAll();
     super.dispose();
+  }
+
+  /// Ronna (Sep 2026): leaving Match Word for another app mid-game must
+  /// alert the table (anti-cheat — peeking the word in Messenger).
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!mounted) return;
+    GameplayController controller;
+    try {
+      controller = context.read<GameplayController>();
+    } catch (_) {
+      return;
+    }
+    switch (state) {
+      case AppLifecycleState.paused:
+      case AppLifecycleState.hidden:
+        unawaited(controller.reportLeftApp());
+      case AppLifecycleState.resumed:
+        unawaited(controller.reportReturnedApp());
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.detached:
+        break;
+    }
   }
 
   AudioController? get _audioMaybe {
@@ -135,6 +169,14 @@ class _PlayScreenState extends State<PlayScreen> {
     if (message == null) return;
     _audioMaybe?.playDisconnectAlarm();
     setState(() => _alarmMessage = message);
+  }
+
+  void _dismissAlarm() {
+    setState(() => _alarmMessage = null);
+    // Allow a later leave to re-fire the same copy.
+    if (widget.disconnectSignal is ValueNotifier<String?>) {
+      (widget.disconnectSignal as ValueNotifier<String?>).value = null;
+    }
   }
 
   /// Feed each game-state change to the host audio (after the frame so playback
@@ -305,7 +347,7 @@ class _PlayScreenState extends State<PlayScreen> {
                 if (_alarmMessage != null)
                   DisconnectAlarm(
                     message: _alarmMessage!,
-                    onDismiss: () => setState(() => _alarmMessage = null),
+                    onDismiss: _dismissAlarm,
                   ),
               ],
             ),
