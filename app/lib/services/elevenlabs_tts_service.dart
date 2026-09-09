@@ -71,25 +71,50 @@ class ElevenLabsTtsService {
       .map((e) => '${e.key}=${e.value}')
       .join(',');
 
+  /// Bumped whenever the cache could be holding audio we no longer trust.
+  ///
+  /// v2 — Ronna (Sep 2026) heard "a sentence of garbled words at the very end".
+  /// A clip used to be written straight to its final path, so a request that
+  /// was cut off mid-write left a truncated MP3 that was long enough to pass
+  /// the cache check. Guy then replayed that same broken take every game,
+  /// which is why it was always the wrap-up. Writes are atomic now; the bump
+  /// retires any clip a device already poisoned.
+  static const int _cacheVersion = 2;
+
   String _cacheKey(String text) {
-    final bytes = utf8.encode('$voiceId|$_modelId|$_settingsTag|$text');
+    final bytes =
+        utf8.encode('v$_cacheVersion|$voiceId|$_modelId|$_settingsTag|$text');
     return sha256.convert(bytes).toString();
   }
 
+  /// One synthesis per line at a time. Two cues asking for the same text used
+  /// to race each other onto the same file.
+  final Map<String, Future<String?>> _inFlight = {};
+
   /// Returns a local file path to an MP3 of [text], or null on failure.
-  Future<String?> synthesizeToFile(String text) async {
+  Future<String?> synthesizeToFile(String text) {
     final trimmed = text.trim();
-    if (trimmed.isEmpty) return null;
+    if (trimmed.isEmpty) return Future<String?>.value();
     if (!isConfigured) {
       debugPrint('ElevenLabsTts: no API key — using bundled voice fallback');
-      return null;
+      return Future<String?>.value();
     }
+    final key = _cacheKey(trimmed);
+    final running = _inFlight[key];
+    if (running != null) return running;
+    final job = _synthesize(trimmed, key).whenComplete(() {
+      _inFlight.remove(key);
+    });
+    _inFlight[key] = job;
+    return job;
+  }
 
+  Future<String?> _synthesize(String text, String key) async {
     try {
       final dir = await _cacheDir();
-      final path = '${dir.path}/${_cacheKey(trimmed)}.mp3';
+      final path = '${dir.path}/$key.mp3';
       final cached = File(path);
-      if (await cached.exists() && await cached.length() > 256) {
+      if (await cached.exists() && await _isPlayableMp3(cached)) {
         return path;
       }
 
@@ -103,7 +128,7 @@ class ElevenLabsTtsService {
               'Accept': 'audio/mpeg',
             },
             body: jsonEncode({
-              'text': trimmed,
+              'text': text,
               'model_id': _modelId,
               'voice_settings': _voiceSettings,
             }),
@@ -116,16 +141,39 @@ class ElevenLabsTtsService {
         );
         return null;
       }
-      if (res.bodyBytes.length < 256) {
-        debugPrint('ElevenLabsTts: empty/short audio body');
+      final bytes = res.bodyBytes;
+      if (bytes.length < 256 || !_looksLikeMp3(bytes)) {
+        debugPrint('ElevenLabsTts: empty / not-audio response body');
         return null;
       }
-      await cached.writeAsBytes(res.bodyBytes, flush: true);
+      // Write to a scratch file and rename: a rename is atomic, so a reader
+      // never sees a half-written clip and no broken take is ever cached.
+      final scratch = File('$path.part');
+      await scratch.writeAsBytes(bytes, flush: true);
+      await scratch.rename(path);
       return path;
     } catch (err) {
       debugPrint('ElevenLabsTts.synthesize failed (ignored): $err');
       return null;
     }
+  }
+
+  Future<bool> _isPlayableMp3(File file) async {
+    try {
+      if (await file.length() < 256) return false;
+      final head = await file.openRead(0, 4).first;
+      return _looksLikeMp3(head);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// An ID3 tag or an MPEG frame sync. Anything else is a JSON error page or a
+  /// truncated body, not audio.
+  static bool _looksLikeMp3(List<int> bytes) {
+    if (bytes.length < 3) return false;
+    if (bytes[0] == 0x49 && bytes[1] == 0x44 && bytes[2] == 0x33) return true;
+    return bytes[0] == 0xFF && (bytes[1] & 0xE0) == 0xE0;
   }
 
   void dispose() {

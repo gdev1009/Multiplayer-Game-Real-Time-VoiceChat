@@ -61,11 +61,17 @@ abstract final class HostVoiceScripts {
   ];
 
   /// End-of-match wrap-ups.
+  ///
+  /// Guy's last word of the show, so it has to land cleanly. Short sentences,
+  /// plain punctuation, no dashes or trailing clauses — Ronna (Sep 2026) heard
+  /// "a sentence of garbled words at the very end" and the long middle line
+  /// here ("thanks for playing at the end of our game today") ran on badly
+  /// enough to sound like one.
   static const List<String> wrapUp = [
-    'What a game! Thanks for playing Match Word today — you were wonderful!',
-    'Great game, folks! Thanks for joining us — come back soon for more Match Word!',
-    "That's a wrap! Thanks for playing at the end of our game today — see you next time on Match Word!",
-    'Fantastic show! Thanks for playing Match Word — until next time!',
+    'What a game! Thanks for playing Match Word. You were wonderful!',
+    'Great game, folks! Come back soon for more Match Word!',
+    "That's a wrap! See you next time on Match Word!",
+    'Fantastic show! Thanks for playing Match Word. Until next time!',
   ];
 
   static const List<String> roundStarts = [

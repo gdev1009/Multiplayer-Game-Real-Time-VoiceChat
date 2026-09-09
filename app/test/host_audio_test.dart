@@ -231,5 +231,32 @@ void main() {
       expect(s.isOver, isTrue);
       expect(HostAudio.cuesForTransition(prev, s), contains(SoundCue.winner));
     });
+
+    // Ronna (Sep 2026): "at the last part of the second half it starts to jump
+    // a little. It will start with a clue. And then jump and say that is
+    // correct without anyone guessing." A late server read that arrived after
+    // a fresher one rewound the board onto the previous, already-scored word,
+    // and its `guessed` outcome read as brand new.
+    test('a state that steps back a word is silent', () {
+      final s0 = start();
+      final clued = MatchEngine.submitClue(s0, 'Petals');
+      final scored = MatchEngine.submitGuess(clued, 'Flower');
+      final dealt = MatchEngine.nextWord(scored);
+      expect(dealt.wordIndex, greaterThan(scored.wordIndex));
+      // The stale row lands after the next word is already on the board.
+      expect(HostAudio.cuesForTransition(dealt, scored), isEmpty);
+    });
+
+    test('an outcome only speaks on the beat the word was decided', () {
+      final s0 = start();
+      final clued = MatchEngine.submitClue(s0, 'Petals');
+      // A live turn carrying a stale outcome flag must not announce a guess
+      // nobody made — a decided word always sits on the resolved beat.
+      final live = clued.copyWith(lastOutcome: WordOutcome.guessed);
+      expect(live.isResolved, isFalse);
+      final cues = HostAudio.cuesForTransition(clued, live);
+      expect(cues, isNot(contains(SoundCue.correct)));
+      expect(cues, isNot(contains(SoundCue.reveal)));
+    });
   });
 }

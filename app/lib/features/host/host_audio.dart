@@ -186,6 +186,11 @@ class HostAudio {
       return const [SoundCue.gameStart];
     }
 
+    // A match only moves forward. A state that steps back a word is a late
+    // read that overtook a fresher one, and replaying its outcome makes Guy
+    // call a word correct that was already scored and moved on from.
+    if (next.wordIndex < prev.wordIndex && !prev.isOver) return const [];
+
     final cues = <SoundCue>[];
 
     // Winner fanfare — fire once when the game ends.
@@ -200,9 +205,12 @@ class HostAudio {
       return cues;
     }
 
-    // Word outcomes — a correct guess, a miss/steal, or a reveal.
+    // Word outcomes — a correct guess, a miss/steal, or a reveal. A decided
+    // word always sits on the resolved beat, so requiring it keeps a stray
+    // outcome flag on a live turn from announcing a guess nobody made.
     if (next.lastOutcome == WordOutcome.guessed &&
-        prev.lastOutcome != WordOutcome.guessed) {
+        prev.lastOutcome != WordOutcome.guessed &&
+        next.isResolved) {
       // Last word of the match: skip the mid-game "correct" line — Guy's
       // wrap-up (SoundCue.winner) carries the whole finale once.
       final lastWord = next.wordIndex >= next.config.totalWords - 1;
@@ -213,7 +221,8 @@ class HostAudio {
         prev.lastOutcome != WordOutcome.wrong) {
       cues.add(SoundCue.steal);
     } else if (next.lastOutcome == WordOutcome.revealed &&
-        prev.lastOutcome != WordOutcome.revealed) {
+        prev.lastOutcome != WordOutcome.revealed &&
+        next.isResolved) {
       cues.add(SoundCue.reveal);
     }
 

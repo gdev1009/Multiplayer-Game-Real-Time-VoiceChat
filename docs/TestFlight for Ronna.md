@@ -1,6 +1,8 @@
 # TestFlight — Match Word (for Ronna)
 
-**Status (Aug 13, 2026):** The latest build is **already uploaded** to App Store Connect and Apple has **finished processing** it. Codemagic’s red “failed” step only means it could not auto-submit for **external** beta review — because TestFlight contact fields are still empty. That does **not** undo the upload.
+**Status (Sep 9, 2026):** Build **102** is the current build. Testers must see `Build 102` in the corner of the app — anything lower is a stale install.
+
+**Goal for Thursday:** a **public TestFlight link** Ronna can text to her friends, so nobody has to be added by email one at a time. That link needs Apple's Beta App Review first — see [Part C](#part-c--public-testflight-link-share-one-url-with-anyone). Start it as early as possible: review is usually same-day but can take 24–48 hours. **Part B (internal testers) works immediately and needs no review** — that is the safe fallback for Thursday.
 
 | Item | Value |
 |------|--------|
@@ -96,18 +98,55 @@ Internal testing is for people on your **App Store Connect** team. It does **not
 
 ---
 
-## Part C — External testers (friends / players outside your team)
+## Part C — Public TestFlight link (share one URL with anyone)
 
-Use this when you want people who are **not** on your App Store Connect team.
+This is the "just send me a link" option: one URL, up to 10,000 testers, no
+email addresses needed. Apple calls it a **public link** on an **external**
+group, and it is the only TestFlight link that can be shared freely.
 
-1. Complete **Part A** (Test Information) if you have not already.
-2. TestFlight → **External Testing** → create a group (e.g. **Friends**).
-3. Add the latest build to that group.
-4. Submit for **Beta App Review** when Apple asks (this is the step Codemagic could not finish automatically).
-5. After Apple approves (often same day to a couple of days), add emails or share a **public link**.
-6. Testers install via the TestFlight invite.
+**It requires Apple's Beta App Review.** Internal testing (Part B) does not.
+So do Part B first as the Thursday fallback, and run Part C alongside it.
 
-Until Beta App Review is approved, stick with **Internal** testing (Part B).
+### C1 — Create the external group and attach the build
+
+1. Complete **Part A** first — review is rejected without the contact fields.
+2. Go to https://appstoreconnect.apple.com/apps/6800935274/testflight/groups
+3. Click **+** next to **External Testing** → name the group **Match Word Testers**.
+4. In the group, open the **Builds** tab → **+** → pick **1.0.0 (102)**.
+5. Apple asks **"What to Test"** — paste the notes from `docs/Store Release Notes.md`, or:
+   > Play a full game with friends. Check that the stand-ins guess sensibly, that the second half does not skip ahead, and that Guy Smiley's sign-off is clear.
+6. Answer the **export compliance** question: the app uses encryption **only for HTTPS**, which is exempt.
+7. Click **Submit for Review**.
+
+### C2 — Turn the public link on
+
+Once the build shows **Approved** (email from Apple; usually same day):
+
+1. Same group → **Testers** tab → **Enable Public Link**.
+2. Optionally set a tester limit (leave it high — 10,000 is the max).
+3. Copy the URL. It looks like `https://testflight.apple.com/join/XXXXXXXX`.
+4. Text or email that one URL to everyone. They tap it, install **TestFlight**
+   from the App Store if they do not have it, then tap **Install** for Match Word.
+
+**Paste the link back into this file** under Part E so there is one place to find it.
+
+### C3 — Keeping the link on the current build
+
+A public link always serves whatever build is attached to that group. Every new
+Codemagic upload has to be added to the group, or friends keep installing the old
+one — this is exactly how "Build 6" happened before.
+
+To make Codemagic do it automatically, uncomment `beta_groups` in `codemagic.yaml`
+under `publishing → app_store_connect` **once the group exists**, with the name
+spelled exactly as in App Store Connect:
+
+```yaml
+beta_groups:
+  - Match Word Testers
+```
+
+A name that does not match an existing group fails the publish step (the build
+still uploads), so only enable it after C1.
 
 ---
 
@@ -127,12 +166,52 @@ What still needs a human in App Store Connect (you):
 
 ## Part E — Quick checklist
 
+**Public link:** _paste the `https://testflight.apple.com/join/…` URL here once Part C2 is done._
+
 - [ ] Open https://appstoreconnect.apple.com/apps/6800935274/testflight/test-info  
 - [ ] Save Feedback Email + Beta Review name / phone / email  
 - [ ] Add your iPhone Apple ID as an **Internal** tester  
-- [ ] Enable the latest **Ready to Test** build on that group  
+- [ ] Enable build **1.0.0 (102)** on that group  
 - [ ] Install **TestFlight** on iPhone → install **Match Word**  
-- [ ] Play a short session and note anything to change  
+- [ ] Confirm the corner of the app reads **Build 102**  
+- [ ] Create the **Match Word Testers** external group and **Submit for Review** (Part C1)  
+- [ ] When approved: **Enable Public Link** and paste it above (Part C2)  
+
+---
+
+## Part F — Answers to the other Thursday questions
+
+**Which build is live?** Build **102**. The app prints its own build number in the
+screen corner, so anyone unsure can read it off their phone. TestFlight's build
+number now comes from `pubspec.yaml`, not Codemagic's own counter — that counter
+restarting is what showed "Build 6" for build 84.
+
+**Will the paywall lock anyone out?** No. Play is not gated: `TrialPolicy.enforcePaywall`
+is `false`, so an expired trial still plays every screen. Nobody needs comping for
+Thursday. (The Subscribe screen is still reachable, but "Keep Playing" exits it.)
+
+**How do we all get into the same game?** With the **4-digit game code**:
+
+1. One person taps **Enter the Studio** (or **Upcoming Games** → start a game).
+   Their lobby shows **Your game code** with Share and Copy buttons.
+2. Everyone else taps **Join with a Code**, types those 4 digits, and taps
+   **See the Game**.
+3. The preview screen shows all four seats. **Tap the seat you want** —
+   that is how you pick your team — then confirm.
+
+Seats map to teams like this, so pick with a partner in mind:
+
+| Seat | Team | Role |
+|------|------|------|
+| 1 | A | A1 |
+| 2 | B | B1 |
+| 3 | A | A2 |
+| 4 | B | B2 |
+
+Seats 1 and 3 are Team A; seats 2 and 4 are Team B. Any seat left empty is filled
+by a stand-in. Tapping **Join** straight from the open-games list skips the seat
+picker and drops you in the first free seat — use **Join with a Code** instead when
+you care which team you land on.
 
 ---
 

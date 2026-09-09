@@ -402,6 +402,49 @@ class ClueBank {
     ];
   }
 
+  /// Clue → the answers it points at, and clue → the family those answers sit
+  /// in. Both read the same table the clue-givers draw from, so a stand-in can
+  /// answer *the clue it just heard* instead of a word tied only to the secret.
+  ///
+  /// Ronna (Sep 2026): "the clue might be pipe and they will say cake". A miss
+  /// used to be picked from the secret's family alone, so it never had to have
+  /// anything to do with the clue that had just been given.
+  static final Map<String, List<String>> _answersByClue = () {
+    final out = <String, List<String>>{};
+    for (final family in byFamily.values) {
+      for (final entry in family.entries) {
+        final answer = entry.key[0].toUpperCase() + entry.key.substring(1);
+        for (final clue in entry.value) {
+          (out[_key(clue)] ??= <String>[]).add(answer);
+        }
+      }
+    }
+    return out;
+  }();
+
+  static final Map<String, String> _familyByClue = () {
+    final out = <String, String>{};
+    for (final entry in byFamily.entries) {
+      for (final clues in entry.value.values) {
+        for (final clue in clues) {
+          out.putIfAbsent(_key(clue), () => entry.key);
+        }
+      }
+    }
+    return out;
+  }();
+
+  /// The answers [clue] points at, in display form.
+  static List<String> answersForClue(String clue) =>
+      _answersByClue[_key(clue)] ?? const [];
+
+  /// Every answer in the family [clue] belongs to, in display form.
+  static List<String> familyForClue(String clue) {
+    final family = byFamily[_familyByClue[_key(clue)]];
+    if (family == null) return const [];
+    return [for (final w in family.keys) w[0].toUpperCase() + w.substring(1)];
+  }
+
   /// Returns [count] distinct words in random order.
   static List<String> deal(int count, {Random? random}) {
     final pool = List<String>.of(words)..shuffle(random ?? Random());

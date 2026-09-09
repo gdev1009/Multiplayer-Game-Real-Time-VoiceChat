@@ -447,9 +447,18 @@ class GameplayController extends ChangeNotifier {
     // row at or after the last one we applied. This stops a delayed realtime
     // UPDATE from wiping a freshly earned score back to zero.
     if (row.updatedAt.isBefore(_lastAppliedAt)) return;
-    _lastAppliedAt = row.updatedAt;
 
     final prior = _state;
+    // A match only ever moves forward. A row that rewinds the board is a late
+    // read that overtook a fresher one; replaying it re-fires Guy's "correct"
+    // line on a word already scored and jumps the stage back a beat (Ronna,
+    // Sep 2026: "it will start with a clue, and then jump and say that is
+    // correct without anyone guessing").
+    if (prior != null && !prior.isOver && row.wordIndex < prior.wordIndex) {
+      return;
+    }
+    _lastAppliedAt = row.updatedAt;
+
     final need = prior?.config.totalWords ?? const MatchConfig().totalWords;
     final wordChanged = prior != null && prior.wordIndex != row.wordIndex;
     if (forceWordsReload || wordChanged || _words.length < need) {
@@ -531,11 +540,10 @@ class GameplayController extends ChangeNotifier {
       if (words.length >= need) {
         _words = words;
         final row = await service.loadState(gameId);
-        if (row != null) {
-          _lastAppliedAt =
-              DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
-          _applyServerState(row, names);
-        }
+        // Never clear [_lastAppliedAt] to force this row in: a word reload is
+        // kicked off *while* the match is advancing, so this read is often the
+        // older of the two in flight.
+        if (row != null) _applyServerState(row, names);
       }
     } catch (_) {
       // Ignore; the periodic poll will try again.
@@ -765,10 +773,22 @@ class GameplayController extends ChangeNotifier {
       _reloadWords(_names);
       return;
     }
+    // The fetch above is a round-trip: the match may have moved on while it was
+    // in flight. Writing this word into the new index would corrupt the deal,
+    // and cluing / guessing it would answer the previous word — which is how a
+    // stand-in ended up saying "cake" to the clue "pipes".
+    if ((_state?.wordIndex ?? cur.wordIndex) != cur.wordIndex) {
+      _maybeDriveComputer();
+      return;
+    }
     _patchSecret(cur.wordIndex, secret);
     notifyListeners();
     final latest = _state;
-    if (latest == null || !latest.isTurnActive) return;
+    if (latest == null ||
+        !latest.isTurnActive ||
+        latest.wordIndex != cur.wordIndex) {
+      return;
+    }
     if (latest.step == TurnStep.awaitingClue) {
       // Vary by team and exchange, and skip clues already spent on this word,
       // so a steal never hands the other side the clue it just heard.
@@ -786,6 +806,8 @@ class GameplayController extends ChangeNotifier {
         AiPlayer.guessFor(
           secret,
           seed: latest.wordIndex * 31 + latest.exchangeCount,
+          // Answer the clue on the board, not just the word behind it.
+          clue: latest.pendingClue ?? '',
         ),
       );
     }
@@ -955,10 +977,9 @@ class GameplayController extends ChangeNotifier {
       }
       final row = await service.loadState(gameId);
       final plays = await service.loadPlays(gameId);
+      // An equal timestamp is already accepted, so the grade lands without
+      // reopening the door to a row older than the one on screen.
       if (row != null) {
-        // Allow this fresh row even if timestamps are equal.
-        _lastAppliedAt =
-            DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
         _applyServerState(row, previous.names, feed: plays);
       }
     });
@@ -967,8 +988,6 @@ class GameplayController extends ChangeNotifier {
         final row = await service.loadState(gameId);
         final plays = await service.loadPlays(gameId);
         if (row != null) {
-          _lastAppliedAt =
-              DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
           _applyServerState(row, previous.names, feed: plays);
         } else {
           _state = previous;

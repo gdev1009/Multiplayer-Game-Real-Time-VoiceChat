@@ -131,6 +131,50 @@ void main() {
       expect(misses, greaterThan(0), reason: 'expected some misses to check');
     });
 
+    // Ronna (Sep 2026): "the clue might be pipe and they will say cake".
+    // A miss picked from the secret's family alone never had to have anything
+    // to do with the clue on the board — and had nothing to do with it at all
+    // whenever the secret the seat held had drifted from the word in play.
+    test('a wrong guess answers the clue that was given', () {
+      // "Pipes" is the bank's clue for Plumber, a word in the jobs family.
+      final jobs = {
+        for (final w in ClueBank.familyForClue('Pipes')) w.toLowerCase(),
+      };
+      expect(jobs, contains('plumber'));
+      var misses = 0;
+      for (var seed = 0; seed < 200; seed++) {
+        // The secret is deliberately from a *different* family, standing in
+        // for a seat whose cached word has drifted.
+        final guess =
+            AiPlayer.guessFor('cake', seed: seed, clue: 'Pipes').toLowerCase();
+        if (guess == 'cake') continue;
+        misses++;
+        expect(jobs, contains(guess), reason: 'off-clue miss "$guess"');
+      }
+      expect(misses, greaterThan(0), reason: 'expected some misses to check');
+    });
+
+    test('a wrong guess never echoes the clue back (a foul)', () {
+      for (var seed = 0; seed < 200; seed++) {
+        final guess =
+            AiPlayer.guessFor('eagle', seed: seed, clue: 'Talons');
+        expect(guess.toLowerCase(), isNot('talons'));
+      }
+    });
+
+    test('an unknown clue still falls back to the secret family', () {
+      final siblings = {
+        for (final s in ClueBank.siblingsOf('garden')) s.toLowerCase(),
+      };
+      for (var seed = 0; seed < 100; seed++) {
+        final guess =
+            AiPlayer.guessFor('garden', seed: seed, clue: 'qqzzxw')
+                .toLowerCase();
+        if (guess == 'garden') continue;
+        expect(siblings, contains(guess));
+      }
+    });
+
     test('lands the word about one time in five (beatable stand-ins)', () {
       var correct = 0;
       const trials = 300;

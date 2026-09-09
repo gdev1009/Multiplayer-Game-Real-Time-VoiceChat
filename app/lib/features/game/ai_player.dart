@@ -82,7 +82,10 @@ class AiPlayer {
   ///
   /// It is given the [secretWord] only because it fills a seat (by design); the
   /// deliberate misses are what keep it fair rather than unbeatable.
-  static String guessFor(String secretWord, {int seed = 0}) {
+  ///
+  /// [clue] is the clue that was just given for this word. A miss is answered
+  /// *to that clue*, so a stand-in reads as someone who was listening.
+  static String guessFor(String secretWord, {int seed = 0, String clue = ''}) {
     final key = secretWord.trim().toLowerCase();
     if (key.isEmpty) return secretWord;
     // A cheap, stable hash of the word + turn seed → a 0..1 roll.
@@ -92,7 +95,7 @@ class AiPlayer {
     }
     final roll = (h % 1000) / 1000.0;
     if (roll < _guessAccuracy) return secretWord; // confident, correct guess
-    return _plausibleMiss(key, h); // an honest wrong answer
+    return _plausibleMiss(key, h, clue); // an honest wrong answer
   }
 
   /// A believable wrong guess, picked deterministically from [h] so the same
@@ -102,21 +105,62 @@ class AiPlayer {
   /// played". A miss used to come from [_missPool] regardless of the word, so
   /// the clue "Teapot" could be answered "Bicycle".
   ///
-  /// A miss is now another answer from the same [ClueBank] family, which is both
-  /// on-topic and a legal thing to say. Guessing one of the word's own *clues*
-  /// would be a foul, so those are no longer used.
-  static String _plausibleMiss(String key, int h) {
-    final siblings = ClueBank.siblingsOf(key);
-    if (siblings.isNotEmpty) return siblings[h % siblings.length];
-    final related = <String>[
-      ...?_semanticClues[key],
-      ...?_hints[key],
-    ].where((w) => w.trim().toLowerCase() != key).toList();
-    if (related.isNotEmpty) return related[h % related.length];
-    final pool = _missPool.where((w) => w.toLowerCase() != key).toList();
-    if (pool.isEmpty) return 'Hmm';
-    return pool[h % pool.length];
+  /// Ronna (Sep 2026): "the clue might be pipe and they will say cake". Picking
+  /// from the *secret's* family fixed the first complaint but not this one — a
+  /// miss was still allowed to ignore the clue on the board, and it always did
+  /// when the secret the seat held had drifted from the word in play. So the
+  /// clue is answered first: another answer that same clue points at, then the
+  /// clue's own family, then (only for a clue nothing knows) the secret's
+  /// family. Guessing the clue itself would be a foul, so it is excluded.
+  static String _plausibleMiss(String key, int h, String clue) {
+    String? pick(List<String> from) {
+      final spoken = clue.trim().toLowerCase();
+      final pool = <String>[];
+      for (final w in from) {
+        final lower = w.trim().toLowerCase();
+        if (lower.isEmpty || lower == key || lower == spoken) continue;
+        if (pool.any((p) => p.toLowerCase() == lower)) continue;
+        pool.add(w);
+      }
+      return pool.isEmpty ? null : pool[h % pool.length];
+    }
+
+    if (clue.trim().isNotEmpty) {
+      final onClue = pick(ClueBank.answersForClue(clue)) ??
+          pick(ClueBank.familyForClue(clue)) ??
+          pick(_answersByHint[clue.trim().toLowerCase()] ?? const []);
+      if (onClue != null) return onClue;
+    }
+    final siblings = pick(ClueBank.siblingsOf(key));
+    if (siblings != null) return siblings;
+    final related = pick(<String>[...?_semanticClues[key], ...?_hints[key]]);
+    if (related != null) return related;
+    return pick(_missPool) ?? 'Hmm';
   }
+
+  /// Reverse index of the legacy clue tables: clue → the words it hints at, in
+  /// display form. It catches a clue a human typed that the curated bank does
+  /// not carry, so a stand-in can still answer on topic.
+  ///
+  /// Buckets wider than [_hintFanout] are dropped. Those are the category
+  /// placeholders the curated bank exists to replace — "Spot" alone stood for
+  /// 145 answers, so answering it would be the random guess all over again.
+  static const int _hintFanout = 6;
+
+  static final Map<String, List<String>> _answersByHint = () {
+    final out = <String, List<String>>{};
+    for (final table in [_semanticClues, _hints]) {
+      for (final entry in table.entries) {
+        final answer = entry.key[0].toUpperCase() + entry.key.substring(1);
+        for (final clue in entry.value) {
+          final bucket = out[clue.trim().toLowerCase()] ??= <String>[];
+          if (!bucket.contains(answer)) bucket.add(answer);
+        }
+      }
+    }
+    out.removeWhere((_, answers) => answers.length > _hintFanout);
+    return out;
+  }();
 
   /// A small pool of common, on-theme words used for a studio player's
   /// occasional wrong guess so a miss reads as a real person thinking aloud.

@@ -173,10 +173,13 @@ workflows:
         submit_to_app_store: false
         # Hand each build straight to the tester group. Without this, an
         # external group has to be added by hand in App Store Connect and
-        # testers keep whatever build they already had.
+        # testers keep whatever build they already had — which is what a
+        # public TestFlight link serves, so it goes stale silently.
         #
-        # Uncomment and set the EXACT group name from App Store Connect →
-        # TestFlight → Testers and Groups (a wrong name fails this step):
+        # Uncomment once the group exists (docs/TestFlight for Ronna.md, Part
+        # C). The name must match App Store Connect → TestFlight → Testers and
+        # Groups exactly; a wrong name fails this step, though the build still
+        # uploads:
         # beta_groups:
         #   - Match Word Testers
 
