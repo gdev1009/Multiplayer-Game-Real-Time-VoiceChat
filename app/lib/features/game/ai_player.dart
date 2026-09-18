@@ -9,8 +9,8 @@ import 'clue_bank.dart';
 /// [GameplayController]) and a studio player **never disconnects**. /// tunes them to a **moderate difficulty** so a table feels like real people
 /// rather than a perfect machine:
 ///  * a clue-giver offers a gentle, varied one-word hint (never the word), and
-///  * a guesser is *usually* right but sometimes needs a second try or misses,
-///    so steals, reveals and varied scores happen naturally.
+  ///  * a guesser is *usually* right (about 9 in 10) and when they miss, the
+  ///    guess still answers the clue on the board,
 ///
 /// All behaviour is **deterministic for a given turn** (seeded by the word plus
 /// the exchange count) so the single host driving the seat produces a stable
@@ -18,8 +18,9 @@ import 'clue_bank.dart';
 class AiPlayer {
   const AiPlayer._();
 
-  /// Ronna (Sep 2026): stand-ins should win ~20% of guesses — beatable.
-  static const double _guessAccuracy = 0.2;
+  /// Ronna (Sep 2026 playtest): stand-ins should only miss about 10% of
+  /// the time, and a miss must still be close to the clue on the board.
+  static const double _guessAccuracy = 0.9;
 
   /// A one-word clue for [secretWord]. Uses a hand-picked hint for the words in
   /// the studio bank; falls back to a friendly generic nudge otherwise. The
@@ -378,9 +379,25 @@ class AiPlayer {
   static bool _isBannedClue(String clue, String secret) {
     final c = clue.trim().toLowerCase();
     final s = secret.trim().toLowerCase();
-    if (c.isEmpty || c == s) return true;
+    if (c.isEmpty || s.isEmpty || c == s) return true;
     if (c.startsWith('starts') || c.startsWith('ends')) return true;
     if (c.contains('letter')) return true;
+    // Spoken "pass" is a skip command, never a legal stand-in clue.
+    if (c == 'pass' || c == 'passed' || c == 'skip' || c == 'time') return true;
+    // Ronna (Sep 2026): the avatar must not use any part of the secret word.
+    if (_usesPartOfWord(c, s)) return true;
+    return false;
+  }
+
+  /// True when the clue shares a stem with the secret (butterfly / butter,
+  /// teapot / tea, rainbow / rain). Short 1–2 letter overlaps are ignored.
+  static bool _usesPartOfWord(String clue, String secret) {
+    if (clue.length >= 3 && secret.contains(clue)) return true;
+    if (secret.length >= 3 && clue.contains(secret)) return true;
+    if (clue.length >= 3 && secret.length >= 3) {
+      if (secret.startsWith(clue) || clue.startsWith(secret)) return true;
+      if (secret.endsWith(clue) || clue.endsWith(secret)) return true;
+    }
     return false;
   }
 

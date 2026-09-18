@@ -34,11 +34,12 @@ enum WordOutcome { none, guessed, revealed, wrong }
 
 /// Immutable tuning for a match.
 ///
-/// Defaults aim for a senior-friendly full game of about **20–25 minutes**
-/// (Ronna Jul 2026): 8 words per half × 2 halves, with generous guess time.
+/// Defaults aim for a senior-friendly full game of about **12–15 minutes**
+/// (Ronna Sep 2026 playtest: 8 rounds felt too long; 5 is better): 5 words
+/// per half × 2 halves, with generous guess time.
 class MatchConfig {
   const MatchConfig({
-    this.wordsPerHalf = 8,
+    this.wordsPerHalf = 5,
     this.maxExchanges = 5,
     this.wordValue = 5,
     this.guessSeconds = 18,
@@ -47,7 +48,7 @@ class MatchConfig {
         assert(wordValue > 0),
         assert(guessSeconds > 0);
 
-  /// Number of secret words played in each half (~20–25 min full match).
+  /// Number of secret words played in each half (5 × 2 = 10 words).
   final int wordsPerHalf;
 
   /// Exchanges (clue + guess) allowed on a word before it auto-reveals.
@@ -191,12 +192,33 @@ class MatchState {
       (role == MatchEngine.clueGiverRole('A', phase) ||
           role == MatchEngine.clueGiverRole('B', phase));
 
-  /// Every clue already given on the word in play. [feed] is cleared per word,
-  /// so this is exactly the current word's clues.
+  /// Every clue already given on the word in play. Pass / TIME tokens are not
+  /// real clues, so they are left out of the "already used" list.
   List<String> get usedClues => [
         for (final e in feed)
-          if (e.kind == PlayKind.clue && e.wordIndex == wordIndex) e.text,
+          if (e.kind == PlayKind.clue &&
+              e.wordIndex == wordIndex &&
+              !MatchEngine.isPassToken(e.text) &&
+              MatchEngine.normalize(e.text) != 'time')
+            e.text,
       ];
+
+  /// Latest guess bubble for [role] on the word in play.
+  ///
+  /// Kept visible through the resolved celebration so a human guess is not
+  /// wiped the instant it scores (Ronna Sep 2026: second-half guesses vanished
+  /// and the stand-in's old miss stayed on screen).
+  PlayEntry? latestSeatGuess(String role) {
+    if (isHalftime || isOver) return null;
+    for (var i = feed.length - 1; i >= 0; i--) {
+      final e = feed[i];
+      if (e.wordIndex != wordIndex) continue;
+      if (e.role != role) continue;
+      if (e.kind != PlayKind.guess) continue;
+      return e;
+    }
+    return null;
+  }
 
   /// True when [clue] has already been given on this word. Ronna (Aug 2026):
   /// after a steal the other team was handed back the same clue, so nobody had
@@ -213,7 +235,7 @@ class MatchState {
     return scoreA > scoreB ? 'A' : 'B';
   }
 
-  /// Human-friendly word counter, e.g. "Word 3 of 8".
+  /// Human-friendly word counter, e.g. "Word 3 of 10".
   String get wordLabel {
     final shown = (wordIndex + 1).clamp(1, config.totalWords);
     return 'Word $shown of ${config.totalWords}';
@@ -301,6 +323,12 @@ class MatchEngine {
       pendingClue.trim().isNotEmpty &&
       isCorrect(guess, pendingClue);
 
+  /// Spoken or typed pass — skip this clue / treat a guess as a miss.
+  static bool isPassToken(String text) {
+    final n = normalize(text);
+    return n == 'pass' || n == 'passed' || n == 'skip';
+  }
+
   /// Starts a new match. [words] must hold at least [MatchConfig.totalWords]
   /// entries; [names] maps each role (A1/A2/B1/B2) to a display name.
   static MatchState start({
@@ -338,6 +366,9 @@ class MatchEngine {
     }
     final text = clue.trim();
     if (text.isEmpty) return state;
+    if (isPassToken(text) || normalize(text) == 'time') {
+      return passClue(state, timedOut: normalize(text) == 'time');
+    }
 
     // A clue already spent on this word gives the next team nothing to solve.
     if (state.isClueRepeat(text)) {
@@ -364,6 +395,32 @@ class MatchEngine {
     );
   }
 
+  /// Clue-giver skips this try (Pass button, spoken "pass", or the clock).
+  /// Burns an exchange and hands the word to the other team, same as a miss.
+  static MatchState passClue(MatchState state, {bool timedOut = false}) {
+    if (!state.isTurnActive || state.step != TurnStep.awaitingClue) {
+      return state;
+    }
+    final entry = PlayEntry(
+      kind: PlayKind.clue,
+      team: state.cluingTeam,
+      role: state.clueGiverRole,
+      playerName: state.clueGiverName,
+      text: timedOut ? 'TIME' : 'PASS',
+      wordIndex: state.wordIndex,
+    );
+    return _burnExchange(
+      state,
+      [...state.feed, entry],
+      timedOut: timedOut,
+      passed: !timedOut,
+    );
+  }
+
+  /// Clue clock expired — same steal / reveal path as [passClue].
+  static MatchState timeoutClue(MatchState state) =>
+      passClue(state, timedOut: true);
+
   /// Wrong-guess steal path when the guess clock expires (no typed guess).
   static MatchState timeoutGuess(MatchState state) {
     if (!state.isTurnActive || state.step != TurnStep.awaitingGuess) {
@@ -389,28 +446,7 @@ class MatchEngine {
               correct: false,
             ),
           ];
-    final used = state.exchangeCount + 1;
-    if (used >= state.config.maxExchanges) {
-      return state.copyWith(
-        exchangeCount: used,
-        step: TurnStep.resolved,
-        pendingClue: null,
-        feed: feed,
-        lastOutcome: WordOutcome.revealed,
-        hostLine: 'Time’s up! The word was ${state.secretWord}. No points.',
-      );
-    }
-    final nextTeam = state.cluingTeam == 'A' ? 'B' : 'A';
-    return state.copyWith(
-      cluingTeam: nextTeam,
-      step: TurnStep.awaitingClue,
-      exchangeCount: used,
-      pendingClue: null,
-      feed: feed,
-      lastOutcome: WordOutcome.wrong,
-      hostLine:
-          'Time’s up! A steal! ${_clueLine(nextTeam, state.phase, state.names)}',
-    );
+    return _burnExchange(state, feed, timedOut: true);
   }
 
   /// The on-the-clock guesser submits a guess. Resolves the word (score / steal
@@ -422,9 +458,11 @@ class MatchEngine {
     final text = guess.trim();
     if (text.isEmpty) return state;
 
+    // Pass / skip is always a miss — never scores even if the secret is "pass".
+    final passed = isPassToken(text);
     // Repeating the clue is a foul — never scores, burns an exchange / steal.
-    final foul = isClueFoul(text, state.pendingClue);
-    final correct = !foul && isCorrect(text, state.secretWord);
+    final foul = !passed && isClueFoul(text, state.pendingClue);
+    final correct = !passed && !foul && isCorrect(text, state.secretWord);
     final entry = PlayEntry(
       kind: PlayKind.guess,
       team: state.cluingTeam,
@@ -472,7 +510,9 @@ class MatchEngine {
     final stealLine = foul
         ? 'Foul! You can’t guess the clue. Steal! '
             '${_clueLine(nextTeam, state.phase, state.names)}'
-        : 'A steal! ${_clueLine(nextTeam, state.phase, state.names)}';
+        : passed
+            ? 'Passed! A steal! ${_clueLine(nextTeam, state.phase, state.names)}'
+            : 'A steal! ${_clueLine(nextTeam, state.phase, state.names)}';
     return state.copyWith(
       cluingTeam: nextTeam,
       step: TurnStep.awaitingClue,
@@ -481,6 +521,49 @@ class MatchEngine {
       feed: feed,
       lastOutcome: WordOutcome.wrong,
       hostLine: stealLine,
+    );
+  }
+
+  /// Spend one exchange: reveal the word, or steal to the other team.
+  static MatchState _burnExchange(
+    MatchState state,
+    List<PlayEntry> feed, {
+    bool timedOut = false,
+    bool passed = false,
+  }) {
+    final used = state.exchangeCount + 1;
+    if (used >= state.config.maxExchanges) {
+      final prefix = passed
+          ? 'Passed!'
+          : timedOut
+              ? 'Time’s up!'
+              : 'Time’s up!';
+      return state.copyWith(
+        exchangeCount: used,
+        step: TurnStep.resolved,
+        pendingClue: null,
+        feed: feed,
+        lastOutcome: WordOutcome.revealed,
+        hostLine: '$prefix The word was ${state.secretWord}. No points.',
+      );
+    }
+    final nextTeam = state.cluingTeam == 'A' ? 'B' : 'A';
+    final prefix = passed
+        ? 'Passed!'
+        : timedOut
+            ? 'Time’s up!'
+            : 'A steal!';
+    final stealBit = (passed || timedOut) ? ' A steal!' : '';
+    return state.copyWith(
+      cluingTeam: nextTeam,
+      step: TurnStep.awaitingClue,
+      exchangeCount: used,
+      pendingClue: null,
+      feed: feed,
+      lastOutcome: WordOutcome.wrong,
+      hostLine:
+          '$prefix$stealBit ${_clueLine(nextTeam, state.phase, state.names)}'
+              .replaceFirst('A steal! A steal!', 'A steal!'),
     );
   }
 

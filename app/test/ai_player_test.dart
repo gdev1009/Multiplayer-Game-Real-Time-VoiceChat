@@ -59,6 +59,44 @@ void main() {
       expect(next.toLowerCase(), isNot(first.toLowerCase()));
     });
 
+    test('never uses part of the secret word in the clue', () {
+      for (final word in [
+        'butterfly',
+        'teapot',
+        'rainbow',
+        'snowman',
+        'football',
+        'sun',
+        'tea',
+      ]) {
+        for (var v = 0; v < 8; v++) {
+          final clue = AiPlayer.clueFor(word, variant: v).toLowerCase();
+          final secret = word.toLowerCase();
+          expect(clue, isNot(equals(secret)), reason: '$word → $clue');
+          if (secret.length >= 3) {
+            expect(clue.contains(secret), isFalse, reason: '$word in $clue');
+          }
+          if (clue.length >= 3) {
+            expect(secret.contains(clue), isFalse, reason: '$clue in $word');
+          }
+        }
+      }
+    });
+
+    test('never clues with Pass / Time (those skip the turn)', () {
+      for (final word in WordBank.words.take(80).followedBy(const [
+        'Pink',
+        'approve',
+        'zzxqabc',
+      ])) {
+        for (var v = 0; v < 5; v++) {
+          final clue = AiPlayer.clueFor(word, variant: v).toLowerCase();
+          expect(clue, isNot(equals('pass')), reason: '$word → $clue');
+          expect(clue, isNot(equals('time')), reason: '$word → $clue');
+        }
+      }
+    });
+
     test('never uses Starts*/Ends*/LetterCount clues', () {
       for (final word in WordBank.words.take(80).followedBy(const [
         'Pink',
@@ -175,7 +213,7 @@ void main() {
       }
     });
 
-    test('lands the word about one time in five (beatable stand-ins)', () {
+    test('lands the word about nine times in ten (close stand-ins)', () {
       var correct = 0;
       const trials = 300;
       for (var seed = 0; seed < trials; seed++) {
@@ -185,8 +223,8 @@ void main() {
         }
       }
       final rate = correct / trials;
-      expect(rate, greaterThan(0.12));
-      expect(rate, lessThan(0.32));
+      expect(rate, greaterThan(0.82));
+      expect(rate, lessThan(0.98));
     });
 
     test('looksForSeats keeps hair/glasses/hat/outfit unique in a match', () {

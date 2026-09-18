@@ -139,22 +139,26 @@ class _TrophyPreview extends StatelessWidget {
                 ),
               ),
             ),
-          if (count > show.length)
+          if (count > 0)
             Positioned(
-              right: 0,
-              bottom: 0,
+              right: -4,
+              bottom: -4,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                 decoration: BoxDecoration(
                   color: AppColors.deepPurple,
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.white, width: 2),
                 ),
+                alignment: Alignment.center,
                 child: Text(
-                  '+${count - show.length}',
+                  '$count',
                   style: AppText.body.copyWith(
                     color: Colors.white,
                     fontSize: 16,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w900,
+                    height: 1.1,
                   ),
                 ),
               ),

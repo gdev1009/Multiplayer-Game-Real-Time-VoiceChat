@@ -1,7 +1,7 @@
 /// First-launch walkthrough copy (Ronna, Aug 2026).
 ///
 /// Skippable. Keep titles short; body can wrap. Facts must match the live game:
-/// 8 words per half × 2 halves, steal can go back and forth, trophy = wins.
+/// 5 words per half × 2 halves, steal can go back and forth, trophy = wins.
 class OnboardingCopy {
   OnboardingCopy._();
 
@@ -21,10 +21,12 @@ class OnboardingCopy {
       'Match Word is easy to learn — it plays a lot like a classic TV game show!\n\n'
       'It is played with 4 players, split into 2 teams of 2. '
       'One person is the clue-giver and one person is the guesser. You are a team.\n\n'
-      'Each game has two halves of 8 words (16 words in all). '
+      'Each game has two halves of 5 words (10 words in all). '
       'At halftime, roles switch — guessers become clue-givers, and clue-givers become guessers.\n\n'
       'Your clue-giver gives one-word clues, and you can type your answer or speak it '
       'into the microphone. Speak one word clearly, a little loudly, so the game can hear you.\n\n'
+      'If you cannot think of a clue, tap Pass — or say “pass” — and the other team gets a try. '
+      'Letting the timer run out does the same thing.\n\n'
       'If your team misses, the other team can steal — their clue-giver gives a new clue '
       'on the same word, and their guesser tries. That can go back and forth a few times.\n\n'
       'Giving your answer is timed. If you cannot answer in time, you will hear a buzzer '
@@ -39,7 +41,9 @@ class OnboardingCopy {
       'no matter how far apart you are!\n\n'
       'You can jump in and join a game, or arrange to play in the same game with a friend. '
       'Games have their own 4-digit code — just text a friend, “Want to play? Use 3536!” '
-      'and they can join you.';
+      'and they can join you.\n\n'
+      'To find your seat: tap Enter the Studio first, then Join with a Code, and type '
+      'the four numbers your friend shared. That puts you in your seat.';
 
   static const soloTitle = 'Playing Solo';
   static const soloBody =
@@ -59,7 +63,8 @@ class OnboardingCopy {
   static const trophiesTitle = 'Earning Points & Trophies';
   static const trophiesBody =
       'Every game you finish counts on your profile.\n\n'
-      'The trophy at sign-in shows how many games you have won. '
+      'The trophy at sign-in shows how many games you have won — you will see a number '
+      'on the trophy, starting at 1 for your first win. '
       'Tap the trophy to see your wins, ties, and games played. '
       'It updates by itself after each game.';
 

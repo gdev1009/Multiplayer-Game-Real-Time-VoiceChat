@@ -415,7 +415,7 @@ class GameplayController extends ChangeNotifier {
       (feed) {
         final s = _state;
         if (s != null) {
-          _state = s.copyWith(feed: feed);
+          _state = s.copyWith(feed: _feedForWord(feed, s.wordIndex));
           notifyListeners();
         }
       },
@@ -482,7 +482,7 @@ class GameplayController extends ChangeNotifier {
       scoreA: row.scoreA,
       scoreB: row.scoreB,
       pendingClue: row.pendingClue,
-      feed: feed ?? s?.feed ?? const [],
+      feed: _feedForWord(feed ?? s?.feed ?? const [], row.wordIndex),
       lastOutcome: row.lastOutcome,
       hostLine: row.hostLine,
     );
@@ -627,8 +627,8 @@ class GameplayController extends ChangeNotifier {
       return;
     }
 
-    // Human guess clock — always (even when there are no AI seats).
-    if (_scheduleHumanGuessTimeout(s)) return;
+    // Human clue / guess clock — always (even when there are no AI seats).
+    if (_scheduleHumanTurnTimeout(s)) return;
 
     // Otherwise nothing to drive unless a turn is active with an AI seat.
     if (!s.isTurnActive) {
@@ -685,40 +685,50 @@ class GameplayController extends ChangeNotifier {
     );
   }
 
-  /// Starts / keeps the human guess deadline. Returns true when this beat owns
-  /// the host timer (caller should not schedule AI on top of it).
+  /// Starts / keeps the human clue or guess deadline. Returns true when this
+  /// beat owns the host timer (caller should not schedule AI on top of it).
   ///
-  /// Flow: [guessSeconds] on the clock → calm "Time's up" hold (~6s) with the
-  /// same team still focused → then buzzer / steal / reveal.
-  bool _scheduleHumanGuessTimeout(MatchState s) {
-    if (s.step != TurnStep.awaitingGuess || !s.isTurnActive) {
+  /// Flow: [guessSeconds] on the clock → Pass / TIME for a clue, or the calm
+  /// "Time's up" hold then buzzer / steal / reveal for a guess.
+  bool _scheduleHumanTurnTimeout(MatchState s) {
+    if ((s.step != TurnStep.awaitingGuess &&
+            s.step != TurnStep.awaitingClue) ||
+        !s.isTurnActive) {
       _clearGuessClock();
       return false;
     }
     final role = onClockRole;
-    // AI guesser — no human clock.
+    // AI seat — no human clock.
     if (role != null && (_aiByRole[role] ?? false)) {
       _clearGuessClock();
       return false;
     }
 
-    // Phase 2: calm pause already in progress.
+    // Phase 2: calm pause already in progress (guess path only).
     if (_guessCalmPending) {
       return true;
     }
 
-    // Phase 1: open the window once per guess turn.
+    // Phase 1: open the window once per turn.
     _guessOpenedAt ??= DateTime.now();
     final fireAt =
         _guessOpenedAt!.add(Duration(seconds: s.config.guessSeconds));
     final remaining = fireAt.difference(DateTime.now());
     final beat =
-        'guessTimeout|${s.wordIndex}|${s.exchangeCount}|${s.cluingTeam}';
+        'turnTimeout|${s.step}|${s.wordIndex}|${s.exchangeCount}|${s.cluingTeam}';
     if (remaining <= Duration.zero) {
-      _beginGuessTimeoutCalm();
+      if (s.step == TurnStep.awaitingClue) {
+        timeoutClue();
+      } else {
+        _beginGuessTimeoutCalm();
+      }
       return true;
     }
-    _scheduleHostBeat(beat, remaining, _beginGuessTimeoutCalm);
+    _scheduleHostBeat(
+      beat,
+      remaining,
+      s.step == TurnStep.awaitingClue ? timeoutClue : _beginGuessTimeoutCalm,
+    );
     return true;
   }
 
@@ -899,6 +909,42 @@ class GameplayController extends ChangeNotifier {
       remote: (svc, id) => svc.submitClue(id, text),
     );
   }
+
+  /// Clue-giver taps Pass, or says "pass".
+  Future<void> passTurn() async {
+    final s = _state;
+    if (s == null || !s.isTurnActive) return;
+    _clearGuessClock();
+    if (s.step == TurnStep.awaitingClue) {
+      return submitClue('PASS');
+    }
+    if (s.step == TurnStep.awaitingGuess) {
+      return submitGuess('PASS');
+    }
+  }
+
+  /// Clue clock expired — same steal path as Pass, labeled TIME.
+  Future<void> timeoutClue() async {
+    final s = _state;
+    if (s == null || s.step != TurnStep.awaitingClue) return;
+    _clearGuessClock();
+    if (isLocal) {
+      return _act(
+        local: MatchEngine.timeoutClue,
+        remote: (_, __) async {},
+      );
+    }
+    // Online: host may pass the clock so a stalled clue never freezes play.
+    if (!_isHost && !isMyTurn) return;
+    await submitClue('PASS');
+  }
+
+  /// Plays on the current word only — drops leftover first-half bubbles so a
+  /// stand-in's old miss cannot sit on a seat while a human guesses.
+  List<PlayEntry> _feedForWord(List<PlayEntry> feed, int wordIndex) => [
+        for (final e in feed)
+          if (e.wordIndex == wordIndex) e,
+      ];
 
   /// Guess clock expired — buzzer path (wrong / steal / reveal).
   Future<void> timeoutGuess() async {

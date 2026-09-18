@@ -6,7 +6,7 @@ import 'package:match_word/features/host/host_audio.dart';
 /// transition fires — this is how the host "narrates" the game (Milestone 6).
 void main() {
   const names = {'A1': 'Sunny', 'A2': 'Walter', 'B1': 'Rosa', 'B2': 'Mabel'};
-  // 16 words (8 per half); teams alternate who opens (A on even indices, B on odd).
+  // 10 words (5 per half); teams alternate who opens (A on even indices, B on odd).
   final words = [
     'Flower', 'Slipper', 'Clock', 'Robin', 'Sandwich', 'Quilt',
     'Holiday', 'Garden', 'Teapot', 'Mirror', 'Apple', 'Honey',

@@ -67,7 +67,9 @@ class _UpcomingGamesScreenState extends State<UpcomingGamesScreen> {
           const SizedBox(height: AppSpacing.sm),
           const HostGreeting(
             message: 'Ready to play? Find a game, start your own, '
-                'or type a friend\'s code.',
+                'or join a friend.\n\n'
+                'To find your seat in a friend’s game: tap Enter the Studio first, '
+                'then type their four-digit code.',
           ),
           const SizedBox(height: AppSpacing.md),
           BigButton(

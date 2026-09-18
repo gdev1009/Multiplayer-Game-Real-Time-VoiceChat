@@ -362,8 +362,8 @@ class _CodeCard extends StatelessWidget {
   Future<void> _shareCode(BuildContext context) async {
     final box = context.findRenderObject() as RenderBox?;
     await Share.share(
-      'Join my Match Word game! Open Match Word, tap "Join with a Code", '
-      'and enter $code.',
+      'Join my Match Word game! Open Match Word, tap Enter the Studio, '
+      'then Join with a Code, and enter $code.',
       subject: 'Match Word game code: $code',
       sharePositionOrigin:
           box == null ? null : box.localToGlobal(Offset.zero) & box.size,

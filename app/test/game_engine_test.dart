@@ -359,6 +359,66 @@ void main() {
     });
   });
 
+  group('pass the clue', () {
+    test('Pass skips the clue and hands the word to the other team', () {
+      var s = _startGame();
+      expect(s.cluingTeam, 'A');
+      s = MatchEngine.submitClue(s, 'pass');
+      expect(s.cluingTeam, 'B');
+      expect(s.step, TurnStep.awaitingClue);
+      expect(s.lastOutcome, WordOutcome.wrong);
+      expect(s.feed.last.text, 'PASS');
+      expect(s.pendingClue, isNull);
+    });
+
+    test('spoken Pass on a guess is a miss, never a score', () {
+      var s = _startGame();
+      s = MatchEngine.submitClue(s, 'hint');
+      s = MatchEngine.submitGuess(s, 'PASS');
+      expect(s.lastOutcome, WordOutcome.wrong);
+      expect(s.cluingTeam, 'B');
+      expect(s.feed.last.correct, isFalse);
+    });
+
+    test('clue timeout matches Pass', () {
+      var s = _startGame();
+      final timed = MatchEngine.timeoutClue(s);
+      expect(timed.cluingTeam, 'B');
+      expect(timed.feed.last.text, 'TIME');
+    });
+
+    test('Pass is not stored as a spent clue', () {
+      var s = _startGame();
+      s = MatchEngine.submitClue(s, 'pass');
+      expect(s.usedClues, isEmpty);
+    });
+  });
+
+  group('seat guess bubbles stay through resolve', () {
+    test('a human guess remains on the seat after it scores', () {
+      var s = _startGame();
+      s = MatchEngine.submitClue(s, 'hint');
+      s = MatchEngine.submitGuess(s, s.secretWord);
+      expect(s.isResolved, isTrue);
+      final bubble = s.latestSeatGuess(s.guesserRole);
+      expect(bubble, isNotNull);
+      expect(bubble!.text, s.secretWord);
+      expect(bubble.correct, isTrue);
+    });
+
+    test('an earlier stand-in miss does not hide the human guess', () {
+      var s = _startGame();
+      s = MatchEngine.submitClue(s, 'hint');
+      s = MatchEngine.submitGuess(s, 'nope'); // A2 misses, steal to B
+      expect(s.cluingTeam, 'B');
+      s = MatchEngine.submitClue(s, 'other');
+      s = MatchEngine.submitGuess(s, s.secretWord); // B2 scores
+      expect(s.isResolved, isTrue);
+      expect(s.latestSeatGuess('A2')?.text, 'nope');
+      expect(s.latestSeatGuess('B2')?.text, s.secretWord);
+    });
+  });
+
   group('a timed-out guess', () {
     test('hands the word to the other team when exchanges remain', () {
       var s = _startGame();

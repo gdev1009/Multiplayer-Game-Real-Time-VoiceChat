@@ -38,10 +38,9 @@ class PlayerTrophyBadge extends StatelessWidget {
           onTap: () => showTrophyPointsPopup(context, room: room),
           borderRadius: BorderRadius.circular(16),
           child: Padding(
-            padding: const EdgeInsets.all(4),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.end,
+            padding: const EdgeInsets.fromLTRB(4, 4, 10, 8),
+            child: Stack(
+              clipBehavior: Clip.none,
               children: [
                 Container(
                   width: size,
@@ -69,8 +68,11 @@ class PlayerTrophyBadge extends StatelessWidget {
                           ),
                         ),
                 ),
-                const SizedBox(width: 6),
-                _WinCountChip(count: wins),
+                Positioned(
+                  right: -6,
+                  bottom: -6,
+                  child: _WinCountChip(count: wins),
+                ),
               ],
             ),
           ),
@@ -88,11 +90,11 @@ class _WinCountChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: AppColors.deepPurple,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white, width: 2),
         boxShadow: AppColors.tileShadow,
       ),
@@ -102,7 +104,7 @@ class _WinCountChip extends StatelessWidget {
         style: AppText.caption.copyWith(
           color: Colors.white,
           fontWeight: FontWeight.w900,
-          fontSize: 16,
+          fontSize: 18,
           height: 1.1,
         ),
       ),

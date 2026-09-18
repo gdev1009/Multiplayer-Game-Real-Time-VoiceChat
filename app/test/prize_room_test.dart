@@ -3,10 +3,11 @@ import 'package:match_word/models/prize.dart';
 
 void main() {
   group('PrizeRoom Phase-1 win trophies', () {
-    test('winTrophyCount matches gamesWon', () {
-      const room = PrizeRoom(gamesPlayed: 5, gamesWon: 3, items: []);
-      expect(room.winTrophyCount, 3);
-      expect(room.winCups().length, 3);
+    test('first win shows a numbered trophy of 1', () {
+      const room = PrizeRoom(gamesPlayed: 1, gamesWon: 1, items: []);
+      expect(room.winTrophyCount, 1);
+      expect(room.winCups().length, 1);
+      expect(room.signInTrophyLine, contains('1 trophy'));
     });
 
     test('winCups are capped for layout', () {

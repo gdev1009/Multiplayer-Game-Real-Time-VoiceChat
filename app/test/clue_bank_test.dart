@@ -19,7 +19,7 @@ void main() {
 
   group('every playable word can actually be clued', () {
     test('the bank is big enough for plenty of variety', () {
-      // A game deals 16 words (8 per half).
+      // A game deals 10 words (5 per half).
       expect(words.length, greaterThanOrEqualTo(200));
     });
 

@@ -61,7 +61,9 @@ class _JoinByCodeScreenState extends State<JoinByCodeScreen> {
         children: [
           const SizedBox(height: AppSpacing.sm),
           const HostGreeting(
-            message: 'Type the four numbers your friend shared with you.',
+            message:
+                'Go into the Studio first, then type the four numbers your friend shared. '
+                'That puts you in your seat.',
           ),
           const SizedBox(height: AppSpacing.md),
           _CodeBoxes(code: _code),

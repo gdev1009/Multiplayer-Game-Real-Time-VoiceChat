@@ -24,6 +24,7 @@ class WordInput extends StatefulWidget {
     this.onInteract,
     this.compact = false,
     this.clueTurn = false,
+    this.onPass,
   });
 
   /// The action label, e.g. "Your clue" or "Your guess".
@@ -52,6 +53,9 @@ class WordInput extends StatefulWidget {
   /// (Ronna: clue entry should match the on-stage clue plaque).
   final bool clueTurn;
 
+  /// Optional Pass — skip this clue or this guess. Spoken "pass" also works.
+  final VoidCallback? onPass;
+
   @override
   State<WordInput> createState() => _WordInputState();
 }
@@ -70,8 +74,18 @@ class _WordInputState extends State<WordInput> {
     widget.onInteract?.call();
     final text = _controller.text.trim();
     if (text.isEmpty) return;
+    if (_isPass(text) && widget.onPass != null) {
+      _controller.clear();
+      widget.onPass!();
+      return;
+    }
     widget.onSubmit(text);
     _controller.clear();
+  }
+
+  static bool _isPass(String text) {
+    final n = text.trim().toLowerCase().replaceAll(RegExp(r'[^a-z]'), '');
+    return n == 'pass' || n == 'passed' || n == 'skip';
   }
 
   Future<void> _speak() async {
@@ -107,6 +121,11 @@ class _WordInputState extends State<WordInput> {
       final heard = await handler();
       if (!mounted) return;
       if (heard != null && heard.trim().isNotEmpty) {
+        if (_isPass(heard) && widget.onPass != null) {
+          widget.onPass!();
+          _controller.clear();
+          return;
+        }
         _controller.text = heard.trim();
         _controller.selection = TextSelection.fromPosition(
           TextPosition(offset: _controller.text.length),
@@ -211,10 +230,32 @@ class _WordInputState extends State<WordInput> {
               ),
             ),
           ),
+          if (widget.onPass != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            SizedBox(
+              height: AppSpacing.buttonHeight,
+              child: OutlinedButton(
+                onPressed: enabled
+                    ? () {
+                        widget.onInteract?.call();
+                        widget.onPass!();
+                      }
+                    : null,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.deepPurple,
+                  side: const BorderSide(color: AppColors.gold, width: 2),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                  ),
+                ),
+                child: const Text('Pass', style: AppText.action),
+              ),
+            ),
+          ],
           if (widget.onSpeakRequested != null) ...[
             const SizedBox(height: 4),
             Text(
-              'Speak or type — whatever is easiest for you.',
+              'Speak or type — whatever is easiest for you. You can also Pass.',
               style: AppText.bodyMuted.copyWith(fontSize: 18),
               textAlign: TextAlign.center,
             ),
@@ -419,6 +460,36 @@ class _WordInputState extends State<WordInput> {
                           ],
                         ),
                       ),
+                      if (widget.onPass != null) ...[
+                        SizedBox(height: narrow ? 8 : 10),
+                        SizedBox(
+                          height: 48,
+                          width: double.infinity,
+                          child: OutlinedButton(
+                            onPressed: enabled
+                                ? () {
+                                    widget.onInteract?.call();
+                                    widget.onPass!();
+                                  }
+                                : null,
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: gold,
+                              side: const BorderSide(color: gold, width: 2),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            child: const Text(
+                              'Pass',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w900,
+                                fontSize: 22,
+                                height: 1,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),

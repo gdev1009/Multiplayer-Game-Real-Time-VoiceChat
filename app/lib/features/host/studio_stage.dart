@@ -679,20 +679,9 @@ class _RedSeatLightsPainter extends CustomPainter {
 }
 
 PlayEntry? _lineForSeat(MatchState state, String role) {
-  if (state.isResolved || state.isHalftime || state.isOver) return null;
-  if (state.wordIndex == 0 && state.feed.isEmpty) return null;
-  PlayEntry? mine;
-  for (var i = state.feed.length - 1; i >= 0; i--) {
-    final e = state.feed[i];
-    if (e.wordIndex == state.wordIndex && e.role == role) {
-      mine = e;
-      break;
-    }
-  }
-  if (mine == null) return null;
-  // Clues show in the centre plaque under MATCH WORD — not on the seat.
-  if (mine.kind == PlayKind.clue) return null;
-  return mine;
+  // Clues stay on the centre plaque. Guesses stay on the seat through the
+  // resolved beat so a human's new word is not wiped the moment it scores.
+  return state.latestSeatGuess(role);
 }
 
 class _SeatPod extends StatelessWidget {

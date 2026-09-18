@@ -653,6 +653,10 @@ class _InputArea extends StatelessWidget {
       },
       compact: true,
       clueTurn: giving,
+      onPass: () async {
+        await audio?.stopHostSpeech();
+        await controller.passTurn();
+      },
       onSpeakRequested: speech == null
           ? null
           : () async {
