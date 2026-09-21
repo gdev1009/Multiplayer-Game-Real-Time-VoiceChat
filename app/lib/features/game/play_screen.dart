@@ -633,7 +633,7 @@ class _InputArea extends StatelessWidget {
     } on ProviderNotFoundException {
       audio = null;
     }
-    return WordInput(
+    final input = WordInput(
       key: ValueKey('${state.wordIndex}-${state.step}-${state.cluingTeam}'),
       label: giving
           ? (stealClue ? 'New one-word clue' : 'One-word clue')
@@ -673,6 +673,27 @@ class _InputArea extends StatelessWidget {
       onInteract: () {
         unawaited(audio?.stopHostSpeech());
       },
+    );
+    final err = controller.error;
+    if (err == null) return input;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Text(
+            err,
+            textAlign: TextAlign.center,
+            style: AppText.body.copyWith(
+              color: const Color(0xFFFFE08A),
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        input,
+      ],
     );
   }
 }

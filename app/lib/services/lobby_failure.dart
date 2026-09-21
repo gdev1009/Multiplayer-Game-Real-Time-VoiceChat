@@ -57,6 +57,11 @@ class LobbyFailure implements Exception {
           'The word is still loading. Please try again in a moment.',
           code: 'no_secret',
         );
+      case 'not_your_turn':
+        return const LobbyFailure(
+          'We didn\'t catch that. Please send it again.',
+          code: 'not_your_turn',
+        );
       case 'not_awaiting_guess':
         return const LobbyFailure(
           'That word is already done — wait for the next one.',

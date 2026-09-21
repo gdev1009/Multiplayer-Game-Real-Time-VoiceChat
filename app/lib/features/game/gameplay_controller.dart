@@ -6,6 +6,7 @@ import '../../models/character.dart';
 import '../../models/game.dart';
 import '../../models/game_player.dart';
 import '../../services/gameplay_service.dart';
+import '../../services/lobby_failure.dart';
 import 'ai_player.dart';
 import 'game_engine.dart';
 
@@ -44,11 +45,14 @@ class GameplayController extends ChangeNotifier {
 
   /// True when the local human may type a clue/guess (on the clock).
   /// Host speech does **not** block — tapping Speak/Send stops Guy.
-  /// During wrong/timeout spotlight hold, nobody acts until Guy finishes.
+  /// A spotlight only blocks the seat it is holding. A leftover hold from the
+  /// previous miss must not stop the next player from sending a guess — that
+  /// is the second-half stall (the guess never leaves the phone, so the same
+  /// person stays on the clock).
   bool get isMyTurn {
-    if (_spotlightHoldRole != null) return false;
-    if (isLocal) return true;
     final role = onClockRole;
+    if (_spotlightHoldRole != null && _spotlightHoldRole == role) return false;
+    if (isLocal) return true;
     return role != null && role == _myRole;
   }
   String? get error => _error;
@@ -102,6 +106,13 @@ class GameplayController extends ChangeNotifier {
   /// never revert a fresher score or phase back to an earlier value (which was
   /// making earned points disappear).
   DateTime _lastAppliedAt = DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+
+  /// Bumped at the start of each online action. A slow reply from an older
+  /// action must not overwrite the newer turn (that put the same guesser back).
+  int _rpcGen = 0;
+
+  /// Beat (`word|exchange|team|phase`) that already got one guess retry.
+  String? _guessRetriedBeat;
 
   // role (A1/A2/B1/B2) -> the character to show on that podium.
   Map<String, Character> _charactersByRole = const {};
@@ -447,12 +458,21 @@ class GameplayController extends ChangeNotifier {
     List<PlayEntry>? feed,
     bool forceWordsReload = false,
     bool trustServer = false,
+    bool force = false,
   }) {
     // Drop stale / out-of-order rows: only advance when the server wrote this
     // row at or after the last one we applied. This stops a delayed realtime
     // UPDATE from wiping a freshly earned score back to zero.
+    // [force] is the row we just read after our own RPC — it is the truth,
+    // even when this phone had jumped ahead of it.
     final prior = _state;
-    if (!trustServer) {
+    if (force) {
+      // Our own read wins when this phone jumped to a later word. A stale
+      // read of the same word must not rewind a guess that already landed.
+      final jumped = prior != null && prior.wordIndex > row.wordIndex;
+      if (row.updatedAt.isBefore(_lastAppliedAt) && !jumped) return;
+      _lastAppliedAt = row.updatedAt;
+    } else if (!trustServer) {
       if (row.updatedAt.isBefore(_lastAppliedAt)) return;
       // A late row for a word we already left. A strictly newer timestamp is
       // the server correcting an optimistic jump, so that one is kept —
@@ -463,6 +483,10 @@ class GameplayController extends ChangeNotifier {
           !row.updatedAt.isAfter(_lastAppliedAt)) {
         return;
       }
+    } else if (row.updatedAt.isBefore(_lastAppliedAt)) {
+      // An earlier request's read must not rewind a newer snapshot. That
+      // put the same guesser back on the clock after their answer had landed.
+      return;
     }
     if (!row.updatedAt.isBefore(_lastAppliedAt)) {
       _lastAppliedAt = row.updatedAt;
@@ -499,6 +523,25 @@ class GameplayController extends ChangeNotifier {
       ),
       hostLine: _guessPrompt(row, names.isNotEmpty ? names : (s?.names ?? const {})),
     );
+    // A hold belongs to the beat that earned it. Carrying it onto the next
+    // word or the other team blocks that player's guess, so the answer never
+    // leaves the phone and the previous person stays lit.
+    if (_spotlightHoldRole != null &&
+        prior != null &&
+        (prior.wordIndex != next.wordIndex ||
+            prior.step != next.step ||
+            prior.cluingTeam != next.cluingTeam ||
+            prior.exchangeCount != next.exchangeCount ||
+            prior.phase != next.phase)) {
+      _spotlightHoldRole = null;
+      _timeoutFanfarePending = false;
+      _guessCalmPending = false;
+    }
+    if (next.step == TurnStep.awaitingGuess &&
+        next.lastOutcome == WordOutcome.none &&
+        _spotlightHoldRole == next.guesserRole) {
+      _spotlightHoldRole = null;
+    }
     final armedMiss = _armSpotlightHold(s, next);
     _state = next;
     notifyListeners();
@@ -728,9 +771,10 @@ class GameplayController extends ChangeNotifier {
     if (_timeoutFiredBeat != null && _timeoutFiredBeat != beat) {
       _timeoutFiredBeat = null;
     }
-    // Already buzzed this exact turn and the server did not move. Asking again
-    // is the second-half loop — leave the input up instead.
-    if (_timeoutFiredBeat == beat) return false;
+    // Already buzzed this exact turn and the server did not move. Do not buzz
+    // again, but keep owning the beat so a stand-in is not started on top of
+    // a human who can still send the guess.
+    if (_timeoutFiredBeat == beat) return true;
 
     _guessOpenedAt ??= DateTime.now();
     final fireAt =
@@ -809,6 +853,11 @@ class GameplayController extends ChangeNotifier {
     final secret = await _serverSecretFor(cur.wordIndex) ?? cur.secretWord.trim();
     if (secret.isEmpty) {
       _reloadWords(_names);
+      _scheduleHostBeat(
+        'reload|${cur.wordIndex}|${cur.step.name}',
+        const Duration(milliseconds: 900),
+        _maybeDriveComputer,
+      );
       return;
     }
     // The fetch above is a round-trip: the match may have moved on while it was
@@ -932,9 +981,13 @@ class GameplayController extends ChangeNotifier {
   Future<void> submitClue(String text) async {
     // Humans may barge in while Guy is talking (UI stops his voice first).
     // AI paths still wait via [inputBlocked] in _driveComputerSeat.
+    // Online, wait for the server before showing the guesser. An optimistic
+    // clue let a guess go out before the server was ready, and that guess
+    // was thrown away — the same person stayed on the clock.
     return _act(
       local: (s) => MatchEngine.submitClue(s, text),
       remote: (svc, id) => svc.submitClue(id, text),
+      optimistic: isLocal,
     );
   }
 
@@ -1060,39 +1113,47 @@ class GameplayController extends ChangeNotifier {
 
     final service = _service!;
     final gameId = _gameId!;
+    final gen = ++_rpcGen;
+    final beat =
+        '${previous.wordIndex}|${previous.exchangeCount}|${previous.cluingTeam}|${previous.phase.name}';
     final ok = await _guard(() async {
       final res = await service.submitGuess(gameId, trimmed);
+      if (gen != _rpcGen) return;
       final gradedWord = (res['word'] as String?)?.trim();
       final idx = (res['word_index'] as num?)?.toInt() ?? previous.wordIndex;
       if (gradedWord != null && gradedWord.isNotEmpty) {
         _patchSecret(idx, gradedWord);
       }
-      final row = await service.loadState(gameId);
-      final plays = await service.loadPlays(gameId);
-      // An equal timestamp is already accepted, so the grade lands without
-      // reopening the door to a row older than the one on screen.
-      if (row != null) {
-        _applyServerState(row, previous.names, feed: plays, trustServer: true);
-      }
+      await _pullServer(service, gameId, previous.names, force: true);
     });
+    if (gen != _rpcGen) return;
     if (!ok) {
-      try {
-        final row = await service.loadState(gameId);
-        final plays = await service.loadPlays(gameId);
-        if (row != null) {
-          _applyServerState(
-            row,
-            previous.names,
-            feed: plays,
-            trustServer: true,
-          );
-        } else {
-          _state = previous;
-          notifyListeners();
+      await _pullServer(service, gameId, previous.names, force: true);
+      final now = _state;
+      final sameBeat = now != null &&
+          now.step == TurnStep.awaitingGuess &&
+          '${now.wordIndex}|${now.exchangeCount}|${now.cluingTeam}|${now.phase.name}' ==
+              beat;
+      // The clue may have landed a moment after this guess. One retry.
+      if (sameBeat && _error != null && _guessRetriedBeat != beat) {
+        _guessRetriedBeat = beat;
+        await Future<void>.delayed(const Duration(milliseconds: 400));
+        if (gen == _rpcGen) {
+          await submitGuess(trimmed);
+          return;
         }
-      } catch (_) {
-        _state = previous;
-        notifyListeners();
+      }
+    } else {
+      _guessRetriedBeat = null;
+      final now = _state;
+      final sameBeat = now != null &&
+          now.step == TurnStep.awaitingGuess &&
+          '${now.wordIndex}|${now.exchangeCount}|${now.cluingTeam}|${now.phase.name}' ==
+              beat;
+      if (sameBeat) {
+        // The server accepted something but the phone still shows the same
+        // guesser. Read once more so a just-written row is not missed.
+        await _pullServer(service, gameId, previous.names, force: true);
       }
     }
     _maybeDriveComputer();
@@ -1143,32 +1204,50 @@ class GameplayController extends ChangeNotifier {
     }
     final service = _service!;
     final gameId = _gameId!;
+    final gen = ++_rpcGen;
     final ok = await _guard(() async {
       await remote(service, gameId);
-      final row = await service.loadState(gameId);
-      if (row != null) {
-        _applyServerState(
-          row,
-          _state?.names ?? previous.names,
-          trustServer: true,
-        );
-      }
+      if (gen != _rpcGen) return;
+      await _pullServer(
+        service,
+        gameId,
+        _state?.names ?? previous.names,
+        force: true,
+      );
     });
+    if (gen != _rpcGen) return;
     if (!ok) {
       // Prefer a fresh server row; otherwise restore the pre-action snapshot.
-      try {
-        final row = await service.loadState(gameId);
-        if (row != null) {
-          _applyServerState(row, previous.names, trustServer: true);
-        } else {
-          _state = previous;
-          notifyListeners();
-        }
-      } catch (_) {
+      final pulled = await _pullServer(
+        service,
+        gameId,
+        previous.names,
+        force: true,
+      );
+      if (!pulled) {
         _state = previous;
         notifyListeners();
       }
       _maybeDriveComputer();
+    }
+  }
+
+  /// Reads the server row (and the feed) and applies it. Returns false if the
+  /// read failed. [force] makes this read win over an optimistic jump.
+  Future<bool> _pullServer(
+    GameplayService service,
+    String gameId,
+    Map<String, String> names, {
+    bool force = false,
+  }) async {
+    try {
+      final row = await service.loadState(gameId);
+      if (row == null) return false;
+      final plays = await service.loadPlays(gameId);
+      _applyServerState(row, names, feed: plays, force: force);
+      return true;
+    } catch (_) {
+      return false;
     }
   }
 
@@ -1184,6 +1263,9 @@ class GameplayController extends ChangeNotifier {
     try {
       await run();
       return true;
+    } on LobbyFailure catch (e) {
+      _error = e.message;
+      return false;
     } catch (_) {
       _error = 'Something went wrong. Please try again.';
       return false;
