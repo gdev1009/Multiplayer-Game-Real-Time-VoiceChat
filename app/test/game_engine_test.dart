@@ -394,6 +394,30 @@ void main() {
     });
   });
 
+  group('a leftover miss does not re-ask the guesser', () {
+    test('wrong is cleared once a clue is on the board', () {
+      expect(
+        MatchEngine.outcomeForTurn(
+          reported: WordOutcome.wrong,
+          step: TurnStep.awaitingGuess,
+          pendingClue: 'garden',
+        ),
+        WordOutcome.none,
+      );
+    });
+
+    test('a real miss with no clue still counts', () {
+      expect(
+        MatchEngine.outcomeForTurn(
+          reported: WordOutcome.wrong,
+          step: TurnStep.awaitingClue,
+          pendingClue: null,
+        ),
+        WordOutcome.wrong,
+      );
+    });
+  });
+
   group('seat guess bubbles stay through resolve', () {
     test('a human guess remains on the seat after it scores', () {
       var s = _startGame();

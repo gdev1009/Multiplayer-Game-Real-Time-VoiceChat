@@ -329,6 +329,28 @@ class MatchEngine {
     return n == 'pass' || n == 'passed' || n == 'skip';
   }
 
+  /// Outcome to show for a server row.
+  ///
+  /// A steal leaves `last_outcome = wrong` on the server. The next clue does
+  /// not always clear it, so the guess prompt arrived still marked "wrong".
+  /// The client then treated the guesser as having just missed, lit their seat
+  /// again, and asked them for another answer — the second-half stall Ronna
+  /// hit ("kept asking the same person"). A clue already on the board means
+  /// that miss is over.
+  static WordOutcome outcomeForTurn({
+    required WordOutcome reported,
+    required TurnStep step,
+    required String? pendingClue,
+  }) {
+    final clueUp = pendingClue != null && pendingClue.trim().isNotEmpty;
+    if (step == TurnStep.awaitingGuess &&
+        clueUp &&
+        (reported == WordOutcome.wrong || reported == WordOutcome.revealed)) {
+      return WordOutcome.none;
+    }
+    return reported;
+  }
+
   /// Starts a new match. [words] must hold at least [MatchConfig.totalWords]
   /// entries; [names] maps each role (A1/A2/B1/B2) to a display name.
   static MatchState start({

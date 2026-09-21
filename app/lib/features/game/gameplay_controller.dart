@@ -89,6 +89,10 @@ class GameplayController extends ChangeNotifier {
   /// Clock expired — TIME is on screen; buzz+Guy still need to play before steal.
   bool _timeoutFanfarePending = false;
 
+  /// Turn that already buzzed. Stops the clock from asking the same person
+  /// again when the server did not move (Ronna: second half, same guesser).
+  String? _timeoutFiredBeat;
+
   Map<String, String> _names = const {}; // role -> display name, for polling.
   Timer? _pollTimer; // realtime fallback: re-fetch state on a short interval.
   bool _reloadingWords = false; // guards a single word re-fetch at a time.
@@ -442,22 +446,27 @@ class GameplayController extends ChangeNotifier {
     Map<String, String> names, {
     List<PlayEntry>? feed,
     bool forceWordsReload = false,
+    bool trustServer = false,
   }) {
     // Drop stale / out-of-order rows: only advance when the server wrote this
     // row at or after the last one we applied. This stops a delayed realtime
     // UPDATE from wiping a freshly earned score back to zero.
-    if (row.updatedAt.isBefore(_lastAppliedAt)) return;
-
     final prior = _state;
-    // A match only ever moves forward. A row that rewinds the board is a late
-    // read that overtook a fresher one; replaying it re-fires Guy's "correct"
-    // line on a word already scored and jumps the stage back a beat (Ronna,
-    // Sep 2026: "it will start with a clue, and then jump and say that is
-    // correct without anyone guessing").
-    if (prior != null && !prior.isOver && row.wordIndex < prior.wordIndex) {
-      return;
+    if (!trustServer) {
+      if (row.updatedAt.isBefore(_lastAppliedAt)) return;
+      // A late row for a word we already left. A strictly newer timestamp is
+      // the server correcting an optimistic jump, so that one is kept —
+      // dropping it is how the second-half guess prompt got stuck.
+      if (prior != null &&
+          !prior.isOver &&
+          row.wordIndex < prior.wordIndex &&
+          !row.updatedAt.isAfter(_lastAppliedAt)) {
+        return;
+      }
     }
-    _lastAppliedAt = row.updatedAt;
+    if (!row.updatedAt.isBefore(_lastAppliedAt)) {
+      _lastAppliedAt = row.updatedAt;
+    }
 
     final need = prior?.config.totalWords ?? const MatchConfig().totalWords;
     final wordChanged = prior != null && prior.wordIndex != row.wordIndex;
@@ -483,8 +492,12 @@ class GameplayController extends ChangeNotifier {
       scoreB: row.scoreB,
       pendingClue: row.pendingClue,
       feed: _feedForWord(feed ?? s?.feed ?? const [], row.wordIndex),
-      lastOutcome: row.lastOutcome,
-      hostLine: row.hostLine,
+      lastOutcome: MatchEngine.outcomeForTurn(
+        reported: row.lastOutcome,
+        step: row.step,
+        pendingClue: row.pendingClue,
+      ),
+      hostLine: _guessPrompt(row, names.isNotEmpty ? names : (s?.names ?? const {})),
     );
     final armedMiss = _armSpotlightHold(s, next);
     _state = next;
@@ -710,13 +723,21 @@ class GameplayController extends ChangeNotifier {
     }
 
     // Phase 1: open the window once per turn.
+    final beat =
+        '${s.step}|${s.wordIndex}|${s.exchangeCount}|${s.cluingTeam}|${s.phase.name}';
+    if (_timeoutFiredBeat != null && _timeoutFiredBeat != beat) {
+      _timeoutFiredBeat = null;
+    }
+    // Already buzzed this exact turn and the server did not move. Asking again
+    // is the second-half loop — leave the input up instead.
+    if (_timeoutFiredBeat == beat) return false;
+
     _guessOpenedAt ??= DateTime.now();
     final fireAt =
         _guessOpenedAt!.add(Duration(seconds: s.config.guessSeconds));
     final remaining = fireAt.difference(DateTime.now());
-    final beat =
-        'turnTimeout|${s.step}|${s.wordIndex}|${s.exchangeCount}|${s.cluingTeam}';
     if (remaining <= Duration.zero) {
+      _timeoutFiredBeat = beat;
       if (s.step == TurnStep.awaitingClue) {
         timeoutClue();
       } else {
@@ -725,9 +746,16 @@ class GameplayController extends ChangeNotifier {
       return true;
     }
     _scheduleHostBeat(
-      beat,
+      'turnTimeout|$beat',
       remaining,
-      s.step == TurnStep.awaitingClue ? timeoutClue : _beginGuessTimeoutCalm,
+      () {
+        _timeoutFiredBeat = beat;
+        if (s.step == TurnStep.awaitingClue) {
+          timeoutClue();
+        } else {
+          _beginGuessTimeoutCalm();
+        }
+      },
     );
     return true;
   }
@@ -946,6 +974,24 @@ class GameplayController extends ChangeNotifier {
           if (e.wordIndex == wordIndex) e,
       ];
 
+  /// Guess prompt uses the seated player's name. The server line is sometimes
+  /// just the role ("A1 — what is your guess?"), which reads as the same seat
+  /// being asked forever.
+  String _guessPrompt(GameStateRow row, Map<String, String> names) {
+    if (row.step != TurnStep.awaitingGuess) return row.hostLine;
+    final role = MatchEngine.guesserRole(row.cluingTeam, row.phase);
+    final name = (names[role] ?? '').trim();
+    if (name.isEmpty) return row.hostLine;
+    final line = row.hostLine.trim().toLowerCase();
+    final named = line.contains(name.toLowerCase());
+    final roleOnly = RegExp(r'^[ab][12]\b').hasMatch(line);
+    if (named && !roleOnly) return row.hostLine;
+    if (line.contains('time') || line.contains('steal') || line.contains('foul')) {
+      return row.hostLine;
+    }
+    return '$name, what is your guess?';
+  }
+
   /// Guess clock expired — buzzer path (wrong / steal / reveal).
   Future<void> timeoutGuess() async {
     final s = _state;
@@ -1026,7 +1072,7 @@ class GameplayController extends ChangeNotifier {
       // An equal timestamp is already accepted, so the grade lands without
       // reopening the door to a row older than the one on screen.
       if (row != null) {
-        _applyServerState(row, previous.names, feed: plays);
+        _applyServerState(row, previous.names, feed: plays, trustServer: true);
       }
     });
     if (!ok) {
@@ -1034,7 +1080,12 @@ class GameplayController extends ChangeNotifier {
         final row = await service.loadState(gameId);
         final plays = await service.loadPlays(gameId);
         if (row != null) {
-          _applyServerState(row, previous.names, feed: plays);
+          _applyServerState(
+            row,
+            previous.names,
+            feed: plays,
+            trustServer: true,
+          );
         } else {
           _state = previous;
           notifyListeners();
@@ -1050,17 +1101,22 @@ class GameplayController extends ChangeNotifier {
   Future<void> nextWord() => _act(
         local: MatchEngine.nextWord,
         remote: (svc, id) => svc.nextWord(id),
+        // Online, wait for the server. An optimistic word jump that the server
+        // never confirmed left the guess prompt stuck on one person.
+        optimistic: isLocal,
       );
 
   Future<void> beginSecondHalf() => _act(
         local: MatchEngine.beginSecondHalf,
         remote: (svc, id) => svc.beginSecondHalf(id),
+        optimistic: isLocal,
       );
 
   /// Applies an action locally (optimistic) and, when online, to the server.
   Future<void> _act({
     required MatchState Function(MatchState) local,
     required Future<void> Function(GameplayService, String) remote,
+    bool optimistic = true,
   }) async {
     final s = _state;
     if (s == null) return;
@@ -1075,27 +1131,35 @@ class GameplayController extends ChangeNotifier {
       return;
     }
 
-    // Optimistic local update so the UI responds instantly, then confirm with
-    // the server. Roll back if the RPC fails so a wrong local score never sticks.
     final previous = s;
-    final next = local(s);
-    final armedMiss = _armSpotlightHold(previous, next);
-    _state = next;
-    notifyListeners();
-    if (!armedMiss) _maybeDriveComputer();
+    if (optimistic) {
+      // Optimistic local update so the UI responds instantly, then confirm with
+      // the server. Roll back if the RPC fails so a wrong local score never sticks.
+      final next = local(s);
+      final armedMiss = _armSpotlightHold(previous, next);
+      _state = next;
+      notifyListeners();
+      if (!armedMiss) _maybeDriveComputer();
+    }
     final service = _service!;
     final gameId = _gameId!;
     final ok = await _guard(() async {
       await remote(service, gameId);
       final row = await service.loadState(gameId);
-      if (row != null) _applyServerState(row, _state?.names ?? const {});
+      if (row != null) {
+        _applyServerState(
+          row,
+          _state?.names ?? previous.names,
+          trustServer: true,
+        );
+      }
     });
     if (!ok) {
       // Prefer a fresh server row; otherwise restore the pre-action snapshot.
       try {
         final row = await service.loadState(gameId);
         if (row != null) {
-          _applyServerState(row, previous.names);
+          _applyServerState(row, previous.names, trustServer: true);
         } else {
           _state = previous;
           notifyListeners();
