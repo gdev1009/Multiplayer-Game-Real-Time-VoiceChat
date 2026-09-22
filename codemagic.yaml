@@ -153,6 +153,45 @@ workflows:
             --export-options-plist=/Users/builder/export_options.plist
           echo "Built Match Word 1.0.0 ($BUILD_NUMBER) — testers must see this number."
 
+      # Apple's content-delivery API often answers 500/502 while the bytes
+      # still land. altool then prints UPLOAD SUCCEEDED and exits non-zero,
+      # and Codemagic's publishing step treats that as a failed build.
+      # Publish here, retry, and accept the upload when Apple says it landed.
+      - name: Publish IPA to TestFlight
+        script: |
+          set -euo pipefail
+          shopt -s nullglob
+          ipas=("$CM_BUILD_DIR"/app/build/ios/ipa/*.ipa)
+          IPA="${ipas[0]:-}"
+          if [ -z "${IPA:-}" ]; then
+            echo "ERROR: no IPA to publish"
+            exit 1
+          fi
+          LOG="/tmp/asc-publish.log"
+          for attempt in 1 2 3; do
+            echo "App Store Connect upload attempt $attempt"
+            : > "$LOG"
+            set +e
+            app-store-connect publish \
+              --path "$IPA" \
+              --key-id "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
+              --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
+              --private-key @env:APP_STORE_CONNECT_PRIVATE_KEY \
+              2>&1 | tee "$LOG"
+            code="${PIPESTATUS[0]}"
+            set -e
+            if grep -q "UPLOAD SUCCEEDED" "$LOG"; then
+              echo "Apple accepted the IPA on attempt $attempt."
+              exit 0
+            fi
+            echo "Attempt $attempt did not land (exit $code). Apple 500/502 is transient."
+            if [ "$attempt" -lt 3 ]; then
+              sleep 120
+            fi
+          done
+          echo "ERROR: App Store Connect did not accept the IPA."
+          exit 1
+
     artifacts:
       - app/build/ios/ipa/*.ipa
       - build_number.txt
@@ -165,23 +204,9 @@ workflows:
         notify:
           success: true
           failure: true
-      app_store_connect:
-        api_key: $APP_STORE_CONNECT_PRIVATE_KEY
-        key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
-        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
-        submit_to_testflight: true
-        submit_to_app_store: false
-        # Hand each build straight to the tester group. Without this, an
-        # external group has to be added by hand in App Store Connect and
-        # testers keep whatever build they already had — which is what a
-        # public TestFlight link serves, so it goes stale silently.
-        #
-        # Uncomment once the group exists (docs/TestFlight for Ronna.md, Part
-        # C). The name must match App Store Connect → TestFlight → Testers and
-        # Groups exactly; a wrong name fails this step, though the build still
-        # uploads:
-        # beta_groups:
-        #   - Match Word Testers
+      # Upload happens in "Publish IPA to TestFlight" above. Leaving
+      # app_store_connect here would upload the same IPA twice, and the
+      # second call fails the build on Apple's 500/502 noise.
 
   android-apk:
     name: Android APK (CI)
