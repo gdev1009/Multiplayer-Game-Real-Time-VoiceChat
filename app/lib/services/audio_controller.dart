@@ -331,8 +331,15 @@ class AudioController extends ChangeNotifier {
     }
   }
 
+  /// Drop the bed while Guy speaks so the loop doesn't talk over him.
+  /// A loud theme under a long line is what sounds garbled on a phone speaker.
+  Future<void> _duckMusicForHostVoice() async {
+    if (_muted || !_matchMusicOn) return;
+    await _out.setLoopVolume((_effectiveMusic * 0.28).clamp(0.0, 1.0));
+  }
+
   /// Guy uses a separate voice player; Android can still pause the loop.
-  /// Keep the bed at full volume (no ducking) and restart if it stalled.
+  /// Bring the bed back up after he finishes, and restart it if it stalled.
   Future<void> _restoreMusicBedAfterHostVoice() async {
     if (_muted || !_matchMusicOn) return;
     await _out.resumeLoopIfNeeded();
@@ -448,6 +455,7 @@ class AudioController extends ChangeNotifier {
           _endLipsync();
           return;
         }
+        await _duckMusicForHostVoice();
         await _out.playOneShot(
           filePath,
           (_effectiveVoice * _hostVoiceBoost).clamp(0.0, 1.0),
@@ -461,6 +469,7 @@ class AudioController extends ChangeNotifier {
           _endLipsync();
           return;
         }
+        await _duckMusicForHostVoice();
         await _out.playOneShot(
           fallback,
           (_effectiveVoice * _hostVoiceBoost).clamp(0.0, 1.0),
@@ -581,6 +590,7 @@ class AudioController extends ChangeNotifier {
           _endLipsync();
           return;
         }
+        await _duckMusicForHostVoice();
         await _out.playOneShot(
           filePath,
           (_effectiveVoice * _hostVoiceBoost).clamp(0.0, 1.0),
@@ -594,6 +604,7 @@ class AudioController extends ChangeNotifier {
           _endLipsync();
           return;
         }
+        await _duckMusicForHostVoice();
         await _out.playOneShot(
           fallback,
           (_effectiveVoice * _hostVoiceBoost).clamp(0.0, 1.0),

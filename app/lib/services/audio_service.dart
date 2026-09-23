@@ -143,6 +143,10 @@ class AudioService implements SoundOutput {
       await _music.setReleaseMode(ReleaseMode.loop);
       await _music.setPlayerMode(PlayerMode.mediaPlayer);
       await _openingBed.setPlayerMode(PlayerMode.mediaPlayer);
+      // Low-latency mode chops longer speech into a garble. Guy's lines are
+      // full sentences, so they play on the media player like the music.
+      await _voice.setPlayerMode(PlayerMode.mediaPlayer);
+      await _voice.setReleaseMode(ReleaseMode.stop);
     } catch (err) {
       debugPrint('AudioService.configure failed (ignored): $err');
       _configured = false;
@@ -258,7 +262,10 @@ class AudioService implements SoundOutput {
         _voiceWait = Completer<void>();
         final wait = _voiceWait!;
         await _voice.stop();
-        await _voice.setPlaybackRate(playbackRate.clamp(0.5, 1.5));
+        // Rate 1.0 still engages iOS time-pitch, which warbles a spoken line.
+        if ((playbackRate - 1.0).abs() > 0.01) {
+          await _voice.setPlaybackRate(playbackRate.clamp(0.5, 1.5));
+        }
         await _voice.setVolume(volume.clamp(0.0, 1.0));
         await _voice.play(source, volume: volume.clamp(0.0, 1.0));
         // Complete when the line finishes *or* stopVoice() is called.

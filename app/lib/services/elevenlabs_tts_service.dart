@@ -19,7 +19,7 @@ class ElevenLabsTtsService {
 
   final http.Client _client;
 
-  static const _modelId = 'eleven_multilingual_v2';
+  static const _modelId = 'eleven_turbo_v2_5';
   static const _base = 'https://api.elevenlabs.io/v1';
 
   String? get apiKey {
@@ -53,16 +53,15 @@ class ElevenLabsTtsService {
 
   /// Voice settings for Guy.
   ///
-  /// Ronna (Aug 2026) heard him "garble/distort partway through". Low stability
-  /// with a high style push makes ElevenLabs wobble on longer lines, which is
-  /// what that is; a steadier setting keeps the game-show warmth without the
-  /// artefacts. Depth comes from the voice itself — the player no longer slows
-  /// playback to fake it (see AudioController).
+  /// Ronna (Sep 2026) heard him garbled all the way through the show, not
+  /// only on the wrap-up. Style and speaker boost are what make
+  /// multilingual takes wobble mid-sentence. Turbo with a steady setting
+  /// keeps the game-show warmth and stays intelligible on a phone speaker.
   static const Map<String, Object> _voiceSettings = {
-    'stability': 0.5,
-    'similarity_boost': 0.85,
-    'style': 0.4,
-    'use_speaker_boost': true,
+    'stability': 0.75,
+    'similarity_boost': 0.75,
+    'style': 0.0,
+    'use_speaker_boost': false,
   };
 
   /// Cache fingerprint of [_voiceSettings]. Derived from the same map the
@@ -73,13 +72,10 @@ class ElevenLabsTtsService {
 
   /// Bumped whenever the cache could be holding audio we no longer trust.
   ///
-  /// v2 — Ronna (Sep 2026) heard "a sentence of garbled words at the very end".
-  /// A clip used to be written straight to its final path, so a request that
-  /// was cut off mid-write left a truncated MP3 that was long enough to pass
-  /// the cache check. Guy then replayed that same broken take every game,
-  /// which is why it was always the wrap-up. Writes are atomic now; the bump
-  /// retires any clip a device already poisoned.
-  static const int _cacheVersion = 2;
+  /// v2 — truncated wrap-up clips were replayed every game.
+  /// v3 — Ronna (Sep 2026) heard Guy garbled throughout. Old takes (style
+  /// and speaker boost) stay on disk until this bump retires them.
+  static const int _cacheVersion = 3;
 
   String _cacheKey(String text) {
     final bytes =

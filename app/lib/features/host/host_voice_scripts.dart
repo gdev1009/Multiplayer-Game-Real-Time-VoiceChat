@@ -12,15 +12,14 @@ abstract final class HostVoiceScripts {
 
   /// Full show open — Ronna's introduction (team Clue Giver / Guesser rules).
   static const String introduction =
-      "Ladies and gentlemen… welcome to the studio that makes words come alive… "
-      "this… is MATCH WORD! I'm your host, Guy Smiley, and let me tell you, we "
-      "are in for a fantastic time today! Here's how we play: one lucky player "
-      "on each team becomes the Clue Giver, and it's their job to describe our "
-      "mystery word with just one word — without saying the word itself, of "
-      "course! The other player on the team is the guesser. Guess it right, and "
-      "the points are yours! Get it wrong, and the team has a chance to steal "
-      "with their own clue! Are you ready to play? Let's find out who takes "
-      "home the win… right here, right now, on MATCH WORD!";
+      "Ladies and gentlemen, welcome to Match Word! "
+      "I'm your host, Guy Smiley. "
+      "One player on each team gives a one word clue. "
+      "Do not say the secret word. "
+      "Their partner guesses. "
+      "Guess it right, and the points are yours. "
+      "Miss it, and the other team can steal. "
+      "Let's play Match Word!";
 
   /// PDF / chat "CORRECT ANSWER RESPONSES".
   static const List<String> correct = [
@@ -76,30 +75,30 @@ abstract final class HostVoiceScripts {
 
   static const List<String> roundStarts = [
     "You're on the clock! Give us your best!",
-    "All right — it's your turn! Make it count!",
-    'Here we go! One word — make it a good one!',
-    "Lights are on you — let's hear it!",
+    "All right, it's your turn! Make it count!",
+    'Here we go! One word. Make it a good one!',
+    "Lights are on you. Let's hear it!",
     'Your moment, folks! What have you got?',
   ];
 
   static const List<String> reveals = [
     "Time's up on that word! Let's reveal it and move on.",
-    "Nobody got it — let's show the word and keep the show rolling!",
-    "That one stumped the room! Revealing the word… and on we go!",
-    "Clock's done! Here's the word — next one coming up!",
+    "Nobody got it. Let's show the word and keep the show rolling!",
+    'That one stumped the room! Here is the word, and on we go!',
+    "Clock's done! Here's the word. Next one coming up!",
   ];
 
   static const List<String> halftimes = [
-    'Halftime! Teams, switch roles — clue givers become guessers!',
-    "That's halftime! Swap seats in spirit — clue givers, you're guessing now!",
-    'Mid-show break! Roles flip — new clue givers, new energy!',
+    'Halftime! Teams, switch roles. Clue givers become guessers!',
+    "That's halftime! Clue givers, you're guessing now!",
+    'Mid-show break! Roles flip. New clue givers, new energy!',
     "Halftime! Flip those roles and let's light up the second half!",
   ];
 
   static const List<String> disconnects = [
-    'Hold on — we lost a player. Hang tight while we sort this out.',
-    "Whoa — someone's dropped off! Stay put, folks, we'll get you back in.",
-    "Technical difficulty! One of our players stepped away — hang on!",
+    'Hold on. We lost a player. Hang tight while we sort this out.',
+    "Whoa, someone's dropped off! Stay put, folks. We'll get you back in.",
+    'Technical difficulty! One of our players stepped away. Hang on!',
   ];
 
   /// Bundled Piper fallback asset for [cue] (relative to assets/).

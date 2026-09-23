@@ -39,6 +39,7 @@ class GameplayController extends ChangeNotifier {
   bool get busy => _busy;
 
   String? _error;
+  String? _errorCode;
 
   /// When true (welcome intro still playing), humans and AI cannot submit.
   bool Function()? inputBlocked;
@@ -1135,7 +1136,11 @@ class GameplayController extends ChangeNotifier {
           '${now.wordIndex}|${now.exchangeCount}|${now.cluingTeam}|${now.phase.name}' ==
               beat;
       // The clue may have landed a moment after this guess. One retry.
-      if (sameBeat && _error != null && _guessRetriedBeat != beat) {
+      // A server error (the guess was rejected outright) will fail the same
+      // way again — retrying it is what kept the same player on the clock.
+      final race = _errorCode == 'not_your_turn' ||
+          _errorCode == 'not_awaiting_guess';
+      if (sameBeat && race && _guessRetriedBeat != beat) {
         _guessRetriedBeat = beat;
         await Future<void>.delayed(const Duration(milliseconds: 400));
         if (gen == _rpcGen) {
@@ -1258,6 +1263,7 @@ class GameplayController extends ChangeNotifier {
   /// Runs [run]; returns false when it throws (and sets [_error]).
   Future<bool> _guard(Future<void> Function() run) async {
     _error = null;
+    _errorCode = null;
     _busy = true;
     notifyListeners();
     try {
@@ -1265,9 +1271,11 @@ class GameplayController extends ChangeNotifier {
       return true;
     } on LobbyFailure catch (e) {
       _error = e.message;
+      _errorCode = e.code;
       return false;
     } catch (_) {
       _error = 'Something went wrong. Please try again.';
+      _errorCode = null;
       return false;
     } finally {
       _busy = false;
