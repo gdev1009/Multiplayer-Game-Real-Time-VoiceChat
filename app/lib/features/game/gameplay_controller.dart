@@ -543,6 +543,18 @@ class GameplayController extends ChangeNotifier {
         _spotlightHoldRole == next.guesserRole) {
       _spotlightHoldRole = null;
     }
+    // A rejected clue used to leave "Something went wrong" sitting on the
+    // guess dock (and the other way around). The note belongs to the beat
+    // that failed.
+    if (prior != null &&
+        (prior.wordIndex != next.wordIndex ||
+            prior.step != next.step ||
+            prior.cluingTeam != next.cluingTeam ||
+            prior.exchangeCount != next.exchangeCount ||
+            prior.phase != next.phase)) {
+      _error = null;
+      _errorCode = null;
+    }
     final armedMiss = _armSpotlightHold(s, next);
     _state = next;
     notifyListeners();
@@ -985,10 +997,12 @@ class GameplayController extends ChangeNotifier {
     // Online, wait for the server before showing the guesser. An optimistic
     // clue let a guess go out before the server was ready, and that guess
     // was thrown away — the same person stayed on the clock.
+    final note = _rejectedNote(text, clue: true);
     return _act(
       local: (s) => MatchEngine.submitClue(s, text),
-      remote: (svc, id) => svc.submitClue(id, text),
+      remote: (svc, id) => svc.submitClue(id, text, rejectedNote: note),
       optimistic: isLocal,
+      rejectedNote: note,
     );
   }
 
@@ -1071,8 +1085,13 @@ class GameplayController extends ChangeNotifier {
       return _act(
         local: (cur) => MatchEngine.submitGuess(cur, trimmed),
         remote: (svc, id) async {
-          await svc.submitGuess(id, trimmed);
+          await svc.submitGuess(
+            id,
+            trimmed,
+            rejectedNote: _rejectedNote(trimmed, clue: false),
+          );
         },
+        rejectedNote: _rejectedNote(trimmed, clue: false),
       );
     }
 
@@ -1115,10 +1134,15 @@ class GameplayController extends ChangeNotifier {
     final service = _service!;
     final gameId = _gameId!;
     final gen = ++_rpcGen;
+    final note = _rejectedNote(trimmed, clue: false);
     final beat =
         '${previous.wordIndex}|${previous.exchangeCount}|${previous.cluingTeam}|${previous.phase.name}';
     final ok = await _guard(() async {
-      final res = await service.submitGuess(gameId, trimmed);
+      final res = await service.submitGuess(
+        gameId,
+        trimmed,
+        rejectedNote: note,
+      );
       if (gen != _rpcGen) return;
       final gradedWord = (res['word'] as String?)?.trim();
       final idx = (res['word_index'] as num?)?.toInt() ?? previous.wordIndex;
@@ -1126,7 +1150,7 @@ class GameplayController extends ChangeNotifier {
         _patchSecret(idx, gradedWord);
       }
       await _pullServer(service, gameId, previous.names, force: true);
-    });
+    }, rejectedNote: note,);
     if (gen != _rpcGen) return;
     if (!ok) {
       await _pullServer(service, gameId, previous.names, force: true);
@@ -1179,10 +1203,23 @@ class GameplayController extends ChangeNotifier {
       );
 
   /// Applies an action locally (optimistic) and, when online, to the server.
+  /// The gold note on the dock. A clue and a guess must not share the
+  /// generic "something went wrong" line.
+  static String _rejectedNote(String text, {required bool clue}) {
+    final n = text.trim().toLowerCase().replaceAll(RegExp(r'[^a-z]'), '');
+    final handedOn =
+        n == 'pass' || n == 'passed' || n == 'skip' || n == 'time';
+    if (handedOn) return "Time's up! Tap Pass to hand this on.";
+    return clue
+        ? "We didn't catch that clue. Please send it again."
+        : "We didn't catch that guess. Please send it again.";
+  }
+
   Future<void> _act({
     required MatchState Function(MatchState) local,
     required Future<void> Function(GameplayService, String) remote,
     bool optimistic = true,
+    String? rejectedNote,
   }) async {
     final s = _state;
     if (s == null) return;
@@ -1219,7 +1256,7 @@ class GameplayController extends ChangeNotifier {
         _state?.names ?? previous.names,
         force: true,
       );
-    });
+    }, rejectedNote: rejectedNote,);
     if (gen != _rpcGen) return;
     if (!ok) {
       // Prefer a fresh server row; otherwise restore the pre-action snapshot.
@@ -1261,7 +1298,10 @@ class GameplayController extends ChangeNotifier {
   // ---------------------------------------------------------------------------
 
   /// Runs [run]; returns false when it throws (and sets [_error]).
-  Future<bool> _guard(Future<void> Function() run) async {
+  Future<bool> _guard(
+    Future<void> Function() run, {
+    String? rejectedNote,
+  }) async {
     _error = null;
     _errorCode = null;
     _busy = true;
@@ -1274,7 +1314,7 @@ class GameplayController extends ChangeNotifier {
       _errorCode = e.code;
       return false;
     } catch (_) {
-      _error = 'Something went wrong. Please try again.';
+      _error = rejectedNote ?? 'Something went wrong. Please try again.';
       _errorCode = null;
       return false;
     } finally {

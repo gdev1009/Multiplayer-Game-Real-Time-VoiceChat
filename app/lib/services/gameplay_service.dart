@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -116,20 +118,38 @@ class GameplayService {
   /// and drives the computer-filled seats).
   String? get currentUserId => _client.auth.currentUser?.id;
 
-  Map<String, dynamic> _asMap(dynamic result) {
+  static const _generic = 'Something went wrong. Please try again.';
+
+  Map<String, dynamic> _asMap(dynamic result, [String? rejectedNote]) {
     if (result is Map<String, dynamic>) return result;
     if (result is Map) return Map<String, dynamic>.from(result);
-    throw const LobbyFailure('Something went wrong. Please try again.');
+    if (result is String) {
+      try {
+        final decoded = jsonDecode(result);
+        if (decoded is Map) return Map<String, dynamic>.from(decoded);
+      } catch (_) {}
+    }
+    throw LobbyFailure(rejectedNote ?? _generic);
+  }
+
+  /// Known reasons keep their own note. A bare failure uses [rejectedNote]
+  /// so a clue and a guess don't both say "something went wrong".
+  LobbyFailure _noted(LobbyFailure failure, String? rejectedNote) {
+    if (rejectedNote == null || failure.message != _generic) return failure;
+    return LobbyFailure(rejectedNote, code: failure.code);
   }
 
   Future<Map<String, dynamic>> _callOk(
     String fn, [
     Map<String, dynamic>? params,
+    String? rejectedNote,
   ]) async {
     try {
-      final res = _asMap(await _client.rpc(fn, params: params));
+      final res = _asMap(await _client.rpc(fn, params: params), rejectedNote);
       if (res['ok'] == true) return res;
-      throw LobbyFailure.fromReason(res['reason'] as String?);
+      throw _noted(LobbyFailure.fromReason(res['reason'] as String?), rejectedNote);
+    } on LobbyFailure {
+      rethrow;
     } on PostgrestException catch (e) {
       debugPrint(
         '[GameplayService] $fn failed: ${e.code} ${e.message} '
@@ -145,7 +165,7 @@ class GameplayService {
         missingSchema
             ? 'This game needs a quick setup on the server before it can be '
                 'played. Please contact support.'
-            : 'Something went wrong. Please try again.',
+            : (rejectedNote ?? _generic),
         code: e.code,
       );
     }
@@ -182,13 +202,29 @@ class GameplayService {
   }
 
   /// The on-the-clock clue-giver submits a one-word clue.
-  Future<void> submitClue(String gameId, String text) =>
-      _callOk('mw_submit_clue', {'p_game': gameId, 'p_text': text});
+  Future<void> submitClue(
+    String gameId,
+    String text, {
+    String? rejectedNote,
+  }) =>
+      _callOk(
+        'mw_submit_clue',
+        {'p_game': gameId, 'p_text': text},
+        rejectedNote,
+      );
 
   /// The on-the-clock guesser submits a guess. Returns the RPC payload
   /// (`correct`, `word`, `word_index`) so the client can re-sync the secret.
-  Future<Map<String, dynamic>> submitGuess(String gameId, String text) =>
-      _callOk('mw_submit_guess', {'p_game': gameId, 'p_text': text});
+  Future<Map<String, dynamic>> submitGuess(
+    String gameId,
+    String text, {
+    String? rejectedNote,
+  }) =>
+      _callOk(
+        'mw_submit_guess',
+        {'p_game': gameId, 'p_text': text},
+        rejectedNote,
+      );
 
   /// Advance off the resolved beat to the next word / halftime / game-over.
   Future<void> nextWord(String gameId) =>

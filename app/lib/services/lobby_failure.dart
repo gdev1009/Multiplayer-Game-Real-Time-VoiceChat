@@ -62,10 +62,20 @@ class LobbyFailure implements Exception {
           'We didn\'t catch that. Please send it again.',
           code: 'not_your_turn',
         );
+      case 'not_awaiting_clue':
+        return const LobbyFailure(
+          'That clue already went through. Wait for the guess.',
+          code: 'not_awaiting_clue',
+        );
       case 'not_awaiting_guess':
         return const LobbyFailure(
-          'That word is already done — wait for the next one.',
+          'That word is already done. Wait for the next one.',
           code: 'not_awaiting_guess',
+        );
+      case 'empty':
+        return const LobbyFailure(
+          'Please type one word, then tap Send.',
+          code: 'empty',
         );
       default:
         return LobbyFailure(

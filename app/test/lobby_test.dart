@@ -114,6 +114,18 @@ void main() {
       expect(f.message, contains('Something went wrong'));
       expect(f.code, 'mystery');
     });
+
+    test('clue and guess rejections name the turn', () {
+      expect(
+        LobbyFailure.fromReason('not_awaiting_clue').message,
+        contains('clue'),
+      );
+      expect(
+        LobbyFailure.fromReason('not_awaiting_guess').message,
+        contains('Wait for the next one'),
+      );
+      expect(LobbyFailure.fromReason('empty').message, contains('one word'));
+    });
   });
 
   group('Game occupancy (open-games list)', () {
