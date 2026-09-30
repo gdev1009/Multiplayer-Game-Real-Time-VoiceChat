@@ -5,7 +5,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:match_word/core/theme/app_responsive.dart';
 import 'package:match_word/core/widgets/big_button.dart';
 import 'package:match_word/core/widgets/host_greeting.dart';
-import 'package:match_word/features/billing/trial_policy.dart';
 import 'package:match_word/services/billing_service.dart';
 import 'package:match_word/services/entitlement_service.dart';
 import 'package:match_word/services/profile_service.dart';
@@ -123,8 +122,11 @@ void main() {
       );
     }
 
-    test('paywall enforcement stays off while checkout is a placeholder', () {
-      expect(TrialPolicy.enforcePaywall, isFalse);
+    test('paywall stays off until the store sells the membership', () async {
+      final s = service();
+      expect(s.paywallLive, isFalse);
+      await s.refresh();
+      expect(s.paywallLive, isFalse);
     });
 
     test('an expired trial can still play', () {

@@ -1,7 +1,7 @@
 name: match_word
 description: Match Word — a real-time multiplayer word game for seniors (Grandma Mac).
 publish_to: "none"
-version: 1.0.0+108
+version: 1.0.0+109
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
@@ -24,6 +24,8 @@ dependencies:
   http: ^1.2.2
   path_provider: ^2.1.4
   speech_to_text: ^7.4.0
+  in_app_purchase: ^3.3.1
+  url_launcher: ^6.3.2
 
 dev_dependencies:
   flutter_test:

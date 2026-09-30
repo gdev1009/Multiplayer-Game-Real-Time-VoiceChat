@@ -36,11 +36,22 @@ class EntitlementService {
   SubscriptionEntitlement _sub = SubscriptionEntitlement.none();
   SubscriptionEntitlement get subscription => _sub;
 
+  AccessLevel? _last;
+
+  /// Result of the most recent [refresh], if any.
+  AccessLevel? get lastLevel => _last;
+
+  /// Whether the store sells the membership, so an expired trial is gated.
+  bool get paywallLive => _billing.checkoutReady;
+
   /// Refresh profile + subscription mirror and return the access level.
   Future<AccessLevel> refresh() async {
+    await _billing
+        .prepare()
+        .timeout(const Duration(seconds: 8), onTimeout: () => false);
     final profile = await _profiles.currentProfile();
     _sub = await _billing.fetchEntitlement();
-    return evaluate(profile: profile, subscription: _sub);
+    return _last = evaluate(profile: profile, subscription: _sub);
   }
 
   /// Pure evaluation (also usable with an already-loaded [Profile]).
@@ -59,13 +70,10 @@ class EntitlementService {
     return AccessLevel.trialEarly;
   }
 
-  /// Play / studio require an active trial or paid membership.
-  ///
-  /// While [TrialPolicy.enforcePaywall] is false the answer is always yes —
-  /// store checkout is a placeholder, so blocking play would leave a tester
-  /// with no way forward at all.
+  /// Play / studio require an active trial or paid membership — but only once
+  /// checkout is live, so nobody is ever locked out with no way to pay.
   bool canPlay(AccessLevel level) {
-    if (!TrialPolicy.enforcePaywall) return true;
+    if (!paywallLive) return true;
     return level != AccessLevel.expired;
   }
 }

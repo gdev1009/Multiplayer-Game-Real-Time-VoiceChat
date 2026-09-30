@@ -13,7 +13,6 @@ import '../../core/widgets/build_stamp.dart';
 import '../../core/widgets/host_greeting.dart';
 import '../../models/prize.dart';
 import '../../services/entitlement_service.dart';
-import '../billing/trial_policy.dart';
 import '../auth/auth_controller.dart';
 import '../character/character_controller.dart';
 import '../character/idle_character_preview.dart';
@@ -139,21 +138,19 @@ class _OpeningScreenState extends State<OpeningScreen> with WidgetsBindingObserv
             message: 'So glad you are here. '
                 'What would you like to do today?',
           ),
-          if (access == AccessLevel.expired && TrialPolicy.enforcePaywall) ...[
+          if (access == AccessLevel.expired && entitlement.paywallLive) ...[
             SizedBox(height: gap),
             _TrialBanner(
               daysLeft: 0,
               expired: true,
-              onSubscribe: () async {
-                await Navigator.of(context).pushNamed(AppRoutes.paywall);
-                await _refreshAccess();
-              },
+              onSubscribe: _openMembership,
             ),
-          ] else if (trialDays > 0) ...[
+          ] else if (trialDays > 0 && access != AccessLevel.subscribed) ...[
             SizedBox(height: gap),
             _TrialBanner(
               daysLeft: trialDays,
               countdown: access == AccessLevel.trialCountdown,
+              onSubscribe: entitlement.paywallLive ? _openMembership : null,
             ),
           ],
           SizedBox(height: gap),
@@ -196,6 +193,11 @@ class _OpeningScreenState extends State<OpeningScreen> with WidgetsBindingObserv
         ],
       ),
     );
+  }
+
+  Future<void> _openMembership() async {
+    await Navigator.of(context).pushNamed(AppRoutes.paywall);
+    await _refreshAccess();
   }
 
   Future<void> _goPlay(String route) async {
@@ -320,7 +322,7 @@ class _TrialBanner extends StatelessWidget {
     final String text;
     if (expired) {
       text =
-          'Your free trial has ended. Tap Subscribe when you are ready to keep playing.';
+          'Your free trial has ended. Tap here when you are ready to keep playing.';
     } else if (countdown) {
       text =
           '$daysLeft ${daysLeft == 1 ? 'day' : 'days'} left in your free trial — '
@@ -329,12 +331,15 @@ class _TrialBanner extends StatelessWidget {
       text =
           '$daysLeft ${daysLeft == 1 ? 'day' : 'days'} left in your free trial';
     }
+    final hint = !expired && onSubscribe != null
+        ? '\nTap to see membership.'
+        : '';
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        onTap: expired ? onSubscribe : null,
+        onTap: onSubscribe,
         child: Container(
           padding: EdgeInsets.all(
             AppResponsive.isCompactPhone(context) ? 10 : AppSpacing.md,
@@ -345,7 +350,7 @@ class _TrialBanner extends StatelessWidget {
             border: Border.all(color: AppColors.gold, width: 2),
           ),
           child: Text(
-            text,
+            '$text$hint',
             style: AppText.body.copyWith(
               fontSize: AppResponsive.bodySize(context),
             ),

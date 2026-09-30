@@ -492,18 +492,28 @@ class _SeatTile extends StatelessWidget {
         children: [
           _SeatAvatar(filled: filled, character: seatLook),
           const SizedBox(width: AppSpacing.sm),
+          // Host tag sits under the name: beside it, the name was squeezed
+          // to nothing in the two-column team cards.
           Expanded(
-            child: Text(
-              filled ? player!.displayName : 'Open seat',
-              style: (filled ? AppText.body : AppText.bodyMuted).copyWith(
-                fontSize: AppResponsive.isCompactPhone(context) ? 13 : 16,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  filled ? player!.displayName : 'Open seat',
+                  style: (filled ? AppText.body : AppText.bodyMuted).copyWith(
+                    fontSize: AppResponsive.isCompactPhone(context) ? 13 : 16,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (filled && player!.isHost) ...[
+                  const SizedBox(height: 2),
+                  const _Tag(label: 'Host', color: AppColors.gold),
+                ],
+              ],
             ),
           ),
-          if (filled && player!.isHost)
-            const _Tag(label: 'Host', color: AppColors.gold),
         ],
       ),
     );
@@ -557,7 +567,7 @@ class _Tag extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding:
-          const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 4),
+          const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 2),
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(12),
@@ -565,7 +575,7 @@ class _Tag extends StatelessWidget {
       child: Text(
         label,
         style: const TextStyle(
-          fontSize: 18,
+          fontSize: 14,
           fontWeight: FontWeight.w800,
           color: AppColors.black,
         ),

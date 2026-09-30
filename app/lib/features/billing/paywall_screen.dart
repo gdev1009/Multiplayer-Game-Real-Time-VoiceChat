@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_responsive.dart';
@@ -12,7 +13,8 @@ import '../../services/billing_service.dart';
 import '../../services/entitlement_service.dart';
 import 'trial_policy.dart';
 
-/// Free-trial ended / subscribe prompt.
+/// Membership screen: subscribe, restore, or (before the store sells the
+/// membership) a friendly note with Keep Playing.
 class PaywallScreen extends StatefulWidget {
   const PaywallScreen({super.key});
 
@@ -23,6 +25,16 @@ class PaywallScreen extends StatefulWidget {
 class _PaywallScreenState extends State<PaywallScreen> {
   String? _message;
   bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await context.read<EntitlementService>().refresh();
+      if (mounted) setState(() {});
+    });
+  }
 
   /// Always leaves this screen — refreshing entitlement must never trap the
   /// player here if the call fails.
@@ -55,52 +67,66 @@ class _PaywallScreenState extends State<PaywallScreen> {
     }
   }
 
+  Future<void> _open(String url) async {
+    try {
+      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    } catch (_) {
+      // Nothing useful to show a player if the browser will not open.
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final billing = context.read<BillingService>();
+    final entitlement = context.read<EntitlementService>();
     final args = ModalRoute.of(context)?.settings.arguments;
-    final compact = AppResponsive.isCompactPhone(context);
     final gap = AppResponsive.sectionGap(context);
-    // Store checkout is not live yet, so this screen only ever informs.
-    const informational = !TrialPolicy.enforcePaywall;
-    final greeting = args is String && args.trim().isNotEmpty
-        ? args.trim()
-        : informational
-            ? 'Match Word will be ${TrialPolicy.monthlyPriceLabel} a month once '
-                'the store is live. Nothing to pay while testing — tap '
-                'Keep Playing and enjoy the game.'
-            : compact
-                ? 'Your free trial ended. Keep Match Word ad-free for '
-                    '${TrialPolicy.monthlyPriceLabel}/month — whenever you are ready.'
-                : 'Your free trial has been a joy. For ${TrialPolicy.monthlyPriceLabel} '
-                    'a month you keep Match Word ad-free — no rush, just whenever '
-                    'you are ready.';
+    final price = billing.priceLabel;
+    final live = billing.checkoutReady;
+    final level = entitlement.lastLevel;
+    final member = live && level == AccessLevel.subscribed;
+    final expired = level == AccessLevel.expired;
+
+    final String title;
+    final String greeting;
+    if (!live) {
+      title = 'About membership';
+      greeting = 'Match Word will be $price a month once membership opens in '
+          'the store. Nothing to pay for now. Tap Keep Playing and enjoy '
+          'the game.';
+    } else if (member) {
+      title = 'You are a member';
+      greeting = 'Your membership is active. Thank you for playing '
+          'Match Word!';
+    } else if (expired) {
+      title = 'Keep playing Match Word';
+      greeting = 'Your free trial has been a joy. For $price a month you keep '
+          'Match Word ad-free, whenever you are ready.';
+    } else {
+      title = 'Match Word membership';
+      greeting = 'Enjoy your free trial. When it ends, keep playing for '
+          '$price a month.';
+    }
+    final hostLine =
+        args is String && args.trim().isNotEmpty ? args.trim() : greeting;
 
     return AppPage(
-      title: informational ? 'Membership' : null,
-      showBack: informational,
+      title: 'Membership',
+      showBack: !(live && expired),
       compactAppBar: true,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           SizedBox(height: gap),
           Text(
-            informational ? 'About membership' : 'Keep playing Match Word',
+            title,
             style: AppText.display.copyWith(
               fontSize: AppResponsive.displaySize(context),
             ),
             textAlign: TextAlign.center,
           ),
           SizedBox(height: gap),
-          HostGreeting(message: greeting),
-          SizedBox(height: gap),
-          Text(
-            '${TrialPolicy.monthlyPriceLabel}/mo · Cancel anytime',
-            style: AppText.bodyMuted.copyWith(
-              fontSize: AppResponsive.bodySize(context),
-            ),
-            textAlign: TextAlign.center,
-          ),
+          HostGreeting(message: hostLine),
           SizedBox(height: gap),
           if (_message != null) ...[
             Text(
@@ -112,9 +138,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
             ),
             SizedBox(height: gap),
           ],
-          // Primary action while testing is "get back to the game", never a
-          // checkout that cannot complete.
-          if (informational) ...[
+          if (!live) ...[
             BigButton(
               label: 'Keep Playing',
               icon: Icons.play_arrow_rounded,
@@ -127,9 +151,9 @@ class _PaywallScreenState extends State<PaywallScreen> {
               variant: BigButtonVariant.secondary,
               onPressed: _busy ? null : () => _run(billing.restorePurchases),
             ),
-          ] else ...[
+          ] else if (!member) ...[
             BigButton(
-              label: _busy ? 'Please wait…' : 'Subscribe',
+              label: _busy ? 'Please wait…' : 'Subscribe for $price a month',
               icon: Icons.favorite_rounded,
               onPressed: _busy ? null : () => _run(billing.purchaseMonthly),
             ),
@@ -140,6 +164,29 @@ class _PaywallScreenState extends State<PaywallScreen> {
               variant: BigButtonVariant.secondary,
               onPressed: _busy ? null : () => _run(billing.restorePurchases),
             ),
+            SizedBox(height: gap),
+            Text(
+              'Monthly membership, $price per month. It renews each month '
+              'until you cancel in your App Store or Google Play account '
+              'settings. Cancel anytime.',
+              style: AppText.bodyMuted.copyWith(
+                fontSize: AppResponsive.bodySize(context) - 2,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            Wrap(
+              alignment: WrapAlignment.center,
+              children: [
+                TextButton(
+                  onPressed: () => _open(TrialPolicy.termsUrl),
+                  child: const Text('Terms of Use', style: AppText.caption),
+                ),
+                TextButton(
+                  onPressed: () => _open(TrialPolicy.privacyUrl),
+                  child: const Text('Privacy Policy', style: AppText.caption),
+                ),
+              ],
+            ),
           ],
           SizedBox(height: gap),
           TextButton(
@@ -148,8 +195,8 @@ class _PaywallScreenState extends State<PaywallScreen> {
               foregroundColor: AppColors.textSecondary,
               minimumSize: const Size.fromHeight(44),
             ),
-            child: const Text(
-              informational ? 'Back to Home' : 'Not now',
+            child: Text(
+              live && !member ? 'Not now' : 'Back to Home',
               style: AppText.body,
             ),
           ),

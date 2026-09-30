@@ -562,10 +562,18 @@ class _DemoGameplayService extends GameplayService {
       WordBank.deal(16, random: Random(20260714));
 
   @override
-  Future<void> submitClue(String gameId, String text) async {}
+  Future<void> submitClue(
+    String gameId,
+    String text, {
+    String? rejectedNote,
+  }) async {}
 
   @override
-  Future<Map<String, dynamic>> submitGuess(String gameId, String text) async =>
+  Future<Map<String, dynamic>> submitGuess(
+    String gameId,
+    String text, {
+    String? rejectedNote,
+  }) async =>
       const {};
 
   @override

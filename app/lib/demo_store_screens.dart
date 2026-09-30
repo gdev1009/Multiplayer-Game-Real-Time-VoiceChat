@@ -32,7 +32,6 @@ import 'features/lobby/lobby_controller.dart';
 import 'features/lobby/lobby_room_screen.dart';
 import 'features/lobby/upcoming_games_screen.dart';
 import 'features/prizes/prize_controller.dart';
-import 'features/prizes/prize_room_screen.dart';
 import 'features/studio/studio_screen.dart';
 import 'models/character.dart';
 import 'models/friend.dart';
@@ -70,16 +69,14 @@ const List<String> kStoreScenes = [
   '12_play_clue',
   '12b_play_bubbles',
   '13_play_winner',
-  '14_prize_room',
   '15_paywall',
   '16_friends',
 ];
 
 void main() {
   final charService = _InMemoryCharacterService()..seed(_rosie());
-  final prizeCtrl = PrizeController(PrizeService(_offlineClient()))
-    ..seedForDemo(_demoPrizeRoom());
-  final billing = BillingService(_offlineClient());
+  final prizeCtrl = _DemoPrizeController()..seedForDemo(_demoPrizeRoom());
+  final billing = _LiveStoreBilling();
   final gameplay = GameplayController()
     ..startLocal(
       words: WordBank.deal(16, random: Random(20260714)),
@@ -130,10 +127,7 @@ void main() {
         ),
         Provider<BillingService>.value(value: billing),
         Provider<EntitlementService>(
-          create: (_) => EntitlementService(
-            profileService: ProfileService(_offlineClient()),
-            billingService: billing,
-          ),
+          create: (_) => _DemoEntitlementService(billing),
         ),
         Provider<GameplayService>.value(value: _DemoGameplayService()),
       ],
@@ -209,6 +203,7 @@ class _StoreSequencerState extends State<_StoreSequencer> {
       chars.chooseOption(CharacterLayer.outfit, 'outfit-f1');
     }
     final play = context.read<GameplayController>();
+    if (scene == '11_play_kickoff') _restartGame(play);
     final state = play.state;
     if (state == null) return;
     if (scene == '12_play_clue' && state.step == TurnStep.awaitingClue) {
@@ -220,8 +215,8 @@ class _StoreSequencerState extends State<_StoreSequencer> {
     }
   }
 
-  /// One steal cycle so A1, A2, B1, and B2 each have a speech bubble.
-  void _seedAllSeatBubbles(GameplayController play) {
+  /// Fresh all-human game so each capture pass starts from the kickoff.
+  void _restartGame(GameplayController play) {
     play.startLocal(
       words: WordBank.deal(16, random: Random(20260714)),
       names: const {
@@ -244,6 +239,11 @@ class _StoreSequencerState extends State<_StoreSequencer> {
         'B2': _pearl(),
       },
     );
+  }
+
+  /// One steal cycle so A1, A2, B1, and B2 each have a speech bubble.
+  void _seedAllSeatBubbles(GameplayController play) {
+    _restartGame(play);
     // Local engine updates are sync inside these Futures.
     play.submitClue('Sunny');
     play.submitGuess('Moon');
@@ -252,7 +252,8 @@ class _StoreSequencerState extends State<_StoreSequencer> {
   }
 
   void _fastForwardToWinner(GameplayController play) {
-    for (var i = 0; i < 20; i++) {
+    _restartGame(play);
+    for (var i = 0; i < 400; i++) {
       final s = play.state;
       if (s == null) return;
       if (s.isOver) return;
@@ -265,9 +266,11 @@ class _StoreSequencerState extends State<_StoreSequencer> {
         continue;
       }
       if (s.step == TurnStep.awaitingClue) {
-        play.submitClue(AiPlayer.clueFor(s.secretWord, variant: s.wordIndex));
+        play.submitClue(AiPlayer.clueFor(s.secretWord, variant: i));
       } else if (s.step == TurnStep.awaitingGuess) {
-        play.submitGuess(i.isEven ? s.secretWord : 'Wrong');
+        // Team A lands most words so the final board shows a clear winner.
+        final right = s.cluingTeam == 'A' ? s.wordIndex % 3 != 2 : s.wordIndex.isEven;
+        play.submitGuess(right ? s.secretWord : 'Wrong');
       }
     }
   }
@@ -314,7 +317,6 @@ class _StoreSequencerState extends State<_StoreSequencer> {
           '12b_play_bubbles' ||
           '13_play_winner' =>
             const PlayScreen(studioPass: true),
-          '14_prize_room' => const PrizeRoomScreen(),
           '15_paywall' => const PaywallScreen(),
           '16_friends' => const FriendsScreen(),
           _ => const WelcomeScreen(),
@@ -415,6 +417,43 @@ PrizeRoom _demoPrizeRoom() => PrizeRoom(
         ),
       ],
     );
+
+/// Store screenshots show membership as it looks once the store sells it.
+class _LiveStoreBilling extends BillingService {
+  _LiveStoreBilling() : super(_offlineClient());
+
+  @override
+  bool get checkoutReady => true;
+
+  @override
+  String get priceLabel => r'$6.99 CAD';
+
+  @override
+  Future<bool> prepare() async => true;
+}
+
+/// Keeps the seeded trophies — the offline reload would empty them.
+class _DemoPrizeController extends PrizeController {
+  _DemoPrizeController() : super(PrizeService(_offlineClient()));
+
+  @override
+  Future<void> load() async {}
+}
+
+/// A player on day one of the free trial (offline there is no profile).
+class _DemoEntitlementService extends EntitlementService {
+  _DemoEntitlementService(BillingService billing)
+      : super(
+          profileService: ProfileService(_offlineClient()),
+          billingService: billing,
+        );
+
+  @override
+  AccessLevel? get lastLevel => AccessLevel.trialEarly;
+
+  @override
+  Future<AccessLevel> refresh() async => AccessLevel.trialEarly;
+}
 
 class _SilentOutput implements SoundOutput {
   @override
@@ -609,10 +648,18 @@ class _DemoGameplayService extends GameplayService {
       WordBank.deal(16, random: Random(20260714));
 
   @override
-  Future<void> submitClue(String gameId, String text) async {}
+  Future<void> submitClue(
+    String gameId,
+    String text, {
+    String? rejectedNote,
+  }) async {}
 
   @override
-  Future<Map<String, dynamic>> submitGuess(String gameId, String text) async =>
+  Future<Map<String, dynamic>> submitGuess(
+    String gameId,
+    String text, {
+    String? rejectedNote,
+  }) async =>
       const {};
 
   @override

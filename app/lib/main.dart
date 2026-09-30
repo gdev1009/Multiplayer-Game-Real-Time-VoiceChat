@@ -1,6 +1,10 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -58,7 +62,16 @@ Future<void> main() async {
   final gameplayService = GameplayService(client);
   final friendService = FriendService(client);
   final prizeService = PrizeService(client);
-  final billingService = BillingService(client);
+  final mobile = !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.iOS ||
+          defaultTargetPlatform == TargetPlatform.android);
+  final billingService = BillingService(
+    client,
+    store: mobile ? InAppPurchase.instance : null,
+  );
+  // Subscribe to store updates at launch so renewals and interrupted
+  // purchases are never missed.
+  unawaited(billingService.prepare());
   final entitlementService = EntitlementService(
     profileService: profileService,
     billingService: billingService,

@@ -280,24 +280,17 @@ class _RequestTile extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.md),
-          Row(
-            children: [
-              Expanded(
-                child: BigButton(
-                  label: 'Accept',
-                  icon: Icons.check_rounded,
-                  onPressed: onAccept,
-                ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: BigButton(
-                  label: 'Not now',
-                  variant: BigButtonVariant.secondary,
-                  onPressed: onDecline,
-                ),
-              ),
-            ],
+          // Stacked: side by side, "Accept" wrapped mid-word on narrow phones.
+          BigButton(
+            label: 'Accept',
+            icon: Icons.check_rounded,
+            onPressed: onAccept,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          BigButton(
+            label: 'Not now',
+            variant: BigButtonVariant.secondary,
+            onPressed: onDecline,
           ),
         ],
       ),

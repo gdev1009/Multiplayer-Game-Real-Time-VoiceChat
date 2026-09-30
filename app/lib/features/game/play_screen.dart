@@ -991,7 +991,7 @@ class _GameOverPanel extends StatelessWidget {
           Text(
             winner == null
                 ? 'Thanks for playing Match Word!'
-                : 'A trophy is waiting on your shelf — see you next game!',
+                : 'Winners add a trophy on the home screen. See you next game!',
             style: AppText.body,
             textAlign: TextAlign.center,
           ),

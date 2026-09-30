@@ -1,4 +1,8 @@
 /// Match Word free-trial + membership rules.
+///
+/// An expired trial only blocks play once the store actually sells the
+/// membership ([BillingService.checkoutReady]); before that a tester whose
+/// trial lapsed could neither subscribe nor play.
 class TrialPolicy {
   const TrialPolicy._();
 
@@ -9,14 +13,11 @@ class TrialPolicy {
   /// With a 5-day trial: soft banner on days 1–2, countdown on days 3–5.
   static const int countdownAtOrBelowDays = 3;
 
-  /// Paid membership price shown in the paywall and store copy.
+  /// Paid membership price used until the store reports its own price.
   static const String monthlyPriceLabel = r'$6.99 CAD';
 
-  /// Whether an expired trial blocks play.
-  ///
-  /// False while App Store / Play checkout is still a placeholder: a tester
-  /// whose trial lapsed could not subscribe *or* play, which locked Ronna out
-  /// of every screen past Subscribe. Flip to true only after real purchases
-  /// work end to end.
-  static const bool enforcePaywall = false;
+  static const String termsUrl =
+      'https://grandmamac.com/matchword/terms-of-service.html';
+  static const String privacyUrl =
+      'https://grandmamac.com/matchword/privacy-policy.html';
 }
