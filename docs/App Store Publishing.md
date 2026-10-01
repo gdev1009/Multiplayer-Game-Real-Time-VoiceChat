@@ -174,13 +174,16 @@ Generated assets live under `docs/screenshots/store/`:
 
 Pick the strongest story arc for the public listing:
 
-1. `05_opening_home` — hero / home  
-2. `06_character_builder` — customization  
-3. `11_play_kickoff` — game show moment  
-4. `12_play_clue` — core gameplay  
-5. `14_prize_room` — progression  
-6. `15_paywall` — subscription (optional for marketing)  
-7. `16_friends` — social  
+The Prize Room screen is not in the shipping app (`PrizeAssets.showPrizeRoomEntry` is false). Do not upload `14_prize_room`. `15_paywall` is review-only for the subscription screenshot, not one of the eight listing pictures.
+
+1. `01_welcome`
+2. `05_opening_home`
+3. `06_character_builder`
+4. `08_studio`
+5. `10_lobby_room`
+6. `11_play_kickoff`
+7. `12_play_clue`
+8. `13_play_winner`
 
 ### Regenerating screenshots
 
@@ -203,7 +206,7 @@ Requires Chrome and Node (`puppeteer-core`). Uses WebGL (SwiftShader) so charact
 - [ ] Screenshots uploaded (6.7" iPhone: 1290×2796)  
 - [ ] App description, keywords, subtitle  
 - [ ] Age rating questionnaire  
-- [ ] Subscription `matchword_monthly_599` created ($5.99/mo)  
+- [ ] Subscription `matchword_monthly_699` created ($6.99 CAD/mo) and attached to build 109 (the build that sells it)
 - [ ] TestFlight build uploaded from Mac/Xcode  
 - [ ] Export compliance / encryption (typically “standard encryption only”)  
 
@@ -214,13 +217,14 @@ See also: [TestFlight Setup.md](TestFlight%20Setup.md)
 ## Google Play Console checklist
 
 - [ ] Developer account ($25 one-time)  
-- [ ] App created — package `com.matchword.matchWord`  
+- [ ] App created — package `com.matchword.app` (not the Apple bundle id)  
 - [ ] **Release signing** — upload keystore, not debug  
-- [ ] Upload `MatchWord-store-*.aab` from `apks/`  
+- [ ] Upload `MatchWord-v109-play-20260930.aab`  
 - [ ] Privacy Policy URL  
-- [ ] Store listing screenshots (1080×1920 or larger)  
+- [ ] Store listing screenshots (1080×1920)  
 - [ ] Content rating questionnaire  
-- [ ] Subscription product `matchword_monthly_599`  
+- [ ] Personal accounts created after 13 Nov 2023: closed test, 12 opted-in testers for 14 consecutive days, before production  
+- [ ] Subscription product `matchword_monthly_699` ($6.99 CAD) after the 109 file is uploaded
 - [ ] Banking & tax profile complete  
 
 ---
@@ -232,7 +236,7 @@ See also: [TestFlight Setup.md](TestFlight%20Setup.md)
 **Short description (Play, 80 chars):** Team up, give one-word clues, and guess before time runs out!  
 
 **Description (long):**  
-Match Word is a lively social word game where four players team up, give clever one-word clues, and race to guess secret words. Build your clay character, invite friends, earn trophies on your prize shelf, and enjoy the full game-show experience with host Guy Smiley. Start with a 5-day free trial, then continue for $5.99/month.
+Match Word is a lively social word game for friends and family. Four players team up. One player gives a one-word clue. Their partner guesses the secret word. Build your own character, invite friends with a room code, and play with host Guy Smiley. The first 5 days are free. After that, membership is $6.99 CAD a month. Build 109 turns checkout on once that product is live in the store.
 
 ---
 
