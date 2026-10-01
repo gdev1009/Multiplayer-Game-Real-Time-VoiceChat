@@ -31,7 +31,7 @@ Build 109 has Apple and Google checkout built in. It switches itself on:
 
 You do not need a new build to turn charging on. You turn it on by finishing the subscription steps below.
 
-**Price:** $6.99 CAD a month, as you set in August. The app shows the price the store sends, so the store price and the screen always match.
+**Price:** $6.99 CAD a month, which is what build 109 shows. You had asked earlier for $5.99. If you still want $5.99, tell me before you create the product and I will send a new build and a new product ID. Do not create `matchword_monthly_699` at $5.99. The app shows the price the store sends, so the store price and the screen stay matched.
 
 **Product ID**, both stores, typed exactly:
 
