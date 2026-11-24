@@ -1,7 +1,8 @@
 # Codemagic CI/CD — Match Word (Flutter in `app/`)
 #
-# Secrets are never committed. Load them in the Codemagic UI under
-# Environment variables (see docs/Codemagic Setup.md).
+# Apple signing and ElevenLabs stay in the Codemagic UI
+# (see docs/Codemagic Setup.md). The Supabase URL and publishable key
+# are pinned in the scripts below so TestFlight uses Ronna's project.
 #
 # Group `appstore_credentials` (all Secret):
 #   APP_STORE_CONNECT_ISSUER_ID
@@ -9,8 +10,9 @@
 #   APP_STORE_CONNECT_PRIVATE_KEY   ← contents of AuthKey_….p8
 #   CERTIFICATE_PRIVATE_KEY         ← REQUIRED (RSA PEM for Distribution cert)
 #
-# Group `matchword_app_secrets` (Secret) so CI can write app/.env:
-#   SUPABASE_URL, SUPABASE_ANON_KEY, ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID
+# Group `matchword_app_secrets` (Secret): ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID.
+# SUPABASE_URL and SUPABASE_ANON_KEY are pinned below to Ronna's Match Word
+# project (reicfxobvqooslymsxqm). The secret group still has the old project.
 
 workflows:
   ios-testflight:
@@ -32,20 +34,16 @@ workflows:
         script: |
           set -euo pipefail
           ENV_FILE="$CM_BUILD_DIR/app/.env"
-          if [ -n "${SUPABASE_URL:-}" ]; then
-            printf '%s\n' \
-              "SUPABASE_URL=${SUPABASE_URL}" \
-              "SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}" \
-              "ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY:-}" \
-              "ELEVENLABS_VOICE_ID=${ELEVENLABS_VOICE_ID:-DHeX7CCuOXUPRpnb0AdT}" \
-              > "$ENV_FILE"
-            echo "Wrote $ENV_FILE from Codemagic secrets."
-          elif [ -f "$ENV_FILE" ]; then
-            echo "Using existing $ENV_FILE"
-          else
-            echo "ERROR: add group matchword_app_secrets (SUPABASE_URL, SUPABASE_ANON_KEY, …)"
-            exit 1
-          fi
+          # Pinned to Ronna's Match Word project. Do not read SUPABASE_URL /
+          # SUPABASE_ANON_KEY from matchword_app_secrets — that group still
+          # has the old development project, and a stale secret would ship it.
+          printf '%s\n' \
+            "SUPABASE_URL=https://reicfxobvqooslymsxqm.supabase.co" \
+            "SUPABASE_ANON_KEY=sb_publishable_L3omVDswE3U832dykD-ouw_fp8jdZk-" \
+            "ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY:-}" \
+            "ELEVENLABS_VOICE_ID=${ELEVENLABS_VOICE_ID:-DHeX7CCuOXUPRpnb0AdT}" \
+            > "$ENV_FILE"
+          echo "Wrote $ENV_FILE for https://reicfxobvqooslymsxqm.supabase.co"
 
       - name: Get Flutter packages
         script: |
@@ -221,17 +219,13 @@ workflows:
         script: |
           set -euo pipefail
           ENV_FILE="$CM_BUILD_DIR/app/.env"
-          if [ -n "${SUPABASE_URL:-}" ]; then
-            printf '%s\n' \
-              "SUPABASE_URL=${SUPABASE_URL}" \
-              "SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}" \
-              "ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY:-}" \
-              "ELEVENLABS_VOICE_ID=${ELEVENLABS_VOICE_ID:-DHeX7CCuOXUPRpnb0AdT}" \
-              > "$ENV_FILE"
-          elif [ ! -f "$ENV_FILE" ]; then
-            echo "ERROR: add matchword_app_secrets"
-            exit 1
-          fi
+          printf '%s\n' \
+            "SUPABASE_URL=https://reicfxobvqooslymsxqm.supabase.co" \
+            "SUPABASE_ANON_KEY=sb_publishable_L3omVDswE3U832dykD-ouw_fp8jdZk-" \
+            "ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY:-}" \
+            "ELEVENLABS_VOICE_ID=${ELEVENLABS_VOICE_ID:-DHeX7CCuOXUPRpnb0AdT}" \
+            > "$ENV_FILE"
+          echo "Wrote $ENV_FILE for https://reicfxobvqooslymsxqm.supabase.co"
       - name: Set up local.properties
         script: |
           echo "flutter.sdk=$HOME/programs/flutter" > "$CM_BUILD_DIR/app/android/local.properties"
