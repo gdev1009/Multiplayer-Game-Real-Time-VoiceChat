@@ -41,9 +41,8 @@ class PinPad extends StatelessWidget {
       children: [
         _Dots(filled: value.length, total: length),
         SizedBox(
-          height: AppResponsive.isShort(context)
-              ? AppSpacing.sm
-              : AppSpacing.md,
+          height:
+              AppResponsive.isShort(context) ? AppSpacing.sm : AppSpacing.md,
         ),
         _padRow(context, ['1', '2', '3'], gap),
         SizedBox(height: gap),
@@ -85,23 +84,26 @@ class _Dots extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dot = AppResponsive.s(context, 18).clamp(14.0, 20.0);
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        for (int i = 0; i < total; i++)
-          Container(
-            margin: EdgeInsets.symmetric(
-              horizontal: AppResponsive.s(context, 6),
+    return Semantics(
+      label: '$filled of $total numbers entered',
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          for (int i = 0; i < total; i++)
+            Container(
+              margin: EdgeInsets.symmetric(
+                horizontal: AppResponsive.s(context, 6),
+              ),
+              width: dot,
+              height: dot,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: i < filled ? AppColors.deepPurple : Colors.transparent,
+                border: Border.all(color: AppColors.deepPurple, width: 2.5),
+              ),
             ),
-            width: dot,
-            height: dot,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: i < filled ? AppColors.deepPurple : Colors.transparent,
-              border: Border.all(color: AppColors.deepPurple, width: 2.5),
-            ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -125,6 +127,7 @@ class _PadKey extends StatelessWidget {
       button: true,
       label: isBackspace ? 'Delete' : label,
       child: SizedBox(
+        key: ValueKey<String>('pin-key-$label'),
         width: keySize,
         height: keySize,
         child: Material(

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -39,6 +41,13 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
   String? _error;
   bool _busy = false;
 
+  /// Waits so the fourth dot paints, and so that same tap cannot land on the
+  /// next pad. Replacing the pad inside the tap made the last number look
+  /// missed and made the two PINs disagree.
+  Timer? _advanceTimer;
+  Timer? _shieldTimer;
+  bool _shieldPad = false;
+
   /// True when the chosen email already has an account, so we can offer the
   /// "Forgot my PIN" recovery flow right from the error.
   bool _offerForgotPin = false;
@@ -54,16 +63,40 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
 
   @override
   void dispose() {
+    _advanceTimer?.cancel();
+    _shieldTimer?.cancel();
     _nameController.dispose();
     _emailController.dispose();
     super.dispose();
   }
 
-  void _goTo(_Step step) => setState(() {
-        _error = null;
-        _offerForgotPin = false;
-        _step = step;
-      });
+  void _armShield() {
+    _shieldTimer?.cancel();
+    _shieldPad = true;
+    _shieldTimer = Timer(const Duration(milliseconds: 280), () {
+      _shieldPad = false;
+    });
+  }
+
+  void _goTo(_Step step, {bool shieldPad = false}) {
+    _advanceTimer?.cancel();
+    if (shieldPad) _armShield();
+    setState(() {
+      _error = null;
+      _offerForgotPin = false;
+      _step = step;
+    });
+  }
+
+  void _scheduleAdvance(void Function() action) {
+    _advanceTimer?.cancel();
+    _advanceTimer = Timer(const Duration(milliseconds: 280), () {
+      if (!mounted) return;
+      action();
+    });
+  }
+
+  bool get _padIgnored => _shieldPad;
 
   void _back() {
     switch (_step) {
@@ -76,7 +109,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
         _goTo(_Step.email);
       case _Step.confirmPin:
         setState(() => _confirmPin = '');
-        _goTo(_Step.pin);
+        _goTo(_Step.pin, shieldPad: true);
     }
   }
 
@@ -104,11 +137,12 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
       setState(() => _error = err);
       return;
     }
-    _goTo(_Step.confirmPin);
+    _goTo(_Step.confirmPin, shieldPad: true);
   }
 
   Future<void> _onConfirmComplete() async {
     if (_confirmPin != _pin) {
+      _armShield();
       setState(() {
         _error = 'The two PINs do not match. Let\'s try again.';
         _confirmPin = '';
@@ -180,7 +214,10 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     );
   }
 
-  Widget _stepWrap({required String heading, String? subtitle, required List<Widget> children}) {
+  Widget _stepWrap(
+      {required String heading,
+      String? subtitle,
+      required List<Widget> children}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -222,7 +259,8 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
           onSubmitted: (_) => _onNameNext(),
         ),
         const SizedBox(height: AppSpacing.xl),
-        BigButton(label: 'Next', icon: Icons.arrow_forward, onPressed: _onNameNext),
+        BigButton(
+            label: 'Next', icon: Icons.arrow_forward, onPressed: _onNameNext),
       ],
     );
   }
@@ -244,7 +282,8 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
           onSubmitted: (_) => _onEmailNext(),
         ),
         const SizedBox(height: AppSpacing.xl),
-        BigButton(label: 'Next', icon: Icons.arrow_forward, onPressed: _onEmailNext),
+        BigButton(
+            label: 'Next', icon: Icons.arrow_forward, onPressed: _onEmailNext),
       ],
     );
   }
@@ -255,15 +294,20 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
       subtitle: 'Pick 4 numbers you will remember, like your bank card.',
       children: [
         PinPad(
+          key: const ValueKey('choose-pin'),
           value: _pin,
           onChanged: (value) {
+            if (_padIgnored) return;
+            _advanceTimer?.cancel();
             setState(() {
               _error = null;
               _pin = value;
             });
             if (value.length == 4) {
               HapticFeedback.lightImpact();
-              _onPinComplete();
+              _scheduleAdvance(() {
+                if (_step == _Step.pin && _pin.length == 4) _onPinComplete();
+              });
             }
           },
         ),
@@ -283,15 +327,22 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
           )
         else
           PinPad(
+            key: const ValueKey('confirm-pin'),
             value: _confirmPin,
             onChanged: (value) {
+              if (_padIgnored) return;
+              _advanceTimer?.cancel();
               setState(() {
                 _error = null;
                 _confirmPin = value;
               });
               if (value.length == 4) {
                 HapticFeedback.lightImpact();
-                _onConfirmComplete();
+                _scheduleAdvance(() {
+                  if (_step == _Step.confirmPin && _confirmPin.length == 4) {
+                    _onConfirmComplete();
+                  }
+                });
               }
             },
           ),
