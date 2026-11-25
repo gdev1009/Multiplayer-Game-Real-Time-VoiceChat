@@ -28,13 +28,14 @@ class CreateAccountScreen extends StatefulWidget {
   State<CreateAccountScreen> createState() => _CreateAccountScreenState();
 }
 
-enum _Step { name, email, pin, confirmPin }
+enum _Step { name, email, pin, confirmPin, code }
 
 class _CreateAccountScreenState extends State<CreateAccountScreen> {
   _Step _step = _Step.name;
 
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
+  final _codeController = TextEditingController();
   String _pin = '';
   String _confirmPin = '';
 
@@ -67,6 +68,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     _shieldTimer?.cancel();
     _nameController.dispose();
     _emailController.dispose();
+    _codeController.dispose();
     super.dispose();
   }
 
@@ -110,6 +112,8 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
       case _Step.confirmPin:
         setState(() => _confirmPin = '');
         _goTo(_Step.pin, shieldPad: true);
+      case _Step.code:
+        _goTo(_Step.email);
     }
   }
 
@@ -159,14 +163,22 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     });
 
     try {
-      await context.read<AuthController>().createAccount(
+      final needsCode = await context.read<AuthController>().beginCreateAccount(
             firstName: _nameController.text,
             email: _emailController.text,
             pin: _pin,
           );
+      if (!mounted) return;
+      if (needsCode) {
+        setState(() {
+          _busy = false;
+          _error = null;
+          _step = _Step.code;
+        });
+        return;
+      }
       // Account created and signed in. Remove this pushed flow so the
       // AuthGate's Home screen becomes visible.
-      if (!mounted) return;
       Navigator.of(context).popUntil((route) => route.isFirst);
     } on AuthFailure catch (e) {
       if (!mounted) return;
@@ -210,6 +222,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
         _Step.email => _emailStep(),
         _Step.pin => _pinStep(),
         _Step.confirmPin => _confirmStep(),
+        _Step.code => _codeStep(),
       },
     );
   }
@@ -348,5 +361,94 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
           ),
       ],
     );
+  }
+
+  Widget _codeStep() {
+    final email = _emailController.text.trim();
+    return _stepWrap(
+      heading: 'Enter your code',
+      subtitle: 'We sent a 6-number code to $email. '
+          'Enter it here to finish creating your account.',
+      children: [
+        BigTextField(
+          label: '6-number code',
+          controller: _codeController,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          textCapitalization: TextCapitalization.none,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (_) => _submitCode(),
+        ),
+        const SizedBox(height: AppSpacing.xl),
+        BigButton(
+          label: 'Finish',
+          icon: Icons.check_rounded,
+          isLoading: _busy,
+          onPressed: _busy ? null : _submitCode,
+        ),
+        const SizedBox(height: AppSpacing.md),
+        BigButton(
+          label: 'Send the code again',
+          icon: Icons.email_outlined,
+          variant: BigButtonVariant.secondary,
+          onPressed: _busy ? null : _resendCode,
+        ),
+      ],
+    );
+  }
+
+  Future<void> _submitCode() async {
+    final code = _codeController.text.trim();
+    if (!RegExp(r'^\d{6}$').hasMatch(code)) {
+      setState(() {
+        _error = 'Please enter the 6-number code from your email.';
+      });
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await context.read<AuthController>().confirmCreateAccount(code: code);
+      if (!mounted) return;
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    } on AuthFailure catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = e.message;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = 'Something went wrong. Please try again.';
+      });
+    }
+  }
+
+  Future<void> _resendCode() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await context.read<AuthController>().resendCreateCode();
+      if (!mounted) return;
+      setState(() => _busy = false);
+    } on AuthFailure catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = e.message;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = 'We could not send the code. Please try again.';
+      });
+    }
   }
 }

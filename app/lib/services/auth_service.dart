@@ -89,50 +89,169 @@ class AuthService {
   // Account creation
   // ---------------------------------------------------------------------------
 
-  Future<Profile> createAccount({
+  _PendingSignup? _pendingSignup;
+
+  /// Starts account creation and sends the email code.
+  ///
+  /// Returns a profile only when the sign-up already has a session. Otherwise
+  /// returns null: the player must enter the emailed code first. Profile and
+  /// device-trial rows are written only after that code is verified, because
+  /// those tables reject a signed-out caller.
+  Future<Profile?> beginCreateAccount({
     required String firstName,
     required String email,
     required String pin,
   }) async {
-    final deviceId = await _device.deviceId();
-
     final password = _generatePassword();
+    final trimmedEmail = email.trim();
+    final trimmedName = firstName.trim();
 
-    final AuthResponse res;
+    AuthResponse? res;
+    var waitingForCode = false;
     try {
-      res = await _client.auth.signUp(email: email.trim(), password: password);
+      res = await _client.auth.signUp(email: trimmedEmail, password: password);
     } on AuthException catch (e) {
-      throw AuthFailure(_friendlySignUpError(e));
-    } catch (_) {
+      final msg = e.message.toLowerCase();
+      if (msg.contains('already') || msg.contains('registered')) {
+        // A previous try created the login but never saved the account,
+        // because the email code was still unverified. Send that code again.
+        try {
+          await _client.auth.resend(
+            email: trimmedEmail,
+            type: OtpType.signup,
+          );
+          waitingForCode = true;
+        } on AuthException {
+          throw AuthFailure(_friendlySignUpError(e));
+        }
+      } else {
+        throw AuthFailure(_friendlySignUpError(e));
+      }
+    } catch (e) {
+      if (e is AuthFailure) rethrow;
       throw const AuthFailure(
         'We could not create your account. Please check your '
         'connection and try again.',
       );
     }
 
-    final user = res.user;
-    if (user == null) {
+    if (!waitingForCode && res?.user == null) {
       throw const AuthFailure(
         'We could not create your account. Please try again.',
       );
     }
 
-    final salt = PinHasher.generateSalt();
-    final hash = PinHasher.hash(pin, salt);
-
-    // Device-id trial ledger (IP layer held for a later phase).
-    final grantTrial = await _trials.claimTrial(deviceId);
-
-    await _profiles.createProfile(
-      userId: user.id,
-      firstName: firstName,
-      deviceId: deviceId,
-      pinHash: hash,
-      pinSalt: salt,
-      grantTrial: grantTrial,
+    _pendingSignup = _PendingSignup(
+      firstName: trimmedName,
+      email: trimmedEmail,
+      pin: pin,
+      password: password,
     );
 
-    await _remember(name: firstName, email: email, password: password);
+    if (!waitingForCode && res?.session != null) {
+      return _finishCreateAccount();
+    }
+    return null;
+  }
+
+  /// Verifies the emailed sign-up code, then saves the profile and trial.
+  Future<Profile> confirmCreateAccount({required String code}) async {
+    final pending = _pendingSignup;
+    if (pending == null) {
+      throw const AuthFailure('Please start creating your account again.');
+    }
+    try {
+      await _client.auth.verifyOTP(
+        email: pending.email,
+        token: code.trim(),
+        type: OtpType.signup,
+      );
+    } on AuthException {
+      throw const AuthFailure('That code is not correct or has expired.');
+    }
+    if (_client.auth.currentSession == null) {
+      throw const AuthFailure('That code is not correct or has expired.');
+    }
+    return _finishCreateAccount();
+  }
+
+  /// Sends the sign-up code again. Does not write the profile or the trial.
+  Future<void> resendCreateCode() async {
+    final pending = _pendingSignup;
+    if (pending == null) {
+      throw const AuthFailure('Please start creating your account again.');
+    }
+    try {
+      await _client.auth.resend(
+        email: pending.email,
+        type: OtpType.signup,
+      );
+    } on AuthException {
+      throw const AuthFailure(
+        'We could not send the code. Please try again in a moment.',
+      );
+    }
+  }
+
+  /// Saves the profile and the one-trial-per-device row. Caller must already
+  /// hold a session from sign-up or from [confirmCreateAccount].
+  Future<Profile> _finishCreateAccount() async {
+    final pending = _pendingSignup;
+    if (pending == null || _client.auth.currentSession == null) {
+      throw const AuthFailure('Please enter the code from your email first.');
+    }
+
+    try {
+      await _client.auth.updateUser(
+        UserAttributes(password: pending.password),
+      );
+    } on AuthException {
+      // The sign-up password is already the one we generated. Keep going.
+    }
+
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) {
+      throw const AuthFailure(
+        'We could not create your account. Please try again.',
+      );
+    }
+
+    final deviceId = await _device.deviceId();
+    final bool grantTrial;
+    try {
+      grantTrial = await _trials.claimTrial(deviceId);
+    } on PostgrestException {
+      throw const AuthFailure(
+        'We could not finish creating your account. Please try again.',
+      );
+    }
+
+    final salt = PinHasher.generateSalt();
+    final hash = PinHasher.hash(pending.pin, salt);
+    try {
+      await _profiles.createProfile(
+        userId: userId,
+        firstName: pending.firstName,
+        deviceId: deviceId,
+        pinHash: hash,
+        pinSalt: salt,
+        grantTrial: grantTrial,
+      );
+    } on PostgrestException catch (e) {
+      // A repeat of the same verified sign-up already has a profile row.
+      if (e.code != '23505') {
+        throw const AuthFailure(
+          'We could not finish creating your account. Please try again.',
+        );
+      }
+    }
+
+    await _remember(
+      name: pending.firstName,
+      email: pending.email,
+      password: pending.password,
+    );
+    _pendingSignup = null;
 
     final profile = await _profiles.currentProfile();
     if (profile == null) {
@@ -200,7 +319,8 @@ class AuthService {
       final profile = await _profiles.currentProfile();
       final name = profile?.firstName ?? await rememberedName();
       if (name == null || name.trim().isEmpty) {
-        throw const AuthFailure('We could not load your account. Please retry.');
+        throw const AuthFailure(
+            'We could not load your account. Please retry.');
       }
       return EmailSignInResult.pin(name.trim());
     }
@@ -408,8 +528,7 @@ class AuthService {
       );
     }
     try {
-      await _client.auth
-          .signInWithPassword(email: email, password: password);
+      await _client.auth.signInWithPassword(email: email, password: password);
     } on AuthException {
       throw const AuthFailure(
         'We could not sign you in. Please use "Forgot My PIN" to '
@@ -469,4 +588,18 @@ class AuthService {
     }
     return 'We could not create your account. Please try again.';
   }
+}
+
+class _PendingSignup {
+  const _PendingSignup({
+    required this.firstName,
+    required this.email,
+    required this.pin,
+    required this.password,
+  });
+
+  final String firstName;
+  final String email;
+  final String pin;
+  final String password;
 }

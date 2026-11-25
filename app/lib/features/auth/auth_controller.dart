@@ -37,20 +37,34 @@ class AuthController extends ChangeNotifier {
     _set(AuthStatus.locked);
   }
 
-  Future<void> createAccount({
+  Future<bool> beginCreateAccount({
     required String firstName,
     required String email,
     required String pin,
   }) async {
-    _profile = await _auth.createAccount(
+    final profile = await _auth.beginCreateAccount(
       firstName: firstName,
       email: email,
       pin: pin,
     );
-    _rememberedName = firstName;
+    if (profile == null) return true;
+    _profile = profile;
+    _rememberedName = firstName.trim();
     _rememberedEmail = email.trim();
     _set(AuthStatus.signedIn);
+    return false;
   }
+
+  /// After the player enters the emailed sign-up code. This is the first
+  /// moment the profile and trial rows are written.
+  Future<void> confirmCreateAccount({required String code}) async {
+    _profile = await _auth.confirmCreateAccount(code: code);
+    _rememberedName = await _auth.rememberedName();
+    _rememberedEmail = await _auth.rememberedEmail();
+    _set(AuthStatus.signedIn);
+  }
+
+  Future<void> resendCreateCode() => _auth.resendCreateCode();
 
   Future<void> dailyLogin({
     required String firstName,

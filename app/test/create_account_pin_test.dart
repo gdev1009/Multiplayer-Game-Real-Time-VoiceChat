@@ -22,14 +22,22 @@ class _RecordingAuth extends AuthController {
 
   final SupabaseClient client;
   String? savedPin;
+  String? savedCode;
+  bool needsCode = false;
 
   @override
-  Future<void> createAccount({
+  Future<bool> beginCreateAccount({
     required String firstName,
     required String email,
     required String pin,
   }) async {
     savedPin = pin;
+    return needsCode;
+  }
+
+  @override
+  Future<void> confirmCreateAccount({required String code}) async {
+    savedCode = code;
   }
 }
 
@@ -94,6 +102,65 @@ void main() {
       find.text('The two PINs do not match. Let\'s try again.'),
       findsNothing,
     );
+    auth.client.auth.stopAutoRefresh();
+  });
+
+  testWidgets('account is not finished until the 6-number code is entered',
+      (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final auth = _RecordingAuth(SupabaseClient('http://localhost', 'anon'))
+      ..needsCode = true;
+    addTearDown(auth.client.auth.stopAutoRefresh);
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AuthController>.value(
+        value: auth,
+        child: const MaterialApp(home: CreateAccountScreen()),
+      ),
+    );
+
+    await tester.enterText(find.byType(TextField), 'Ronna');
+    await tester.tap(find.text('Next'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'ronna@example.com');
+    await tester.tap(find.text('Next'));
+    await tester.pumpAndSettle();
+
+    for (final digit in ['1', '9', '8', '4']) {
+      await tester.tap(find.byKey(ValueKey('pin-key-$digit')));
+      await tester.pump();
+    }
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump(const Duration(milliseconds: 300));
+    for (final digit in ['1', '9', '8', '4']) {
+      await tester.tap(find.byKey(ValueKey('pin-key-$digit')));
+      await tester.pump();
+    }
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+
+    expect(auth.savedPin, '1984');
+    expect(auth.savedCode, isNull);
+    expect(find.text('Enter your code'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField), '12345678');
+    await tester.tap(find.text('Finish'));
+    await tester.pump();
+    expect(
+      find.text('Please enter the 6-number code from your email.'),
+      findsOneWidget,
+    );
+    expect(auth.savedCode, isNull);
+
+    await tester.enterText(find.byType(TextField), '123456');
+    await tester.tap(find.text('Finish'));
+    await tester.pump();
+    await tester.pump();
+    expect(auth.savedCode, '123456');
     auth.client.auth.stopAutoRefresh();
   });
 }
