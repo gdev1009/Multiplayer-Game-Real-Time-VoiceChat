@@ -29,8 +29,10 @@ class BillingService {
   /// True once the store sells the monthly membership on this device.
   bool get checkoutReady => _product != null;
 
-  /// Store-formatted price when known (matches what the checkout sheet shows).
-  String get priceLabel => _product?.price ?? TrialPolicy.monthlyPriceLabel;
+  /// Membership price shown on the screen. Always the agreed $6.99 CAD.
+  /// The store string is the converted price for the Apple ID's country, so a
+  /// US storefront can report $4.99 for this same product.
+  String get priceLabel => TrialPolicy.monthlyPriceLabel;
 
   String get _storeName =>
       defaultTargetPlatform == TargetPlatform.iOS ? 'app_store' : 'play_store';
