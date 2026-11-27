@@ -9,6 +9,7 @@ import '../../core/widgets/app_page.dart';
 import '../../core/widgets/big_button.dart';
 import '../../core/widgets/host_greeting.dart';
 import '../../models/game.dart';
+import '../game/computer_players_picker.dart';
 import 'lobby_controller.dart';
 
 /// "Check Upcoming Games" lobby hub.
@@ -71,6 +72,8 @@ class _UpcomingGamesScreenState extends State<UpcomingGamesScreen> {
                 'To find your seat in a friend’s game: tap Enter the Studio first, '
                 'then type their four-digit code.',
           ),
+          const SizedBox(height: AppSpacing.md),
+          const ComputerPlayersPicker(),
           const SizedBox(height: AppSpacing.md),
           BigButton(
             label: 'Find a Game',

@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:match_word/features/game/ai_player.dart';
 import 'package:match_word/features/game/clue_bank.dart';
+import 'package:match_word/features/game/computer_play.dart';
 import 'package:match_word/features/game/word_bank.dart';
 
 void main() {
@@ -213,11 +214,53 @@ void main() {
       }
     });
 
+    test('misses more on Easy than on Hard', () {
+      var easyHits = 0;
+      var mediumHits = 0;
+      var hardHits = 0;
+      const trials = 300;
+      var easyHardDiffer = 0;
+      for (var seed = 0; seed < trials; seed++) {
+        final easy = AiPlayer.guessFor(
+          'rainbow',
+          seed: seed,
+          level: ComputerPlayLevel.easy,
+        );
+        final medium = AiPlayer.guessFor(
+          'rainbow',
+          seed: seed,
+          level: ComputerPlayLevel.medium,
+        );
+        final hard = AiPlayer.guessFor(
+          'rainbow',
+          seed: seed,
+          level: ComputerPlayLevel.hard,
+        );
+        if (easy.toLowerCase() == 'rainbow') easyHits++;
+        if (medium.toLowerCase() == 'rainbow') mediumHits++;
+        if (hard.toLowerCase() == 'rainbow') hardHits++;
+        if (easy.toLowerCase() != hard.toLowerCase()) easyHardDiffer++;
+      }
+      expect(easyHits, lessThan(mediumHits));
+      expect(mediumHits, lessThan(hardHits));
+      expect(easyHits / trials, greaterThan(0.38));
+      expect(easyHits / trials, lessThan(0.62));
+      expect(mediumHits / trials, greaterThan(0.56));
+      expect(mediumHits / trials, lessThan(0.80));
+      expect(hardHits / trials, greaterThan(0.78));
+      expect(hardHits / trials, lessThan(0.96));
+      expect(easyHardDiffer, greaterThan(20));
+    });
+
     test('lands the word about nine times in ten (close stand-ins)', () {
       var correct = 0;
       const trials = 300;
       for (var seed = 0; seed < trials; seed++) {
-        if (AiPlayer.guessFor('rainbow', seed: seed).toLowerCase() ==
+        if (AiPlayer.guessFor(
+              'rainbow',
+              seed: seed,
+              level: ComputerPlayLevel.hard,
+            ).toLowerCase() ==
             'rainbow') {
           correct++;
         }

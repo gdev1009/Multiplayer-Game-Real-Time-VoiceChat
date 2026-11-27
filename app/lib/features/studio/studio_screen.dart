@@ -7,6 +7,7 @@ import '../../core/theme/app_text.dart';
 import '../../core/widgets/app_page.dart';
 import '../../core/widgets/big_button.dart';
 import '../../core/widgets/host_greeting.dart';
+import '../game/computer_players_picker.dart';
 import '../lobby/lobby_controller.dart';
 
 /// "Enter the Studio" destination.
@@ -60,6 +61,8 @@ class StudioScreen extends StatelessWidget {
                 'or join with a friend’s code.\n\n'
                 'To find your seat: tap Join with a Code, then type the four numbers.',
           ),
+          SizedBox(height: gap),
+          const ComputerPlayersPicker(),
           SizedBox(height: gap + 4),
           BigButton(
             label: 'Start New Game',

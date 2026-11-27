@@ -11,6 +11,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'app.dart';
 import 'core/config/app_config.dart';
 import 'features/auth/auth_controller.dart';
+import 'features/game/computer_play_controller.dart';
 import 'features/character/character_controller.dart';
 import 'features/friends/friend_controller.dart';
 import 'features/lobby/lobby_controller.dart';
@@ -95,6 +96,7 @@ Future<void> main() async {
         Provider<EntitlementService>.value(value: entitlementService),
         Provider<BillingService>.value(value: billingService),
         ChangeNotifierProvider(create: (_) => AudioController()),
+        ChangeNotifierProvider(create: (_) => ComputerPlayController()),
         Provider<SpeechInputService>(
           create: (_) => SpeechInputService(),
           dispose: (_, s) => s.dispose(),

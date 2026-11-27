@@ -8,6 +8,7 @@ import '../../models/game_player.dart';
 import '../../services/gameplay_service.dart';
 import '../../services/lobby_failure.dart';
 import 'ai_player.dart';
+import 'computer_play.dart';
 import 'game_engine.dart';
 
 /// Drives the live gameplay screen.
@@ -43,6 +44,13 @@ class GameplayController extends ChangeNotifier {
 
   /// When true (welcome intro still playing), humans and AI cannot submit.
   bool Function()? inputBlocked;
+
+  /// Host's Easy / Medium / Hard choice. Read when a computer seat is about
+  /// to speak, so the lobby choice applies to the game that follows.
+  ComputerPlayLevel Function()? playLevel;
+
+  ComputerPlayLevel get _playLevel =>
+      playLevel?.call() ?? ComputerPlayLevel.medium;
 
   /// True when the local human may type a clue/guess (on the clock).
   /// Host speech does **not** block — tapping Speak/Send stops Guy.
@@ -737,10 +745,14 @@ class GameplayController extends ChangeNotifier {
       return;
     }
 
-    // Senior pacing (Ronna / video24): calm gaps so humans can read the board.
-    final aiDelay = s.lastOutcome == WordOutcome.wrong
-        ? const Duration(milliseconds: 12000)
-        : const Duration(milliseconds: 10000);
+    // Calm gaps so humans can read the board, plus a longer pause on some
+    // turns so a computer seat does not answer on a metronome.
+    final aiDelay = _playLevel.pauseFor(
+      wordIndex: s.wordIndex,
+      exchangeCount: s.exchangeCount,
+      guessing: s.step == TurnStep.awaitingGuess,
+      afterWrong: s.lastOutcome == WordOutcome.wrong,
+    );
     _scheduleHostBeat(
       'ai|${s.wordIndex}|${s.step}|${s.cluingTeam}|${s.exchangeCount}',
       aiDelay,
@@ -908,6 +920,7 @@ class GameplayController extends ChangeNotifier {
           seed: latest.wordIndex * 31 + latest.exchangeCount,
           // Answer the clue on the board, not just the word behind it.
           clue: latest.pendingClue ?? '',
+          level: _playLevel,
         ),
       );
     }

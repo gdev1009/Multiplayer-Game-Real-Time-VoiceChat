@@ -19,6 +19,8 @@ import '../auth/auth_controller.dart';
 import '../character/character_controller.dart';
 import '../character/idle_character_preview.dart';
 import '../game/ai_player.dart';
+import '../game/computer_play_controller.dart';
+import '../game/computer_players_picker.dart';
 import '../game/gameplay_controller.dart';
 import '../game/play_screen.dart';
 import 'lobby_controller.dart';
@@ -195,8 +197,10 @@ class _LobbyBodyState extends State<_LobbyBody> {
             ),
           ],
         ),
-        SizedBox(height: gap + 4),
+        SizedBox(height: gap),
         if (isHost) ...[
+          const ComputerPlayersPicker(),
+          SizedBox(height: gap),
           if (!lobby.isFull)
             BigButton(
               label: 'Add Players',
@@ -611,7 +615,17 @@ class _StartingPanelState extends State<_StartingPanel> {
     _launched = true;
 
     final service = context.read<GameplayService>();
+    ComputerPlayController? skill;
+    try {
+      skill = context.read<ComputerPlayController>();
+    } on ProviderNotFoundException {
+      skill = null;
+    }
+    final chosen = skill;
     final controller = GameplayController(service: service, game: widget.game);
+    if (chosen != null) {
+      controller.playLevel = () => chosen.level;
+    }
     // Deal words (host) / subscribe (everyone) before showing the screen.
     await controller.startOnline(players: widget.players);
     if (!mounted) {

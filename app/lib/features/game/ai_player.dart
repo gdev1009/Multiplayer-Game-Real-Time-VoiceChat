@@ -1,26 +1,21 @@
 import '../../models/character.dart';
 import '../character/character_catalog.dart';
 import 'clue_bank.dart';
+import 'computer_play.dart';
 
-/// Computer-player behaviour for the seats the host fills with studio players
-///.
+/// Computer-player behaviour for the seats the host fills with studio players.
 ///
 /// The host device is the single authority that drives these seats (see
-/// [GameplayController]) and a studio player **never disconnects**. /// tunes them to a **moderate difficulty** so a table feels like real people
-/// rather than a perfect machine:
+/// [GameplayController]) and a studio player never disconnects. How often a
+/// guess lands, and how long the seat waits, follows [ComputerPlayLevel]:
 ///  * a clue-giver offers a gentle, varied one-word hint (never the word), and
-  ///  * a guesser is *usually* right (about 9 in 10) and when they miss, the
-  ///    guess still answers the clue on the board,
+///  * a guesser misses some answers. A miss still answers the clue on the board.
 ///
-/// All behaviour is **deterministic for a given turn** (seeded by the word plus
+/// All behaviour is deterministic for a given turn (seeded by the word plus
 /// the exchange count) so the single host driving the seat produces a stable
 /// result even if it re-evaluates the same beat after a dropped request.
 class AiPlayer {
   const AiPlayer._();
-
-  /// Ronna (Sep 2026 playtest): stand-ins should only miss about 10% of
-  /// the time, and a miss must still be close to the clue on the board.
-  static const double _guessAccuracy = 0.9;
 
   /// A one-word clue for [secretWord]. Uses a hand-picked hint for the words in
   /// the studio bank; falls back to a friendly generic nudge otherwise. The
@@ -76,17 +71,21 @@ class AiPlayer {
     'Everyday', 'Familiar', 'Common', 'Ordinary', 'Household', 'Simple',
   ];
 
-  /// A moderate-skill guess for [secretWord]. About [_guessAccuracy] of the
-  /// time (deterministic per turn via [seed]) the studio player says the word;
-  /// otherwise it offers a plausible, related-but-wrong guess so the other team
-  /// gets a chance to steal — the "moderate difficulty" the spec calls for.
+  /// A guess for [secretWord] at [level]. The roll is deterministic per turn
+  /// via [seed]. A hit says the word. A miss is a related wrong answer so the
+  /// other team gets a chance to steal.
   ///
   /// It is given the [secretWord] only because it fills a seat (by design); the
   /// deliberate misses are what keep it fair rather than unbeatable.
   ///
   /// [clue] is the clue that was just given for this word. A miss is answered
-  /// *to that clue*, so a stand-in reads as someone who was listening.
-  static String guessFor(String secretWord, {int seed = 0, String clue = ''}) {
+  /// to that clue, so a stand-in reads as someone who was listening.
+  static String guessFor(
+    String secretWord, {
+    int seed = 0,
+    String clue = '',
+    ComputerPlayLevel level = ComputerPlayLevel.medium,
+  }) {
     final key = secretWord.trim().toLowerCase();
     if (key.isEmpty) return secretWord;
     // A cheap, stable hash of the word + turn seed → a 0..1 roll.
@@ -95,8 +94,8 @@ class AiPlayer {
       h = ((h ^ c) * 16777619) & 0x7fffffff;
     }
     final roll = (h % 1000) / 1000.0;
-    if (roll < _guessAccuracy) return secretWord; // confident, correct guess
-    return _plausibleMiss(key, h, clue); // an honest wrong answer
+    if (roll < level.guessAccuracy) return secretWord;
+    return _plausibleMiss(key, h, clue);
   }
 
   /// A believable wrong guess, picked deterministically from [h] so the same
