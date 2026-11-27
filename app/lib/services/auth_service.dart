@@ -121,11 +121,11 @@ class AuthService {
             type: OtpType.signup,
           );
           waitingForCode = true;
-        } on AuthException {
-          throw AuthFailure(_friendlySignUpError(e));
+        } on AuthException catch (resendError) {
+          throw AuthFailure(_friendlyAuthEmailError(resendError));
         }
       } else {
-        throw AuthFailure(_friendlySignUpError(e));
+        throw AuthFailure(_friendlyAuthEmailError(e));
       }
     } catch (e) {
       if (e is AuthFailure) rethrow;
@@ -148,8 +148,19 @@ class AuthService {
       password: password,
     );
 
-    if (!waitingForCode && res?.session != null) {
+    // A sign-up that still needs the emailed code must stay on the code
+    // screen. Finishing here closed Match Word before the code could be typed,
+    // and no verify call ever reached the server.
+    final confirmed = (res?.user?.emailConfirmedAt ?? '').isNotEmpty;
+    if (!waitingForCode && res?.session != null && confirmed) {
       return _finishCreateAccount();
+    }
+    if (_client.auth.currentSession != null && !confirmed) {
+      try {
+        await _client.auth.signOut(scope: SignOutScope.local);
+      } catch (_) {
+        // The code screen still works if the half-session cannot be cleared.
+      }
     }
     return null;
   }
@@ -186,10 +197,8 @@ class AuthService {
         email: pending.email,
         type: OtpType.signup,
       );
-    } on AuthException {
-      throw const AuthFailure(
-        'We could not send the code. Please try again in a moment.',
-      );
+    } on AuthException catch (e) {
+      throw AuthFailure(_friendlyAuthEmailError(e));
     }
   }
 
@@ -581,13 +590,21 @@ class AuthService {
     return 'Mw!${base64Url.encode(bytes)}';
   }
 
-  String _friendlySignUpError(AuthException e) {
+  String _friendlyAuthEmailError(AuthException e) {
     final msg = e.message.toLowerCase();
+    final code = (e.code ?? '').toLowerCase();
+    if (code.contains('over_email_send_rate_limit') ||
+        msg.contains('rate limit')) {
+      return 'We can only send a couple of code emails each hour right now. '
+          'Please wait a little while, then try again.';
+    }
     if (msg.contains('already') || msg.contains('registered')) {
       return 'That email already has an account. Try "Forgot my PIN".';
     }
     return 'We could not create your account. Please try again.';
   }
+
+  String _friendlySignUpError(AuthException e) => _friendlyAuthEmailError(e);
 }
 
 class _PendingSignup {
